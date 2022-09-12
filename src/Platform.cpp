@@ -1244,6 +1244,7 @@ void Platform::Spin()
 # endif
 		if (c == 'D')
 		{
+			debugPrintf("Version %s\n", VERSION);
 			String<StringLength256> reply;
 			Tasks::Diagnostics(reply.GetRef());
 			debugPrintf("%s\n", reply.c_str());
