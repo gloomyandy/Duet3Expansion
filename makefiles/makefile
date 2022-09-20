@@ -15,19 +15,19 @@ OUTPUT_NAME ?= Duet3Firmware_RPiPico
 BUILD ?= Debug
 
 #Comment out to show compilation commands (verbose)
-V=@
+#V=@
 
 $(info Building RepRapFirmware Duet3Expansion:)
 
 ## Cross-compilation commands 
-CC      = arm-none-eabi-gcc
-CXX     = arm-none-eabi-g++
-LD      = arm-none-eabi-gcc
-AR      = arm-none-eabi-ar
-AS      = arm-none-eabi-as
-OBJCOPY = arm-none-eabi-objcopy
-OBJDUMP = arm-none-eabi-objdump
-SIZE    = arm-none-eabi-size
+CC      = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-gcc"
+CXX     = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-g++"
+LD      = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-gcc"
+AR      = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-ar"
+AS      = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-as"
+OBJCOPY = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-objcopy"
+OBJDUMP = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-objdump"
+SIZE    = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-size"
 
 MKDIR = mkdir -p
 
@@ -42,15 +42,16 @@ include $(MAKE_DIR)/EXP.mk
 FLAGS=
 ifeq ($(PROCESSOR),RP2040)
 	FLAGS  += -D__RP2040__ -DRPI_PICO 
-	PROCFLAGS = -mfpu=fpv4-sp-d16 -mfp16-format=ieee -mcpu=cortex-m0plus -mthumb
+	PROCFLAGS = -mfp16-format=ieee -mcpu=cortex-m0plus -mthumb
     $(info - Processor: $(PROCESSOR)) 
 endif
 
 ifeq ($(BUILD),Debug)
-	DEBUG_FLAGS = -O3 -g -DDEBUG=1
+#	DEBUG_FLAGS = -O3 -g -DDEBUG=1
+	DEBUG_FLAGS =
         $(info - Build: Debug) 
 else
-	DEBUG_FLAGS = -O3
+	DEBUG_FLAGS =
         $(info - Build: Release)
 endif
 	
@@ -75,19 +76,21 @@ FLAGS += -nostdlib -Wdouble-promotion -fsingle-precision-constant
 FLAGS += $(DEBUG_FLAGS)
 #FLAGS += -MMD -MP 
 
-CFLAGS   = $(FLAGS) -std=gnu11 -fgnu89-inline -Dnoexcept=
-CXXFLAGS = $(FLAGS) -std=gnu++17 -fno-threadsafe-statics -fno-exceptions -fno-rtti -Wno-register -Wsuggest-override
-CXXFLAGS_RRFL = $(FLAGS) -std=gnu++17 -fno-threadsafe-statics -fno-exceptions -fno-rtti -Wno-register -Wsuggest-override
-CXXFLAGS_CORE = $(FLAGS) -std=gnu++17 -fno-threadsafe-statics -fno-exceptions -fno-rtti -Wno-register -Wsuggest-override
-CXXFLAGS_CANLIB = $(FLAGS) -std=gnu++17 -fno-threadsafe-statics -fno-exceptions -fno-rtti -Wno-register -Wsuggest-override
+CFLAGS   = $(FLAGS) -std=gnu99 -O2 -Dnoexcept=
+CXXFLAGS = $(FLAGS) -std=gnu++17 -O3 -fno-threadsafe-statics -fno-exceptions -fno-rtti -Wno-register -Wsuggest-override
+CXXFLAGS_RRFL = $(FLAGS) -std=gnu++17 -O2 -fno-threadsafe-statics -fno-exceptions -fno-rtti -Wno-register -Wsuggest-override
+CXXFLAGS_CORE = $(FLAGS) -std=gnu++17 -O3 -fno-threadsafe-statics -fno-exceptions -fno-rtti -Wno-register -Wsuggest-override
+CXXFLAGS_RTOS = $(FLAGS) -std=gnu++17 -O3 -fno-threadsafe-statics -fno-exceptions -fno-rtti -Wno-register -Wsuggest-override
+CXXFLAGS_CANLIB = $(FLAGS) -std=gnu++17 -O2 -fno-threadsafe-statics -fno-exceptions -fno-rtti -Wno-register -Wsuggest-override
 
 $(info  - SDK Include: $(SDK_INCLUDES))
 
 #all Includes (RRF + Core)
-INCLUDES = $(EXP_INCLUDES) $(CORE_INCLUDES) $(RRFLIBRARIES_INCLUDES) $(RRFLIBC_INCLUDES) $(SDK_INCLUDES) $(CANLIB_INCLUDES)
+INCLUDES = $(EXP_INCLUDES) $(CORE_INCLUDES) $(RTOS_INCLUDES) $(RRFLIBRARIES_INCLUDES) $(RRFLIBC_INCLUDES) $(SDK_INCLUDES) $(CANLIB_INCLUDES)
 
 
 DEPS = $(CORE_OBJS:.o=.d)
+DEPS = $(RTOS_OBJS:.o=.d)
 DEPS += $(IAP_OBJS:.o=.d)
 DEPS += $(RRFLIBC_OBJS:.o=.d)
 DEPS += $(RRFLIBRARIES_OBJS:.o=.d)
@@ -112,10 +115,14 @@ $(BUILD_DIR)/libCANlib.a: $(CANLIB_OBJS)
 	$(V)$(AR) rcs $@ $(CANLIB_OBJS)
 	@echo "\nBuilt CANlib\n"
 
-$(BUILD_DIR)/$(OUTPUT_NAME).elf: $(BUILD_DIR)/libCoreN2G.a $(BUILD_DIR)/libRRFLibraries.a $(BUILD_DIR)/libCANlib.a $(EXP_OBJS)
+$(BUILD_DIR)/libFreeRTOS.a: $(RTOS_OBJS)
+	$(V)$(AR) rcs $@ $(RTOS_OBJS)
+	@echo "\nBuilt FreeRTOS lib\n"
+
+$(BUILD_DIR)/$(OUTPUT_NAME).elf: $(BUILD_DIR)/libCoreN2G.a $(BUILD_DIR)/libFreeRTOS.a $(BUILD_DIR)/libRRFLibraries.a $(BUILD_DIR)/libCANlib.a $(EXP_OBJS)
 	@echo "\nCreating $(OUTPUT_NAME).bin"
 	$(V)$(MKDIR) $(dir $@)
-	$(V)$(CXX) -L$(BUILD_DIR)/ -L$(COREN2G_DIR)/src/RP2040/pico/lib -Os --specs=nano.specs -Wl,--fatal-warnings -fno-exceptions $(PROCFLAGS) -T$(LINKER_SCRIPT) -Wl,-Map,$(BUILD_DIR)/$(OUTPUT_NAME).map -o $(BUILD_DIR)/$(OUTPUT_NAME).elf -Wl,--gc-sections $(EXP_OBJS) -lRRFLibraries -lCoreN2G -lCANlib -lpico -lRRFLibraries -lCoreN2G -lCANlib -lpico
+	$(V)$(CXX) -L$(BUILD_DIR)/ -L$(COREN2G_DIR)/src/RP2040/pico/lib -Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -fno-exceptions -mcpu=cortex-m0plus -T$(LINKER_SCRIPT) -Wl,-Map,$(BUILD_DIR)/$(OUTPUT_NAME).map -o $(BUILD_DIR)/$(OUTPUT_NAME).elf $(EXP_OBJS) -lRRFLibraries -lCoreN2G -lCANlib -lFreeRTOS -lpico -lRRFLibraries -lCoreN2G -lCANlib -lFreeRTOS -lpico
 	$(V)$(OBJCOPY) --strip-unneeded -O binary $(BUILD_DIR)/$(OUTPUT_NAME).elf $(BUILD_DIR)/$(OUTPUT_NAME).bin
 	$(V)$(SIZE) $(BUILD_DIR)/$(OUTPUT_NAME).elf
 	$(V)python $(REPRAPFIRMWARE_DIR)/Tools/uf2conv/uf2conv.py  -b 0x10000000 -f 0xe48bff56 -c -o $(BUILD_DIR)/$(OUTPUT_NAME).uf2 $(BUILD_DIR)/$(OUTPUT_NAME).bin
