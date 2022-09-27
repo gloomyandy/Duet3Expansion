@@ -15,9 +15,9 @@
 #include <CanMessageGenericTables.h>
 #include <InputMonitors/InputMonitor.h>
 #include <GPIO/GpioPorts.h>
-#include <Platform.h>
+#include <Platform/Platform.h>
 #include <Movement/Move.h>
-#include <Tasks.h>
+#include <Platform/Tasks.h>
 #include <AnalogIn.h>
 #include <Hardware/NonVolatileMemory.h>
 
@@ -651,6 +651,8 @@ static GCodeResult ProcessM915(const CanMessageGeneric& msg, const StringRef& re
 									{
 										reply.lcatf("Driver %u.%u: ", CanInterface::GetCanAddress(), drive);
 										SmartDrivers::AppendStallConfig(drive, reply);
+										reply.cat(", event on stall: ");
+										reply.cat((Platform::GetEventOnStall(drive)) ? "yes" : "no");
 									}
 					   );
 	}
@@ -708,6 +710,7 @@ static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& rep
 	{
 	case CanMessageReturnInfo::typeFirmwareVersion:
 	default:
+		// This must be formatted in a specific way for the ATE
 		Platform::AppendBoardAndFirmwareDetails(reply);
 		break;
 

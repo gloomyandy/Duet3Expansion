@@ -549,10 +549,16 @@ static void Platform::InitLeds()
 #ifdef TOOL1LC
 	if (boardVariant == 1)
 	{
-		for (Pin pin : LedPinsV11)
+		// The LEDs are connected to the SWDIO and SWCLK pins, so don't activate them in a debug build or if a debugger is attached
+# ifndef DEBUG
+		if (!DSU->STATUSB.bit.DBGPRES)
 		{
-			IoPort::SetPinMode(pin, (LedActiveHighV11) ? OUTPUT_LOW : OUTPUT_HIGH);
+			for (Pin pin : LedPinsV11)
+			{
+				IoPort::SetPinMode(pin, (LedActiveHighV11) ? OUTPUT_LOW : OUTPUT_HIGH);
+			}
 		}
+# endif
 	}
 	else
 	{
@@ -653,7 +659,7 @@ void Platform::Init()
 #ifdef ATEIO
 			else if (StringStartsWith(p.pinNames, "!rsel") || StringStartsWith(p.pinNames, "!tsel"))
 			{
-				SetHighDriveStrength(pin);
+				SetDriveStrength(pin, 2);
 				IoPort::SetPinMode(pin, OUTPUT_HIGH);
 			}
 #endif
@@ -756,9 +762,9 @@ void Platform::Init()
 # if DIFFERENTIAL_STEPPER_OUTPUTS
 		// Step pins
 		IoPort::SetPinMode(StepPins[i], OUTPUT_LOW);
-		SetHighDriveStrength(StepPins[i]);
+		SetDriveStrength(StepPins[i], 2);
 		IoPort::SetPinMode(InvertedStepPins[i], OUTPUT_HIGH);
-		SetHighDriveStrength(InvertedStepPins[i]);
+		SetDriveStrength(InvertedStepPins[i], 2);
 
 		// Set up the CCL to invert the step output from PB10 to the inverted output on PA11
 		MCLK->APBCMASK.reg |= MCLK_APBCMASK_CCL;
@@ -805,15 +811,15 @@ void Platform::Init()
 
 		// Direction pins
 		IoPort::SetPinMode(DirectionPins[i], OUTPUT_LOW);
-		SetHighDriveStrength(DirectionPins[i]);
+		SetDriveStrength(DirectionPins[i], 2);
 		IoPort::SetPinMode(InvertedDirectionPins[i], OUTPUT_HIGH);
-		SetHighDriveStrength(InvertedDirectionPins[i]);
+		SetDriveStrength(InvertedDirectionPins[i], 2);
 
 		// Enable pins
 		IoPort::SetPinMode(EnablePins[i], OUTPUT_LOW);
-		SetHighDriveStrength(EnablePins[i]);
+		SetDriveStrength(EnablePins[i], 2);
 		IoPort::SetPinMode(InvertedEnablePins[i], OUTPUT_HIGH);
-		SetHighDriveStrength(InvertedEnablePins[i]);
+		SetDriveStrength(InvertedEnablePins[i], 2);
 		enableValues[i] = 1;
 		driverIsEnabled[i] = false;
 # else
@@ -824,7 +830,10 @@ void Platform::Init()
 		IoPort::SetPinMode(StepPins[i], OUTPUT_HIGH);
 #  endif
 #  if !HAS_SMART_DRIVERS
-		SetHighDriveStrength(StepPins[i]);
+		SetDriveStrength(StepPins[i], 2);
+#  endif
+#  if RP2040
+		SetPinFunction(StepPins[i], GpioPinFunction::Sio);			// enable fast stepping - must do this after the call to SetPinMode
 #  endif
 
 		// Direction pins
@@ -834,7 +843,7 @@ void Platform::Init()
 		IoPort::SetPinMode(DirectionPins[i], OUTPUT_HIGH);
 #  endif
 #  if !HAS_SMART_DRIVERS
-		SetHighDriveStrength(DirectionPins[i]);
+		SetDriveStrength(DirectionPins[i], 2);
 #  endif
 
 #  if !HAS_SMART_DRIVERS
@@ -846,7 +855,7 @@ void Platform::Init()
 		IoPort::SetPinMode(EnablePins[i], OUTPUT_HIGH);
 		enableValues[i] = 0;
 #   endif
-		SetHighDriveStrength(EnablePins[i]);
+		SetDriveStrength(EnablePins[i], 2);
 		driverIsEnabled[i] = false;
 #  endif
 # endif
@@ -1231,7 +1240,6 @@ void Platform::Spin()
 
 	// If D is received from the USB port, output some diagnostics
 # if defined(RPI_PICO)
-	serialUSB.Spin();
 	while (serialUSB.available() != 0)
 # elif defined(SAMMYC21)
 	while (uart0.available() != 0)
@@ -1771,7 +1779,11 @@ void Platform::InternalEnableDrive(size_t driver)
 #  endif
 	}
 # endif
-	brakePorts[driver].WriteDigital(true);					// energise the brake solenoid to release the brake
+	if (brakePorts[driver].IsValid() && !brakePorts[driver].ReadDigital())
+	{
+		delay(50);											//TODO make the delay configurable
+		brakePorts[driver].WriteDigital(true);				// energise the brake solenoid to release the brake
+	}
 }
 
 void Platform::DisableDrive(size_t driver)
@@ -1787,7 +1799,11 @@ void Platform::DisableDrive(size_t driver)
 
 void Platform::InternalDisableDrive(size_t driver)
 {
-	brakePorts[driver].WriteDigital(false);					// de-energise the brake solenoid to apply the brake
+	if (brakePorts[driver].IsValid() && brakePorts[driver].ReadDigital())
+	{
+		brakePorts[driver].WriteDigital(false);				// de-energise the brake solenoid to apply the brake
+		delay(100);											//TODO make this delay configurable
+	}
 # if HAS_SMART_DRIVERS
 	SmartDrivers::EnableDrive(driver, false);
 # else
@@ -1897,6 +1913,11 @@ void Platform::SetOrResetEventOnStall(DriversBitmap drivers, bool enable) noexce
 	{
 		eventOnStallDrivers &= ~drivers;
 	}
+}
+
+bool Platform::GetEventOnStall(unsigned int driver) noexcept
+{
+	return eventOnStallDrivers.IsBitSet(driver);
 }
 
 #  endif
@@ -2234,6 +2255,7 @@ float Platform::GetCurrentV12Voltage() noexcept
 
 void Platform::AppendBoardAndFirmwareDetails(const StringRef& reply) noexcept
 {
+	// This must be formatted in a specific way for the ATE
 #if defined(TOOL1LC)
 	reply.lcatf("Duet " BOARD_TYPE_NAME " rev %s firmware version " VERSION " (%s%s)",
 				(boardVariant == 1) ? "1.1 or later" : "1.0 or earlier",

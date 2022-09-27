@@ -38,11 +38,11 @@
 #if SUPPORT_DRIVERS
 
 #include "StepTimer.h"
-#include "Platform.h"
+#include <Platform/Platform.h>
 #include <CAN/CanInterface.h>
 #include <CanMessageFormats.h>
 #include <CanMessageBuffer.h>
-#include <TaskPriorities.h>
+#include <Platform/TaskPriorities.h>
 
 #if HAS_SMART_DRIVERS
 # include "StepperDrivers/TMC51xx.h"
@@ -304,7 +304,7 @@ bool Move::SetKinematics(KinematicsType k)
 void Move::CurrentMoveCompleted()
 {
 	{
-		DDA *cdda = currentDda;						// capture volatile variable
+		DDA *const cdda = currentDda;				// capture volatile variable
 		AtomicCriticalSectionLocker lock;			// disable interrupts while we are updating the move accumulators, until we set currentDda to null
 #if SINGLE_DRIVER
 		const int32_t stepsTaken = cdda->GetStepsTaken(0);
@@ -349,7 +349,7 @@ void Move::StopDrivers(uint16_t whichDrives)
 #else
 # error Unsupported processor
 #endif
-	DDA *cdda = currentDda;							// capture volatile
+	DDA *const cdda = currentDda;					// capture volatile
 	if (cdda != nullptr)
 	{
 		cdda->StopDrivers(whichDrives);
