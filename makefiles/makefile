@@ -8,7 +8,7 @@ RRFLIBRARIES_DIR ?= ./RRFLibraries
 COREN2G_DIR ?= ./CoreN2G
 FREERTOS_DIR ?= ./FreeRTOS
 CANLIB_DIR ?= ./CANlib
-SDK_DIR ?= ./pico-sdk
+SDK_DIR ?= $(COREN2G_DIR)/src/RP2040/pico-sdk
 LDNAME ?= rp2040_flash
 OUTPUT_NAME ?= Duet3Firmware_RPiPico
 
@@ -76,7 +76,7 @@ FLAGS += -nostdlib -Wdouble-promotion -fsingle-precision-constant
 FLAGS += $(DEBUG_FLAGS)
 #FLAGS += -MMD -MP 
 
-CFLAGS   = $(FLAGS) -std=gnu99 -O2 -Dnoexcept=
+CFLAGS   = $(FLAGS) -std=gnu99 -O2 -Dnoexcept= 
 CXXFLAGS = $(FLAGS) -std=gnu++17 -O3 -fno-threadsafe-statics -fno-exceptions -fno-rtti -Wno-register -Wsuggest-override
 CXXFLAGS_RRFL = $(FLAGS) -std=gnu++17 -O2 -fno-threadsafe-statics -fno-exceptions -fno-rtti -Wno-register -Wsuggest-override
 CXXFLAGS_CORE = $(FLAGS) -std=gnu++17 -O3 -fno-threadsafe-statics -fno-exceptions -fno-rtti -Wno-register -Wsuggest-override
@@ -117,16 +117,23 @@ $(BUILD_DIR)/libCANlib.a: $(CANLIB_OBJS)
 
 $(BUILD_DIR)/libFreeRTOS.a: $(RTOS_OBJS)
 	$(V)$(AR) rcs $@ $(RTOS_OBJS)
+#	$(V)$(AR) rcs $@ ./expbuild/./FreeRTOS/src/event_groups.o ./expbuild/./FreeRTOS/src/list.o ./expbuild/./FreeRTOS/src/portable/GCC/ARM_CM0/port.o ./expbuild/./FreeRTOS/src/queue.o ./expbuild/./FreeRTOS/src/stream_buffer.o ./expbuild/./FreeRTOS/src/tasks.o ./expbuild/./FreeRTOS/src/timers.o
 	@echo "\nBuilt FreeRTOS lib\n"
 
 $(BUILD_DIR)/$(OUTPUT_NAME).elf: $(BUILD_DIR)/libCoreN2G.a $(BUILD_DIR)/libFreeRTOS.a $(BUILD_DIR)/libRRFLibraries.a $(BUILD_DIR)/libCANlib.a $(EXP_OBJS)
 	@echo "\nCreating $(OUTPUT_NAME).bin"
 	$(V)$(MKDIR) $(dir $@)
-	$(V)$(CXX) -L$(BUILD_DIR)/ -L$(COREN2G_DIR)/src/RP2040/pico/lib -Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -fno-exceptions -mcpu=cortex-m0plus -T$(LINKER_SCRIPT) -Wl,-Map,$(BUILD_DIR)/$(OUTPUT_NAME).map -o $(BUILD_DIR)/$(OUTPUT_NAME).elf $(EXP_OBJS) -lRRFLibraries -lCoreN2G -lCANlib -lFreeRTOS -lpico -lRRFLibraries -lCoreN2G -lCANlib -lFreeRTOS -lpico
+	$(V)$(CXX) -L$(BUILD_DIR)/ -L$(COREN2G_DIR)/src/RP2040/Tools/Build-pico-sdk/build/ -Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -fno-exceptions -mcpu=cortex-m0plus -T$(LINKER_SCRIPT) -Wl,-Map,$(BUILD_DIR)/$(OUTPUT_NAME).map -o $(BUILD_DIR)/$(OUTPUT_NAME).elf $(EXP_OBJS) -lRRFLibraries -lCoreN2G -lCANlib -lFreeRTOS -lpico -lRRFLibraries -lCoreN2G -lCANlib -lFreeRTOS -lpico
 	$(V)$(OBJCOPY) --strip-unneeded -O binary $(BUILD_DIR)/$(OUTPUT_NAME).elf $(BUILD_DIR)/$(OUTPUT_NAME).bin
 	$(V)$(SIZE) $(BUILD_DIR)/$(OUTPUT_NAME).elf
 	$(V)python $(REPRAPFIRMWARE_DIR)/Tools/uf2conv/uf2conv.py  -b 0x10000000 -f 0xe48bff56 -c -o $(BUILD_DIR)/$(OUTPUT_NAME).uf2 $(BUILD_DIR)/$(OUTPUT_NAME).bin
 	
+$(BUILD_DIR)/$(FREERTOS_DIR)/%.o : $(FREERTOS_DIR)/%.c
+	@echo "[$<]"
+	$(V)$(MKDIR) $(dir $@)
+	$(V)$(CC)  $(CFLAGS) $(DEFINES) $(INCLUDES) -MMD -MP -MM -MF $(patsubst %.o,%.d,$@) $<
+	$(V)$(CC)  $(CFLAGS) $(DEFINES) $(INCLUDES) -MMD -MP -o $@ $<
+
 $(BUILD_DIR)/%.o: %.c
 	@echo "[$<]"
 	$(V)$(MKDIR) $(dir $@)
@@ -143,6 +150,7 @@ $(BUILD_DIR)/$(COREN2G_DIR)/%.o : $(COREN2G_DIR)/%.cpp
 	@echo "CORE [$<]"
 	$(V)$(MKDIR) $(dir $@)
 	$(V)$(CXX) $(CXXFLAGS_CORE) $(DEFINES) $(INCLUDES) -MMD -MP -MM -MF $(patsubst %.o,%.d,$@) $<
+#	$(V)$(CXX) -Wa,-ahl=$@.s $(CXXFLAGS_CORE) $(DEFINES) $(INCLUDES) -MMD -MP -o $@ $<
 	$(V)$(CXX) $(CXXFLAGS_CORE) $(DEFINES) $(INCLUDES) -MMD -MP -o $@ $<
 
 $(BUILD_DIR)/$(CANLIB_DIR)/%.o : $(CANLIB_DIR)/%.cpp
