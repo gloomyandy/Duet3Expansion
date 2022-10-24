@@ -18,7 +18,7 @@
 # include "ClosedLoop/ClosedLoop.h"
 #endif
 
-#if SUPPORT_SPI_SENSORS || defined(ATEIO)
+#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO)
 # include <Hardware/SharedSpiDevice.h>
 #endif
 
@@ -134,7 +134,7 @@ namespace Platform
 #endif	//SUPPORT_DRIVERS
 
 	// Public functions
-#if SUPPORT_SPI_SENSORS || defined(ATEIO)
+#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO)
 	extern SharedSpiDevice *sharedSpi;
 	inline SharedSpiDevice& GetSharedSpi() noexcept { return *sharedSpi; }
 #endif
@@ -235,13 +235,13 @@ namespace Platform
 	bool GetDirectionValue(size_t driver);
 	void SetEnableValue(size_t driver, int8_t eVal);
 	int8_t GetEnableValue(size_t driver);
-#if SUPPORT_CLOSED_LOOP
-	void DriveEnableOverride(size_t driver, bool doOverride);
-#endif
-	void EnableDrive(size_t driver);
-	void DisableDrive(size_t driver);
+	void EnableDrive(size_t driver, uint16_t brakeOffDelay);
+	void DisableDrive(size_t driver, uint16_t motorOffDelay);
 	void DisableAllDrives();
 	void SetDriverIdle(size_t driver, uint16_t idlePercent);
+# if SUPPORT_CLOSED_LOOP
+	bool IsDriverEnabled(size_t driver);
+# endif
 
 	GCodeResult ProcessM569Point7(const CanMessageGeneric& msg, const StringRef& reply);
 
@@ -274,8 +274,6 @@ namespace Platform
 #endif
 
 	const MinCurMax& GetMcuTemperatures();
-
-	void HandleHeaterFault(unsigned int heater);
 
 	void KickHeatTaskWatchdog();
 	uint32_t GetHeatTaskIdleTicks();
@@ -317,6 +315,10 @@ namespace Platform
 	uint32_t GetDateTime() noexcept;
 	void SetDateTime(uint32_t tim) noexcept;
 	bool WasDeliberateError() noexcept;
+
+#if SAME5x
+	void SetInterruptPriority(IRQn base, unsigned int num, uint32_t prio) noexcept;
+#endif
 
 	void AppendBoardAndFirmwareDetails(const StringRef& reply) noexcept;
 	void AppendDiagnostics(const StringRef& reply) noexcept;

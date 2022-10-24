@@ -182,36 +182,49 @@ void NonVolatileMemory::SetThermistorCalibration(unsigned int inputNumber, int8_
 	}
 }
 
-bool NonVolatileMemory::GetClosedLoopDataWritten() noexcept
+bool NonVolatileMemory::GetClosedLoopDataValid() noexcept
 {
 	EnsureRead();
-	return !buffer.closedLoopPage.neverWritten;
+	return !buffer.closedLoopPage.notValid;
 }
 
-float* NonVolatileMemory::GetClosedLoopLUTHarmonicAngles() noexcept
+void NonVolatileMemory::SetClosedLoopDataValid(bool valid) noexcept
 {
 	EnsureRead();
-	return buffer.closedLoopPage.absEncoderLUTHarmonicAngles;
+	if (valid)
+	{
+		if (buffer.closedLoopPage.notValid)
+		{
+			buffer.closedLoopPage.notValid = 0;
+			state = NvmState::writeNeeded;
+		}
+	}
+	else if (!buffer.closedLoopPage.notValid)
+	{
+		buffer.closedLoopPage.notValid = 1;
+		state = NvmState::eraseAndWriteNeeded;
+	}
 }
 
-float* NonVolatileMemory::GetClosedLoopLUTHarmonicMagnitudes() noexcept
+const NonVolatileMemory::HarmonicDataElement *NonVolatileMemory::GetClosedLoopHarmonicValues() noexcept
 {
 	EnsureRead();
-	return buffer.closedLoopPage.absEncoderLUTHarmonicMagnitudes;
+	return buffer.closedLoopPage.harmonicData;
 }
 
-void NonVolatileMemory::SetClosedLoopLUTHarmonicValue(float* harmonicArray, size_t harmonic, float value) noexcept
+void NonVolatileMemory::SetClosedLoopHarmonicValue(size_t index, float value) noexcept
 {
 	EnsureRead();
-	const float oldValue = harmonicArray[harmonic];
-	const bool hasBeenWrittenBefore = !buffer.closedLoopPage.neverWritten;
+	const float oldValue = buffer.closedLoopPage.harmonicData[index].f;
 	if (oldValue != value)
 	{
-		buffer.closedLoopPage.neverWritten = 0;
-		harmonicArray[harmonic] = value;
+		buffer.closedLoopPage.notValid = 0;
+		const uint32_t oldBits = buffer.closedLoopPage.harmonicData[index].u;
+		buffer.closedLoopPage.harmonicData[index].f = value;
 
 		// If we are only changing 1s to 0s then we don't need to erase
-		if (hasBeenWrittenBefore)
+		const uint32_t newBits = buffer.closedLoopPage.harmonicData[index].u;
+		if ((~oldBits & newBits) != 0)
 		{
 			state = NvmState::eraseAndWriteNeeded;
 		}
@@ -222,14 +235,22 @@ void NonVolatileMemory::SetClosedLoopLUTHarmonicValue(float* harmonicArray, size
 	}
 }
 
-void NonVolatileMemory::SetClosedLoopLUTHarmonicAngle(size_t harmonic, float value) noexcept
+void NonVolatileMemory::SetClosedLoopZeroCountPhase(uint32_t phase) noexcept
 {
-	SetClosedLoopLUTHarmonicValue(buffer.closedLoopPage.absEncoderLUTHarmonicAngles, harmonic, value);
-}
-
-void NonVolatileMemory::SetClosedLoopLUTHarmonicMagnitude(size_t harmonic, float value) noexcept
-{
-	SetClosedLoopLUTHarmonicValue(buffer.closedLoopPage.absEncoderLUTHarmonicMagnitudes, harmonic, value);
+	EnsureRead();
+	const uint32_t oldPhase = buffer.closedLoopPage.harmonicData[0].u;
+	if (oldPhase != phase)
+	{
+		buffer.closedLoopPage.harmonicData[0].u = phase;
+		if ((phase & ~oldPhase) != 0)
+		{
+			state = NvmState::eraseAndWriteNeeded;
+		}
+		else
+		{
+			state = NvmState::writeNeeded;
+		}
+	}
 }
 
 // End

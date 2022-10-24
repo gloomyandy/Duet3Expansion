@@ -7,7 +7,7 @@
 
 #include <RepRapFirmware.h>
 
-#if SAME5x && SUPPORT_CLOSED_LOOP
+#if SUPPORT_CLOSED_LOOP && defined(EXP1HCLv1_0)
 
 #include "QuadratureEncoderPdec.h"
 #include <hri_mclk_e54.h>
@@ -66,13 +66,13 @@ void QuadratureEncoderPdec::AppendDiagnostics(const StringRef &reply) noexcept
 	PDEC->CTRLBSET.reg = PDEC_CTRLBSET_CMD_READSYNC;
 	while (PDEC->SYNCBUSY.reg & (PDEC_SYNCBUSY_CTRLB | PDEC_SYNCBUSY_COUNT)) { }
 	const uint16_t count = PDEC->COUNT.reg;
-	reply.catf(", raw count = %u", count);
+	reply.catf("Encoder raw count %u", count);
 #endif
 }
 
 void QuadratureEncoderPdec::AppendStatus(const StringRef& reply) noexcept
 {
-	// Nothing needed here yet
+	reply.catf(", encoder pulses/step: %.2f", (double)(countsPerStep / 4));
 }
 
 // Get the current position relative to the starting position

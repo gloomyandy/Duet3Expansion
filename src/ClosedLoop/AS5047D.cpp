@@ -12,6 +12,8 @@
 #include <Hardware/IoPorts.h>
 #include <ClosedLoop/ClosedLoop.h>
 
+constexpr unsigned int AS5047DResolutionBits = 14;
+
 constexpr uint16_t AS5047RegNop = 0x0000;
 constexpr uint16_t AS5047RegErrfl = 0x0001;
 constexpr uint16_t AS5047RegProg = 0x0003;
@@ -59,9 +61,9 @@ static inline bool CheckResponse(uint16_t response) noexcept
 	return CheckEvenParity(response) && (response & 0x4000) == 0;
 }
 
-AS5047D::AS5047D(SharedSpiDevice& spiDev, Pin p_csPin) noexcept
+AS5047D::AS5047D(float p_stepAngle, SharedSpiDevice& spiDev, Pin p_csPin) noexcept
 	: SpiEncoder(spiDev, AS5047ClockFrequency, SpiMode::mode1, false, p_csPin),
-	  AbsoluteEncoder()
+	  AbsoluteEncoder(p_stepAngle, AS5047DResolutionBits)
 {
 }
 
@@ -121,7 +123,8 @@ void AS5047D::Disable() noexcept
 	ClosedLoop::DisableEncodersSpi();
 }
 
-uint32_t AS5047D::GetAbsolutePosition(bool& error) noexcept
+// Return the current position as reported by the encoder
+bool AS5047D::GetRawReading() noexcept
 {
 	if (spi.Select(0))			// get the mutex and set the clock rate
 	{
@@ -132,14 +135,12 @@ uint32_t AS5047D::GetAbsolutePosition(bool& error) noexcept
 		spi.Deselect();			// release the mutex
 		if (ok && CheckResponse(response))
 		{
-			response &= 0x3FFF;
-			error = false;
-			return ((response & 0x2000) ? response | 0xFFFFC000 : response) + AS5047D_ABS_READING_OFFSET;
+			rawReading = response & 0x3FFF;
+			return false;
 		}
 	}
 
-	error = true;
-	return 0;
+	return true;
 }
 
 // Get the diagnostic register and the error flags register
@@ -164,9 +165,9 @@ bool AS5047D::GetDiagnosticRegisters(DiagnosticRegisters& regs) noexcept
 // Get diagnostic information and append it to a string
 void AS5047D::AppendDiagnostics(const StringRef &reply) noexcept
 {
-	reply.catf(", encoder full rotations %d", (int) fullRotations);
-	reply.catf(", encoder last angle %d", (int) lastAngle);
-	reply.catf(", zero crossing index=%d, zero crossing offset=%d, minCorrection=%.1f, maxCorrection=%.1f", zeroCrossingIndex, zeroCrossingOffset, (double)minCorrection, (double)maxCorrection);
+	reply.catf("Encoder full rotations %" PRIi32, fullRotations);
+	reply.catf(", last angle %" PRIu32, currentAngle);
+	reply.catf(", minCorrection=%.1f, maxCorrection=%.1f", (double)minLUTCorrection, (double)maxLUTCorrection);
 	DiagnosticRegisters regs;
 	if (GetDiagnosticRegisters(regs))
 	{
@@ -237,6 +238,7 @@ void AS5047D::AppendDiagnostics(const StringRef &reply) noexcept
 // Append short form status to a string. If there is an error then the user can use M122 to get more details.
 void AS5047D::AppendStatus(const StringRef& reply) noexcept
 {
+	reply.catf(", motor degrees/step: %.2f", (double)stepAngle);
 	DiagnosticRegisters regs;
 	if (GetDiagnosticRegisters(regs))
 	{
@@ -251,7 +253,7 @@ void AS5047D::AppendStatus(const StringRef& reply) noexcept
 	}
 	else
 	{
-		reply.cat(", sensor comms error");
+		reply.cat(", sensor comm error");
 	}
 }
 

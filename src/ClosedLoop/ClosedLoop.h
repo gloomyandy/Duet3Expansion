@@ -40,6 +40,7 @@ namespace ClosedLoop
 	// Tuning manoeuvres
 	constexpr uint8_t BASIC_TUNING_MANOEUVRE 				= 1u << 0;		// this measures the polarity, check that the CPR looks OK, and for relative encoders sets the zero position
 	constexpr uint8_t ENCODER_CALIBRATION_MANOEUVRE 		= 1u << 1;		// this calibrates an absolute encoder
+	constexpr uint8_t ENCODER_CALIBRATION_CHECK				= 1u << 2;		// this checks the calibration
 	constexpr uint8_t STEP_MANOEUVRE 						= 1u << 6;		// this does a sudden step change in the requested position for PID tuning
 
 #if 0	// The remainder are not currently implemented
@@ -51,10 +52,8 @@ namespace ClosedLoop
 	extern Encoder *encoder;						// Pointer to the encoder object in use
 	extern uint8_t tuning;							// Bitmask of any tuning manoeuvres that have been requested
 	extern uint8_t tuningError;						// Flags for any tuning errors
-	extern uint16_t measuredStepPhase;				// The measured position of the motor
 	extern uint16_t desiredStepPhase;				// The desired position of the motor
-	extern int32_t currentEncoderReading;			// The latest reading taken from the encoder
-	extern float encoderPulsePerStep;				// How many encoder readings do we get per step?
+	extern uint32_t currentMotorPhase;				// the phase (0 to 4095) that the driver is set to
 
 	// Closed loop public methods
 	void Init() noexcept;
@@ -84,16 +83,17 @@ namespace ClosedLoop
 	float PulsePerStepToExternalUnits(float pps, uint8_t encoderType) noexcept;
 	float ExternalUnitsToPulsePerStep(float externalUnits, uint8_t encoderType) noexcept;
 	void SetMotorPhase(uint16_t phase, float magnitude) noexcept;
-	void SetForwardPolarity() noexcept;
-	void SaveBasicTuningResult(float slope, float origin, float xMean, bool reverse) noexcept;
-	void FinishedBasicTuning() noexcept;			// call this when we have stopped basic tuning movement and are ready to switch to closed loop control
-	void AdjustTargetMotorSteps(float amount) noexcept;	// called by tuning to execute a step
+	void FinishedBasicTuning(float forwardSlope, float reverseSlope, float forwardOrigin, float reverseOrigin, float forwardXmean, float reverseXmean) noexcept;
+															// call this when we have stopped basic tuning movement and are ready to switch to closed loop control
+	void FinishedEncoderCalibration() noexcept;				// call this when we have finished calibrating an absolute encoder
+	void ReportEncoderCalibrationCheckResult() noexcept;	// call this to report calibration results
+	void AdjustTargetMotorSteps(float amount) noexcept;		// called by tuning to execute a step
 
 	// Methods in the tuning module
 	void PerformTune() noexcept;
 }
 
-#  if defined(EXP1HCLv0_3) || defined(EXP1HCLv1_0)
+#  if defined(EXP1HCLv1_0) || defined(M23CL)
 // The encoder uses the standard shared SPI device, so we don't need to enable/disable it
 inline void ClosedLoop::EnableEncodersSpi() noexcept { }
 inline void ClosedLoop::DisableEncodersSpi() noexcept { }

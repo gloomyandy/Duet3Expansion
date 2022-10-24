@@ -16,36 +16,38 @@
 #ifndef SRC_CLOSEDLOOP_RELATIVEENCODER_H_
 # define SRC_CLOSEDLOOP_RELATIVEENCODER_H_
 
-# include "Encoder.h"
+#include "Encoder.h"
 
-# if SUPPORT_CLOSED_LOOP
+#if SUPPORT_CLOSED_LOOP
 
 class RelativeEncoder : public Encoder
 {
 public:
-	RelativeEncoder() noexcept : offset(0) {}
+	// Constructors
+	RelativeEncoder(uint32_t p_stepsPerRev, uint32_t p_countsPerRev) noexcept : Encoder(p_stepsPerRev, (float)p_countsPerRev/(float)p_stepsPerRev) {}
 
-	// Offset management
-	void SetOffset(int32_t newOffset) noexcept { offset += newOffset; }
-	void ClearOffset() noexcept { offset = 0; }
+	// Overridden virtual functions
+
+	// Return true if this is an absolute encoder
+	bool IsAbsolute() const noexcept override { return false; }
 
 	// Get the current reading
-	int32_t GetReading() noexcept {
-		bool error;	// TODO: How to handle error?
-		return GetRelativePosition(error) + offset;
-	}
+	bool TakeReading() noexcept override;
 
-	// Constants
-	EncoderPositioningType GetPositioningType() const noexcept override { return EncoderPositioningType::relative; }
+	// Tell the encoder what the step phase is at a particular count
+	void SetKnownPhaseAtCount(uint32_t phase, int32_t count) noexcept override;
+
+	// Clear the accumulated full rotations so as to get the count back to a smaller number
+	void ClearFullRevs() noexcept override { currentCount %= (int32_t)countsPerRev; }
 
 protected:
 	// Get the relative position since the start
 	virtual int32_t GetRelativePosition(bool& error) noexcept = 0;
 
-	// For calculating the raw reading
-	int32_t offset;
+private:
+	uint32_t countsPerRev;
 };
 
-# endif
+#endif
 
 #endif /* SRC_CLOSEDLOOP_RELATIVEENCODER_H_ */
