@@ -23,8 +23,7 @@ bool AbsoluteEncoder::TakeReading() noexcept
 	bool err = GetRawReading();
 	if (!err)
 	{
-		rawAngle = (IsBackwards()) ? GetMaxValue() - 1 - rawReading : rawReading;
-		uint32_t newAngle = rawAngle;
+		uint32_t newAngle = rawReading;
 
 		// Apply LUT correction (if the LUT is loaded)
 		if (LUTLoaded)
@@ -36,20 +35,30 @@ bool AbsoluteEncoder::TakeReading() noexcept
 			}
 			else
 			{
-				const uint32_t windowOffset = newAngle & (1u << (resolutionToLutShiftFactor - 1));
+				const uint32_t windowOffset = newAngle & ((1u << resolutionToLutShiftFactor) - 1);
 				if (windowOffset <= (1u << (resolutionToLutShiftFactor - 1)))
 				{
 					newAngle = correctionLUT[windowStartIndex] + windowOffset;
 				}
 				else
 				{
+					// Note that we store an duplicate of correctionLUT[0] at the end to avoid having to wrap when we add 1 to windowStartIndex
 					newAngle = correctionLUT[windowStartIndex + 1] - (1u << resolutionToLutShiftFactor) + windowOffset;
 				}
-				newAngle &= ((1u << resolutionBits) - 1);
+				newAngle &= (GetMaxValue() - 1);
 			}
 		}
 
-		currentPhasePosition = (((newAngle * stepsPerRev * 1024u) >> resolutionBits) + zeroCountPhasePosition) & 4095u;
+		if (IsBackwards())
+		{
+			newAngle = (GetMaxValue() - newAngle) & (GetMaxValue() - 1);
+			rawAngle = (GetMaxValue() - rawReading) & (GetMaxValue() - 1);
+		}
+		else
+		{
+			rawAngle = rawReading;
+		}
+		currentPhasePosition = (((newAngle * GetPhasePositionsPerRev()) >> resolutionBits) + zeroCountPhasePosition) & 4095u;
 
 		// Accumulate the full rotations if one has occurred
 		const int32_t difference = (int32_t)newAngle - (int32_t)currentAngle;
@@ -60,7 +69,7 @@ bool AbsoluteEncoder::TakeReading() noexcept
 		}
 		else if (difference < -(int32_t)(GetMaxValue()/2))
 		{
-			// Gone from a high value to a low value, to going up and wrapped round
+			// Gone from a high value to a low value, so going up and wrapped round
 			++fullRotations;
 		}
 
@@ -78,13 +87,17 @@ void AbsoluteEncoder::ClearFullRevs() noexcept
 	currentCount = (int32_t)currentAngle;
 }
 
-// Tell the encoder what the step phase is at a particular count
-void AbsoluteEncoder::SetKnownPhaseAtCount(uint32_t phase, int32_t count) noexcept
+// Encoder polarity. Changing this will change the encoder reading.
+void AbsoluteEncoder::SetBackwards(bool backwards) noexcept
 {
-	count %= (int32_t)GetCountsPerRev();
-	if (count < 0) { count += (int32_t)GetCountsPerRev(); }
-	const uint32_t relativePhasePosition = ((uint32_t)count * stepsPerRev * 1024u) >> resolutionBits;
-	zeroCountPhasePosition = (phase - relativePhasePosition) & 4095u;
+	if (isBackwards != backwards)
+	{
+		ClearFullRevs();
+		rawAngle = (GetMaxValue() - rawAngle) & (GetMaxValue() - 1);
+		currentAngle = (GetMaxValue() - currentAngle) & (GetMaxValue() - 1);
+		ClearFullRevs();
+		isBackwards = backwards;
+	}
 }
 
 bool AbsoluteEncoder::LoadLUT() noexcept
@@ -113,6 +126,10 @@ void AbsoluteEncoder::PopulateLUT(NonVolatileMemory& mem) noexcept
 	const NonVolatileMemory::HarmonicDataElement *harmonicData = mem.GetClosedLoopHarmonicValues();
 	minLUTCorrection = std::numeric_limits<float>::infinity();
 	maxLUTCorrection = -std::numeric_limits<float>::infinity();
+	rmsCorrection = 0.0;
+#ifdef DEBUG
+	int32_t totalCorrection = 0;
+#endif
 	for (size_t index = 0; index < LUTLength; index++)
 	{
 		const float basicAngle = TwoPi * index / LUTLength;
@@ -125,12 +142,12 @@ void AbsoluteEncoder::PopulateLUT(NonVolatileMemory& mem) noexcept
 			}
 			const float correctionAngle = lastCorrection * TwoPi/GetMaxValue();
 			float correction = 0.0;
-			for (size_t harmonic = 0; harmonic < NumHarmonics; harmonic++)
+			for (size_t harmonic = 1; harmonic < NumHarmonics; harmonic++)
 			{
-				const float sineCoefficient = (harmonic == 0) ? 0.0 : harmonicData[2 * harmonic].f;
+				const float sineCoefficient = harmonicData[2 * harmonic].f;
 				const float cosineCoefficient = harmonicData[2 * harmonic + 1].f;
 				const float angle = harmonic * basicAngle;
-				correction -= sineCoefficient * sinf(angle + correctionAngle) + cosineCoefficient * cosf(angle + correctionAngle);
+				correction += sineCoefficient * sinf(angle + correctionAngle) + cosineCoefficient * cosf(angle + correctionAngle);
 			}
 			const float diff = fabsf(correction - lastCorrection);
 			lastCorrection = correction;
@@ -139,93 +156,28 @@ void AbsoluteEncoder::PopulateLUT(NonVolatileMemory& mem) noexcept
 				break;
 			}
 		}
-		const int32_t temp = lrintf(lastCorrection + (float)(index << resolutionToLutShiftFactor));
+		const int32_t temp = lrintf(lastCorrection) + (int32_t)(index << resolutionToLutShiftFactor);
 		correctionLUT[index] = (uint16_t)temp & ((1u << resolutionBits) - 1);
 		if (lastCorrection < minLUTCorrection) { minLUTCorrection = lastCorrection; }
 		if (lastCorrection > maxLUTCorrection) { maxLUTCorrection = lastCorrection; }
-		rmsCorrection += fsquare(lastCorrection + harmonicData[1].f);				// ignore the mean when computing the RMC
+		rmsCorrection += fsquare(lastCorrection);
+#ifdef DEBUG
+		totalCorrection += lrintf(lastCorrection);
+#endif
 	}
+	correctionLUT[LUTLength] = correctionLUT[0];			// extra duplicate entry at end
 	rmsCorrection = sqrtf(rmsCorrection/LUTLength);
-	meanCorrection = -harmonicData[1].f;
+
+	zeroCountPhasePosition = harmonicData[0].u;
+	SetBackwards(harmonicData[1].u & 0x01);
 
 #ifdef DEBUG
-	debugPrintf("Actual max iterations %u, minCorrection %.1f, maxCorrection %.1f, RMS correction %.1f\n", actualMaxIterationNumber + 1, (double)minLUTCorrection, (double)maxLUTCorrection, (double)rmsCorrection);
+	debugPrintf("Actual max iterations %u, minCorrection %.1f, maxCorrection %.1f, RMS correction %.1f, zrp %" PRIu32 " totalCorr %" PRIi32 "\n",
+					actualMaxIterationNumber + 1, (double)minLUTCorrection, (double)maxLUTCorrection, (double)rmsCorrection, zeroCountPhasePosition, totalCorrection);
 #endif
 
 	// Mark the LUT as loaded
 	LUTLoaded = true;
-}
-
-void AbsoluteEncoder::StoreLUT(uint32_t virtualStartPosition, uint32_t numReadingsTaken) noexcept
-{
-#ifdef DEBUG
-	debugPrintf("Calibration min/max errors [%.1f %.1f]\nSin/cos coefficients:", (double)minCalibrationError, (double)maxCalibrationError);
-#endif
-
-	// Store the table of harmonics to nonvolatile memory
-	NonVolatileMemory mem(NvmPage::closedLoop);
-	for (size_t harmonic = 0; harmonic < NumHarmonics; harmonic++)
-	{
-		if (harmonic != 0)				// the zero-order sine coefficient is always zero, so we store the zero count phase there instead
-		{
-			const float sineCoefficient = 2.0 * sines[harmonic]/numReadingsTaken;
-			mem.SetClosedLoopHarmonicValue(harmonic * 2, sineCoefficient);
-		}
-		const float cosineCoefficient = (harmonic == 0) ? cosines[harmonic]/numReadingsTaken : 2.0 * cosines[harmonic]/numReadingsTaken;
-		mem.SetClosedLoopHarmonicValue(harmonic * 2 + 1, cosineCoefficient);
-#ifdef DEBUG
-		debugPrintf(" [%.3f %.3f]", (double)sineCoefficient, (double)cosineCoefficient);
-#endif
-	}
-	mem.SetClosedLoopZeroCountPhase(0xFFFFFFFF);
-	mem.SetClosedLoopDataValid(true);
-#ifdef DEBUG
-	debugPrintf("\n");
-#endif
-	mem.EnsureWritten();
-
-	// Populate the LUT from the coefficients
-	PopulateLUT(mem);
-}
-
-void AbsoluteEncoder::CheckLUT(uint32_t virtualStartPosition, uint32_t numReadingsTaken) noexcept
-{
-#ifdef DEBUG
-	debugPrintf("Calibration check min/max errors [%.1f %.1f]\nSin/cos coefficients:", (double)minCalibrationError, (double)maxCalibrationError);
-#endif
-	for (size_t harmonic = 0; harmonic < NumHarmonics; harmonic++)
-	{
-		sines[harmonic] = 2.0 * sines[harmonic]/numReadingsTaken;
-		cosines[harmonic] = (harmonic == 0) ? cosines[harmonic]/numReadingsTaken : 2.0 * cosines[harmonic]/numReadingsTaken;
-#ifdef DEBUG
-		debugPrintf(" [%.3f %.3f]", (double)sines[harmonic], (double)cosines[harmonic]);
-#endif
-	}
-#ifdef DEBUG
-	debugPrintf("\n");
-#endif
-
-	const size_t LUTLength = GetNumLUTEntries();
-	minLUTError = std::numeric_limits<float>::infinity();
-	maxLUTError = -std::numeric_limits<float>::infinity();
-	rmsError = 0.0;
-	for (size_t index = 0; index < LUTLength; index++)
-	{
-		const float basicAngle = TwoPi * index / LUTLength;
-		float correction = 0.0;
-		for (size_t harmonic = 0; harmonic < NumHarmonics; harmonic++)
-		{
-			const float sineCoefficient = sines[harmonic];
-			const float cosineCoefficient = cosines[harmonic];
-			const float angle = harmonic * basicAngle;
-			correction -= sineCoefficient * sinf(angle) + cosineCoefficient * cosf(angle);
-		}
-		if (correction < minLUTError) { minLUTError = correction; }
-		if (correction > maxLUTError) { maxLUTError = correction; }
-		rmsError += fsquare(correction + cosines[0]);					// ignore the mean when computing the RMS error
-	}
-	rmsError = sqrtf(rmsError/LUTLength);
-	meanError = -cosines[0];
 }
 
 // Clear the LUT. We may be about to calibrate the encoder, so clear the calibration values too.
@@ -234,14 +186,13 @@ void AbsoluteEncoder::ClearLUT() noexcept
 	LUTLoaded = false;
 }
 
-void AbsoluteEncoder::ClearHarmonics() noexcept
+void AbsoluteEncoder::ClearDataCollection(size_t p_numDataPoints) noexcept
 {
-	for (size_t i = 0; i < NumHarmonics; ++i)
-	{
-		sines[i] = cosines[i] = 0.0;
-	}
+	numDataPoints = p_numDataPoints;
+	hysteresisSum = dataSum = dataBias = 0;
 	minCalibrationError = std::numeric_limits<float>::infinity();
 	maxCalibrationError = -std::numeric_limits<float>::infinity();
+	calibrationPhase = 0;
 }
 
 void AbsoluteEncoder::ScrubLUT() noexcept
@@ -252,27 +203,177 @@ void AbsoluteEncoder::ScrubLUT() noexcept
 	mem.EnsureWritten();
 }
 
-void AbsoluteEncoder::RecordDataPoint(float angle, float error) noexcept
+// Record a data point. The first forwards data point must be index zero, and the first backwards data point must be index (numDataPoints - 1).
+void AbsoluteEncoder::RecordDataPoint(size_t index, int32_t data, bool backwards) noexcept
 {
-	if (error < minCalibrationError) { minCalibrationError = error; }
-	if (error > maxCalibrationError) { maxCalibrationError = error; }
+	if (backwards)
+	{
+		if (index + 1 == numDataPoints)
+		{
+			// This is the first data point collected during reverse motion.
+			// It sometimes happens that the encoder appears to travel slightly more than a full rotation.
+			// When using a 14-bit encoder and storing signed 16-bit values with two readings per point, this causes the data to overflow.
+			// To avoid this, after collecting the first set of data points we bias the data by subtracting the average value.
+			dataBias = dataSum/(int32_t)numDataPoints;
+		}
+		data -= initialCount;
+		hysteresisSum += data - calibrationData[index];
+		calibrationData[index] = (int16_t)((int32_t)calibrationData[index] + data - dataBias);
+	}
+	else
+	{
+		if (index == 0)
+		{
+			initialCount = data;
+		}
+		data -= initialCount;
+		calibrationData[index] = (int16_t)data;
+	}
+	dataSum += data;
+}
 
-	// Update the harmonic series coefficients
+// Analyse the calibration data and optionally store it. We have the specified number of data points but we read each point twice, once while rotating forwards and once backwards.
+// This takes a long time so it must be called by a low priority task
+TuningErrors AbsoluteEncoder::Calibrate(bool store) noexcept
+{
+	// dataSum is the sum of all the readings. If it is negative then the encoder is running backwards.
+	const float twiceExpectedMidPointDifference = (float)dataSum/(float)numDataPoints;
+
+	// expectedMidPointDifference should be close to half the encoder counts/rev
+	const float ratio = twiceExpectedMidPointDifference/GetMaxValue();
+	const float rotationDirection = (ratio < 0.0) ? -1.0 : 1.0;
+	measuredCountsPerStep = (twiceExpectedMidPointDifference * rotationDirection)/stepsPerRev;
+	measuredHysteresis = ((float)hysteresisSum * rotationDirection)/((float)numDataPoints * countsPerStep);
+
+	if (fabsf(ratio) > 1.05)
+	{
+		return TuningError::TooMuchMotion;
+	}
+	if (fabsf(ratio) < 0.95)
+	{
+		return TuningError::TooLittleMotion;
+	}
+
+	// Normalise initialCount to be within -GetMaxValue()..GetMaxValue()
+	initialCount %= (int32_t)GetMaxValue();
+
+	// Further normalise initialCount to keep the angles small, preferably we want the count to cross zero and back.
+	if (dataSum > 0 && initialCount > 0) { initialCount -= (int32_t)GetMaxValue(); }
+	else if (dataSum < 0 && initialCount < 0) { initialCount += (int32_t)GetMaxValue(); }
+
+	const float expectedMidPointReading = twiceExpectedMidPointDifference * 0.5 + (float)initialCount;
+	const float revFractionAtMidPoint = (float)(numDataPoints - 1)/(float)(2 * numDataPoints);
+	const float correctionRevFraction = (expectedMidPointReading * rotationDirection)/(float)GetMaxValue() - revFractionAtMidPoint;
+	const float phaseCorrection = correctionRevFraction * (float)GetPhasePositionsPerRev();
+	int32_t expectedZeroReadingPhase = -(lrintf(phaseCorrection)) % 4096;
+	if (expectedZeroReadingPhase < 0) { expectedZeroReadingPhase += 4096; }
+
+#ifdef DEBUG
+	debugPrintf("dataSum %" PRIi32 ", empr %.5f, init count %" PRIi32 ", crf %.5f, phase corr %.1f, bias %" PRIi32 ", zrp %" PRIu32 "\n",
+					dataSum, (double)expectedMidPointReading, initialCount, (double)correctionRevFraction, (double)phaseCorrection, dataBias, expectedZeroReadingPhase);
+#endif
+
+	// Now Fourier analyse the data, using the expected zero reading phase to set the angle origin
+	float minError = std::numeric_limits<float>::infinity();
+	float maxError = -std::numeric_limits<float>::infinity();
+
+	// Do a Fourier analysis of the data
+	float sines[NumHarmonics], cosines[NumHarmonics];
 	for (size_t i = 0; i < NumHarmonics; ++i)
 	{
-		sines[i] += error * sinf(angle * i);
-		cosines[i] += error * cosf(angle * i);
+		sines[i] = cosines[i] = 0.0;
 	}
+	float rmsErrorAcc = 0.0;
+	float sinSteps = 0.0;
+	float cosSteps = 0.0;
+	for (size_t i = 0; i < numDataPoints; ++i)
+	{
+		const float revFraction = ((float)i/(float)numDataPoints + correctionRevFraction) * rotationDirection;
+		const float angle = TwoPi * revFraction;
+		const float expectedValue = revFraction * (float)(GetMaxValue() * 2);		// *2 because we stored 2 values for each data point
+		const int32_t actualValue = (int32_t)calibrationData[i] + dataBias + (2 * initialCount);
+		const float error = expectedValue - (float)actualValue;
+
+#if 0
+		if ((i & 127) == 0 /*|| fabsf(error) > (float)GetMaxValue()*/)
+		{
+			debugPrintf("exp %.1f calib %" PRIi32 " err %.1f\n", (double)expectedValue, actualValue, (double)error);
+		}
+#endif
+		if (error < minError) { minError = error; }
+		if (error > maxError) { maxError = error; }
+		rmsErrorAcc += fsquare(error);
+
+		for (size_t j = 0; j < NumHarmonics; ++j)
+		{
+			sines[j] += error * sinf(angle * j);
+			cosines[j] += error * cosf(angle * j);
+		}
+
+		sinSteps += error * sinf(TwoPi * (float)(i * stepsPerRev)/(float)numDataPoints);
+		cosSteps += error * cosf(TwoPi * (float)(i * stepsPerRev)/(float)numDataPoints);
+	}
+
+	// We took 2 samples per point, so halve the errors
+	minCalibrationError = 0.5 * minError;
+	maxCalibrationError = 0.5 * maxError;
+
+	// Calculate the RMS error
+	rmsCalibrationError = 0.5 * sqrtf(rmsErrorAcc/numDataPoints);
+
+#ifdef DEBUG
+	debugPrintf("min/max/rms errors [%.1f %.1f %.1f] sin/cos steps [%.2f %.2f]\nSin/cos coefficients:",
+				(double)minCalibrationError, (double)maxCalibrationError, (double)rmsCalibrationError, (double)(sinSteps/numDataPoints), (double)(cosSteps/numDataPoints));
+#endif
+
+	for (size_t harmonic = 0; harmonic < NumHarmonics; harmonic++)
+	{
+		sines[harmonic] /= numDataPoints;
+		if (harmonic == 0)
+		{
+			cosines[harmonic] = 0.5 * cosines[harmonic]/numDataPoints;
+		}
+		else
+		{
+			cosines[harmonic] /= numDataPoints;
+		}
+#ifdef DEBUG
+		debugPrintf(" [%.3f %.3f]", (double)sines[harmonic], (double)cosines[harmonic]);
+#endif
+	}
+#ifdef DEBUG
+	debugPrintf("\n");
+#endif
+
+	if (store)
+	{
+		SetBackwards(rotationDirection < 0.0);
+
+		// Store the table of harmonics to nonvolatile memory
+		NonVolatileMemory mem(NvmPage::closedLoop);
+		for (size_t harmonic = 1; harmonic < NumHarmonics; harmonic++)
+		{
+			mem.SetClosedLoopHarmonicValue(harmonic * 2, sines[harmonic]);
+			mem.SetClosedLoopHarmonicValue(harmonic * 2 + 1, cosines[harmonic]);
+		}
+		mem.SetClosedLoopZeroCountPhaseAndPolarity((uint32_t)expectedZeroReadingPhase, (rotationDirection < 0.0) ? 0xFFFFFFFF : 0xFFFFFFFE);
+		mem.SetClosedLoopDataValid(true);
+		mem.EnsureWritten();
+
+		// Populate the LUT from the coefficients
+		PopulateLUT(mem);
+	}
+	return 0;
 }
 
-void AbsoluteEncoder::ReportCalibrationResult(const StringRef& reply) const noexcept
+void AbsoluteEncoder::AppendLUTCorrections(const StringRef& reply) const noexcept
 {
-	reply.lcatf("Calibration corrections: min %.1f, max %.1f, mean %.1f, deviation %.1f", (double)minLUTCorrection, (double)maxLUTCorrection, (double)meanCorrection, (double)rmsCorrection);
+	reply.catf("min %.1f, max %.1f, rms %.1f", (double)minLUTCorrection, (double)maxLUTCorrection, (double)rmsCorrection);
 }
 
-void AbsoluteEncoder::ReportCalibrationCheckResult(const StringRef& reply) const noexcept
+void AbsoluteEncoder::AppendCalibrationErrors(const StringRef& reply) const noexcept
 {
-	reply.lcatf("Calibration error: min %.1f, max %.1f, mean %.1f, deviation %.1f", (double)minLUTError, (double)maxLUTError, (double)meanError, (double)rmsError);
+	reply.catf("min %.1f, max %.1f, rms %.1f", (double)minCalibrationError, (double)maxCalibrationError, (double)rmsCalibrationError);
 }
 
 #endif

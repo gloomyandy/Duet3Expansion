@@ -10,8 +10,8 @@
 
 #include <Hardware/PinDescription.h>
 
-#define BOARD_TYPE_NAME		"RPI_PICO"
-#define BOOTLOADER_NAME		"RPI_PICO"
+#define BOARD_TYPE_NAME		"RPi_Pico"
+#define BOOTLOADER_NAME		"RPi_Pico"
 
 // General features
 #define HAS_VREF_MONITOR		0
@@ -22,7 +22,7 @@
 #define HAS_BUTTONS				1
 
 // Drivers configuration
-#define SUPPORT_DRIVERS			1	// temporary!
+#define SUPPORT_DRIVERS			1
 
 #if SUPPORT_DRIVERS
 
@@ -202,7 +202,7 @@ static_assert(NumPins == 30);		// 30 GPIO pins on RP2040
 constexpr DmaChannel DmacChanCAN = 0;					// this must match the value used in the RP2040 CAN driver in CoreN2G!
 constexpr DmaChannel DmacChanAdcRx = 1;
 constexpr DmaChannel DmacChanTmcTx = 2;
-constexpr DmaChannel DmacChanTmcRx = 3;
+constexpr DmaChannel DmacChanTmcRx = 3;					// this must be one higher than DmacChanTmcTx for RP2040 build configurations
 constexpr DmaChannel DmacChanCRC = 4;
 
 constexpr unsigned int NumDmaChannelsUsed = 5;			// must be at least the number of channels used, may be larger. Max 12 on the RP2040.

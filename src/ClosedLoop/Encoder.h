@@ -45,20 +45,17 @@ public:
 	// Return true if this is an absolute encoder, false if it is relative
 	virtual bool IsAbsolute() const noexcept = 0;
 
-	// Tell the encoder what the step phase is at a particular count
-	virtual void SetKnownPhaseAtCount(uint32_t phase, int32_t count) noexcept = 0;
-
 	// Clear the accumulated full rotations so as to get the count back to a smaller number
 	virtual void ClearFullRevs() noexcept = 0;
 
 	// Get the accumulated count
 	int32_t GetCurrentCount() const noexcept { return currentCount; }
 
-	// Encoder polarity. Changing this will change subsequent encoder readings, so call AdjustOffset afterwards.
-	void SetBackwards(bool backwards) noexcept { reversePolarityMultiplier = (backwards) ? -1 : 1; }
+	// Encoder polarity. Changing this will change the encoder reading.
+	virtual void SetBackwards(bool backwards) noexcept = 0;
 
 	// Return the encoder polarity
-	bool IsBackwards() const noexcept { return reversePolarityMultiplier < 0; }
+	virtual bool IsBackwards() const noexcept = 0;
 
 	// Return the number of encoder counts per step
 	float GetCountsPerStep() const noexcept { return countsPerStep; }
@@ -69,17 +66,27 @@ public:
 	// Return the number of steps per revolution
 	uint32_t GetStepsPerRev() const noexcept { return stepsPerRev; }
 
-	// Get the current phase position from the last reading - this may be more accurate that the fractional part of GetCurrentMotorSteps()
+	// Return the number of phase positions per revolution
+	uint32_t GetPhasePositionsPerRev() const noexcept { return stepsPerRev * 1024u; }
+
+	// Get the current phase position from the last reading - this may be more accurate than the fractional part of GetCurrentMotorSteps()
 	uint32_t GetCurrentPhasePosition() const noexcept { return currentPhasePosition; }
+
+	// Return the measured counts per step after tuning or calibration
+	float GetMeasuredCountsPerStep() const noexcept { return measuredCountsPerStep; }
+
+	// Return the measured hysteresis after tuning or calibration
+	float GetMeasuredHysteresis() const noexcept { return measuredHysteresis; }
 
 protected:
 	uint32_t stepsPerRev;
-	int32_t reversePolarityMultiplier = 1;
 	uint32_t currentPhasePosition = 0;
 	int32_t currentCount = 0;
 	uint32_t zeroCountPhasePosition = 0;
 	float countsPerStep;
 	float stepsPerCount;
+	float measuredCountsPerStep;
+	float measuredHysteresis;
 };
 
 #endif

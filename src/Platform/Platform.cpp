@@ -1819,6 +1819,7 @@ void Platform::DisableDrive(size_t driver, uint16_t motorOffDelay)
 	}
 	else
 	{
+		EngageBrake(driver);
 		InternalDisableDrive(driver);
 	}
 }
@@ -1869,8 +1870,17 @@ void Platform::DisableAllDrives()
 
 #if SUPPORT_CLOSED_LOOP
 
-bool Platform::IsDriverEnabled(size_t driver)
+bool Platform::EnableIfIdle(size_t driver)
 {
+	if (driverStates[driver] == DriverStateControl::driverIdle)
+	{
+		driverStates[driver] = DriverStateControl::driverActive;
+# if HAS_SMART_DRIVERS
+		driverAtIdleCurrent[driver] = false;
+		UpdateMotorCurrent(driver);
+#endif
+	}
+
 	return driverStates[driver] == DriverStateControl::driverActive;
 }
 
@@ -1900,7 +1910,11 @@ GCodeResult Platform::ProcessM569Point7(const CanMessageGeneric& msg, const Stri
 	{
 		String<StringLength20> portName;
 		parser.GetStringParam('C', portName.GetRef());
-		return GetGCodeResultFromSuccess(brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, PinAccess::write0));
+		return GetGCodeResultFromSuccess(	brakePorts[drive].AssignPort
+												(	portName.c_str(), reply, PinUsedBy::gpout,
+													(driverStates[drive] == DriverStateControl::driverDisabled) ? PinAccess::write0 : PinAccess::write1
+												)
+										);
 	}
 
 	reply.printf("Driver %u.%u uses brake port ", CanInterface::GetCanAddress(), drive);
