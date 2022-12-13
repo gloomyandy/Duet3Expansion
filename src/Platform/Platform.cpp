@@ -88,7 +88,6 @@ enum class DeferredCommand : uint8_t
 
 static volatile DeferredCommand deferredCommand = DeferredCommand::none;
 static volatile uint32_t whenDeferredCommandRequested;
-static uint32_t realTime = 0;
 static bool deliberateError = false;
 
 namespace Platform
@@ -97,6 +96,8 @@ namespace Platform
 
 	UniqueIdBase uniqueId;
 	bool isPrinting = false;
+	uint32_t realTime = 0;
+
 #if defined(EXP3HC) || defined(TOOL1LC)
 	static uint8_t boardVariant = 0;
 #endif
@@ -267,34 +268,38 @@ namespace Platform
 	}
 #endif
 
-#ifdef M23CL
+#if SUPPORT_DRIVERS
+
+# ifdef M23CL
 	static float currentBrakePwm = 0.0;
-#endif
+# endif
 
 	// Turn the brake solenoid on to disengage the brake
 	static void DisengageBrake(size_t driver) noexcept
 	{
-#ifdef M23CL
+# ifdef M23CL
 		// Set the PWM to deliver 24V regardless of the VIN voltage
-		currentBrakePwm = min<float>(24.0/AdcReadingToVinVoltage(max<int16_t>(currentVin, 1)), 1.0);
+		currentBrakePwm = min<float>(24.0/AdcReadingToVinVoltage(max<uint16_t>(currentVin, 1)), 1.0);
 		AnalogOut::Write(BrakePwmPin, currentBrakePwm, BrakePwmFrequency);
 		digitalWrite(BrakeOnPin, true);
-#else
+# else
 		brakePorts[driver].WriteDigital(true);
-#endif
+# endif
 	}
 
 	// Turn the brake solenoid off to re-engage the brake
 	static void EngageBrake(size_t driver) noexcept
 	{
-#ifdef M23CL
+# ifdef M23CL
 		currentBrakePwm = 0.0;
 		digitalWrite(BrakePwmPin, false);
 		digitalWrite(BrakeOnPin, false);
-#else
+# else
 		brakePorts[driver].WriteDigital(false);
-#endif
+# endif
 	}
+
+#endif	// SUPPORT_DRIVERS
 
 #if SAME5x
 	static int32_t tempCalF1, tempCalF2, tempCalF3, tempCalF4;		// temperature calibration factors
@@ -376,7 +381,7 @@ namespace Platform
 		NVIC_SetPriority(DMAC_IRQn, NvicPriorityDmac);
 		NVIC_SetPriority(EIC_IRQn, NvicPriorityPins);
 #elif RP2040
-		//TODO
+		NVIC_SetPriority((IRQn_Type)StepTcIRQn, NvicPriorityStep);
 #else
 # error Undefined processor
 #endif
@@ -686,7 +691,7 @@ void Platform::Init()
 #if defined(SAMMYC21)
 	uart0.begin(115200);						// set up the UART with the same baud rate as the bootloader
 #elif defined(RPI_PICO)
-	serialUSB.Start();
+	serialUSB.Start(NoPin);
 #elif defined(DEBUG)
 	// Set up the UART to send to PanelDue for debugging
 	// CAUTION! This sends data to pin io0.out on a tool board, which interferes with a BLTouch connected to that pin. So don't do it in normal use.
@@ -901,6 +906,12 @@ void Platform::Init()
 # if HAS_SMART_DRIVERS && HAS_VOLTAGE_MONITOR
 	warnDriversNotPowered = false;
 # endif
+
+# ifdef M23CL
+	// Set the brake control pins to outputs, leaving the brake engaged
+	pinMode(BrakeOnPin, OUTPUT_LOW);
+	pinMode(BrakePwmPin, OUTPUT_LOW);
+# endif
 #endif	//SUPPORT_DRIVERS
 
 #if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO)
@@ -1053,20 +1064,21 @@ void Platform::Spin()
 	}
 #endif
 
+#if SUPPORT_DRIVERS
 	// Check whether we need to turn any brake solenoids or motors off
 	for (size_t driver = 0; driver < NumDrivers; ++driver)
 	{
-		if (brakeOffTimers[driver].Check(brakeOffDelays[driver]))
+		if (brakeOffTimers[driver].CheckAndStop(brakeOffDelays[driver]))
 		{
 			DisengageBrake(driver);
 		}
-		if (motorOffTimers[driver].Check(motorOffDelays[driver]))
+		if (motorOffTimers[driver].CheckAndStop(motorOffDelays[driver]))
 		{
 			InternalDisableDrive(driver);
 		}
 	}
 
-#ifdef M23CL
+# ifdef M23CL
 
 	// If the brake solenoid is activated, adjust the PWM if necessary
 	if (currentBrakePwm != 0.0 && voltsVin > 0.0)
@@ -1079,10 +1091,15 @@ void Platform::Spin()
 		}
 	}
 
-#endif
+# endif
+#endif	// SUPPORT_DRIVERS
 
 #if HAS_SMART_DRIVERS
+# if HAS_VOLTAGE_MONITOR
 	SmartDrivers::Spin(powered);
+# else
+	SmartDrivers::Spin(true);
+# endif
 
 	// Check one TMC driver for warnings and errors
 	if (enableValues[nextDriveToPoll] >= 0)				// don't poll driver if it is flagged "no poll"
@@ -1116,7 +1133,7 @@ void Platform::Spin()
 		{
 			if (timer.IsRunning())
 			{
-				if (!timer.Check(OpenLoadTimeout))
+				if (!timer.CheckNoStop(OpenLoadTimeout))
 				{
 					stat.ClearOpenLoadBits();
 				}
@@ -2231,16 +2248,6 @@ GCodeResult Platform::DoDiagnosticTest(const CanMessageDiagnosticTest& msg, cons
 		reply.printf("Unknown test type %u", msg.testType);
 		return GCodeResult::error;
 	}
-}
-
-uint32_t Platform::GetDateTime() noexcept
-{
-	return realTime;
-}
-
-void Platform::SetDateTime(uint32_t tim) noexcept
-{
-	realTime = tim;
 }
 
 bool Platform::WasDeliberateError() noexcept

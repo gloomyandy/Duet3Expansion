@@ -7,7 +7,7 @@
 
 #include <RepRapFirmware.h>
 
-#if SUPPORT_CLOSED_LOOP && defined(EXP1HCLv1_0)
+#if SUPPORT_CLOSED_LOOP && (defined(EXP1HCLv1_0) || defined(M23CL))
 
 #include "QuadratureEncoderPdec.h"
 #include <hri_mclk_e54.h>
@@ -67,18 +67,19 @@ void QuadratureEncoderPdec::ClearFullRevs() noexcept
 
 void QuadratureEncoderPdec::AppendDiagnostics(const StringRef &reply) noexcept
 {
-	// Nothing needed here yet
+	reply.catf("Encoder reverse polarity: %s", (IsBackwards()) ? "yes" : "no");
+
 #if 1	//debug
 	PDEC->CTRLBSET.reg = PDEC_CTRLBSET_CMD_READSYNC;
 	while (PDEC->SYNCBUSY.reg & (PDEC_SYNCBUSY_CTRLB | PDEC_SYNCBUSY_COUNT)) { }
 	const uint16_t count = PDEC->COUNT.reg;
-	reply.catf("Encoder raw count %u", count);
+	reply.catf(", raw count %u", count);
 #endif
 }
 
 void QuadratureEncoderPdec::AppendStatus(const StringRef& reply) noexcept
 {
-	reply.catf(", encoder pulses/rev: %.2f", (double)(countsPerRev / 4));
+	reply.lcatf("Quadrature encoder pulses/rev: %.2f", (double)(countsPerRev / 4));
 }
 
 // Get the current position relative to the starting position

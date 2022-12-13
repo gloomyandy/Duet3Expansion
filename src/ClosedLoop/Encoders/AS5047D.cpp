@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include <ClosedLoop/AS5047D.h>
+#include "AS5047D.h"
 
 #if SUPPORT_CLOSED_LOOP
 
@@ -61,9 +61,9 @@ static inline bool CheckResponse(uint16_t response) noexcept
 	return CheckEvenParity(response) && (response & 0x4000) == 0;
 }
 
-AS5047D::AS5047D(float p_stepAngle, SharedSpiDevice& spiDev, Pin p_csPin) noexcept
+AS5047D::AS5047D(uint32_t p_stepsPerRev, SharedSpiDevice& spiDev, Pin p_csPin) noexcept
 	: SpiEncoder(spiDev, AS5047ClockFrequency, SpiMode::mode1, false, p_csPin),
-	  AbsoluteEncoder(p_stepAngle, AS5047DResolutionBits)
+	  AbsoluteRotaryEncoder(p_stepsPerRev, AS5047DResolutionBits)
 {
 }
 
@@ -165,7 +165,8 @@ bool AS5047D::GetDiagnosticRegisters(DiagnosticRegisters& regs) noexcept
 // Get diagnostic information and append it to a string
 void AS5047D::AppendDiagnostics(const StringRef &reply) noexcept
 {
-	reply.catf("Encoder full rotations %" PRIi32, fullRotations);
+	reply.catf("Encoder reverse polarity: %s", (IsReversed()) ? "yes" : "no");
+	reply.catf(", full rotations %" PRIi32, fullRotations);
 	reply.catf(", last angle %" PRIu32, currentAngle);
 	reply.catf(", minCorrection=%.1f, maxCorrection=%.1f", (double)minLUTCorrection, (double)maxLUTCorrection);
 	DiagnosticRegisters regs;
@@ -238,7 +239,7 @@ void AS5047D::AppendDiagnostics(const StringRef &reply) noexcept
 // Append short form status to a string. If there is an error then the user can use M122 to get more details.
 void AS5047D::AppendStatus(const StringRef& reply) noexcept
 {
-	reply.catf(", motor degrees/step: %.2f", (double)stepAngle);
+	reply.lcatf("Magnetic encoder motor steps/rev %" PRIu32, stepsPerRev);
 	DiagnosticRegisters regs;
 	if (GetDiagnosticRegisters(regs))
 	{

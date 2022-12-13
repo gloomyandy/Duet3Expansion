@@ -15,7 +15,7 @@
 
 // General features
 #define HAS_VREF_MONITOR		0
-#define HAS_VOLTAGE_MONITOR		1
+#define HAS_VOLTAGE_MONITOR		0	//TEMP!
 #define HAS_12V_MONITOR			0
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_ADDRESS_SWITCHES	0
@@ -37,7 +37,7 @@
 #define SUPPORT_TMC2160			0
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			1
-#define SUPPORT_TMC2240			1		// Duet3D boards using the RP2040 will likely use the TMC2240 stepper driver
+#define SUPPORT_TMC2240			0		// TEMP! Duet3D boards using the RP2040 will likely use the TMC2240 stepper driver
 
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
@@ -192,7 +192,8 @@ static constexpr size_t NumPins = ARRAY_SIZE(PinTable);
 static_assert(NumPins == 30);		// 30 GPIO pins on RP2040
 
 // Timer/counter used to generate step pulses and other sub-millisecond timings
-//TODO
+constexpr unsigned int StepTimerAlarmNumber = 0;
+constexpr unsigned int StepTcIRQn = TIMER_IRQ_0;
 
 // Available UART ports
 #define NUM_SERIAL_PORTS		1
@@ -212,7 +213,7 @@ constexpr DmaPriority DmacPrioTmcTx = 0;
 constexpr DmaPriority DmacPrioTmcRx = 1;
 constexpr DmaPriority DmacPrioAdcRx = 1;
 
-// Interrupt priorities, lower means higher priority. 0 can't make RTOS calls. Only 0 to 3 are available.
+// Interrupt priorities, lower means higher priority. Only 0 to 3 are available.
 const NvicPriority NvicPriorityStep = 1;				// step interrupt is next highest, it can preempt most other interrupts
 const NvicPriority NvicPriorityUart = 2;				// serial driver makes RTOS calls
 const NvicPriority NvicPriorityPins = 2;				// priority for GPIO pin interrupts
@@ -220,5 +221,6 @@ const NvicPriority NvicPriorityI2C = 2;
 const NvicPriority NvicPriorityCan = 3;
 const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interrupts
 const NvicPriority NvicPriorityAdc = 3;
+const NvicPriority NvicPriorityUSB = 3;
 
 #endif /* SRC_CONFIG_RPI_PICO_H_ */

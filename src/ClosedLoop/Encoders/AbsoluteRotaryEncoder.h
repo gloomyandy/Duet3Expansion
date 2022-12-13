@@ -18,39 +18,53 @@
  *  - Plus all the virtual functions required by the Encoder class
  */
 
-#ifndef SRC_CLOSEDLOOP_ABSOLUTEENCODER_H_
-# define SRC_CLOSEDLOOP_ABSOLUTEENCODER_H_
+#ifndef SRC_CLOSEDLOOP_ABSOLUTEROTARYENCODER_H_
+# define SRC_CLOSEDLOOP_ABSOLUTEROTARYENCODER_H_
 
 # include "Encoder.h"
 
 # if SUPPORT_CLOSED_LOOP
 
-#include "TuningErrors.h"
-
 class NonVolatileMemory;
 
 // Base class for absolute encoders. The encoder resolution(counts/revolution) must be a power of two.
-class AbsoluteEncoder : public Encoder
+class AbsoluteRotaryEncoder : public Encoder
 {
 public:
 	// Constructors
-	AbsoluteEncoder(uint32_t p_stepsPerRev, unsigned int p_resolutionBits) noexcept;
+	AbsoluteRotaryEncoder(uint32_t p_stepsPerRev, unsigned int p_resolutionBits) noexcept;
 
 	// Overridden virtual functions
-	// Return true if this is an absolute encoder
-	bool IsAbsolute() const noexcept override { return true; }
 
-	// Get the current reading
+	// Take a reading and store at least currentCount and currentPhasePosition. Return true if error, false if success.
 	bool TakeReading() noexcept override;
+
+	// Tell the encoder what the step phase is at the current count. Only applicable to relative encoders.
+	void SetKnownPhaseAtCurrentCount(uint32_t phase) noexcept override { }
 
 	// Clear the accumulated full rotations so as to get the count back to a smaller number
 	void ClearFullRevs() noexcept override;
 
-	// Encoder polarity. Changing this will change the encoder reading.
-	void SetBackwards(bool backwards) noexcept override;
+	// Encoder polarity for basic tuning purposes. Changing this will change the encoder reading.
+	void SetTuningBackwards(bool backwards) noexcept override { }
 
-	// Return the encoder polarity
-	bool IsBackwards() const noexcept override { return isBackwards; }
+	// Encoder polarity for calibration purposes. Changing this will change the encoder reading.
+	void SetCalibrationBackwards(bool backwards) noexcept override;
+
+	// Return true if rotary absolute encoder calibration is applicable to this encoder
+	bool UsesCalibration() const noexcept override { return true; }
+
+	// Return true if basic tuning is applicable to this encoder
+	bool UsesBasicTuning() const noexcept override { return false; }
+
+	// Set the forward tuning results. Only applicable if the encoder supports basic tuning.
+	void SetForwardTuningResults(float slope, float xMean, float yMean) noexcept override { }
+
+	// Set the reverse tuning results. Only applicable if the encoder supports basic tuning.
+	void SetReverseTuningResults(float slope, float xMean, float yMean) noexcept override { }
+
+	// Process the tuning data. Only applicable if the encoder supports basic tuning.
+	TuningErrors ProcessTuningData() noexcept override { return TuningError::SystemError; }
 
 	// Get the angle within a rotation from the most recent reading, corrected for direction only
 	uint32_t GetRawAngle() const noexcept { return rawAngle; }
@@ -61,24 +75,35 @@ public:
 	// Get the counts per revolution
 	uint32_t GetCountsPerRev() const noexcept { return 1u << resolutionBits; }
 
-	// Lookup table (LUT) management
-	void ClearDataCollection(size_t p_numDataPoints) noexcept;
-	void RecordDataPoint(size_t index, int32_t data, bool backwards) noexcept;
-	TuningErrors Calibrate(bool store) noexcept;
+	// Clear the encoder data collection. Only applicable if the encoder supports calibration.
+	void ClearDataCollection(size_t p_numDataPoints) noexcept override;
 
-	bool LoadLUT() noexcept;
-	void ClearLUT() noexcept;
-	void ScrubLUT() noexcept;
+	// Record a calibration data point. Only applicable if the encoder supports calibration.
+	void RecordDataPoint(size_t index, int32_t data, bool backwards) noexcept override;
+
+	// Calibrate the encoder using the recorded data points. Only applicable if the encoder supports calibration.
+	TuningErrors Calibrate(bool store) noexcept override;
+
+	// Load the calibration lookup table and clear bits TuningError:NeedsBasicTuning and/or TuningError::NotCalibrated in tuningNeeded as appropriate.
+	void LoadLUT(TuningErrors& tuningNeeded) noexcept override;
+
+	// Clear the calibration lookup table. Only applicable if the encoder supports calibration.
+	void ClearLUT() noexcept override;
+
+	// Clear the calibration lookup table and delete it from NVRAM. Only applicable if the encoder supports calibration.
+	void ScrubLUT() noexcept override;
+
+	// Append a summary of calibration lookup table corrections to a string. Only applicable if the encoder supports calibration.
+	void AppendLUTCorrections(const StringRef& reply) const noexcept override;
+
+	// Append a summary of measured calibration errors to a string. Only applicable if the encoder supports calibration.
+	void AppendCalibrationErrors(const StringRef& reply) const noexcept override;
 
 	unsigned int GetMaxValue() const noexcept { return 1ul << resolutionBits; }
 	unsigned int GetNumLUTEntries() const noexcept { return 1u << (resolutionBits - resolutionToLutShiftFactor); }
 	unsigned int GetResolutionBits() const noexcept { return resolutionBits; }
 	unsigned int GetResolutionToLutShiftFactor() const noexcept { return resolutionToLutShiftFactor; }
-
-	void AppendLUTCorrections(const StringRef& reply) const noexcept;
-	void AppendCalibrationErrors(const StringRef& reply) const noexcept;
-
-	static constexpr size_t MaxDataPoints = 200 * 64;				// support up to 64 data points per full step, uses about 25K RAM
+	bool IsReversed() const noexcept { return isBackwards; }
 
 protected:
 	// This must be defined to set rawReading to a value between 0 and one below GetMaxValue()
@@ -88,7 +113,7 @@ protected:
 	uint32_t rawAngle = 0;					// the value after correcting for direction
 	uint32_t currentAngle = 0;				// the value after correcting for eccentricity
 	int32_t fullRotations = 0;				// the number of full rotations counted
-	float stepAngle;
+	uint32_t zeroCountPhasePosition = 0;
 
 	// For diagnostics
 	float minLUTCorrection = 0.0, maxLUTCorrection = 0.0;			// min and max corrections, for reporting in diagnostics
@@ -119,9 +144,9 @@ private:
 	int32_t dataBias;
 	size_t numDataPoints;
 	unsigned int calibrationPhase;
-	int16_t calibrationData[MaxDataPoints];
+	int16_t calibrationData[MaxCalibrationDataPoints];
 };
 
 # endif
 
-#endif /* SRC_CLOSEDLOOP_ABSOLUTEENCODER_H_ */
+#endif /* SRC_CLOSEDLOOP_ABSOLUTEROTARYENCODER_H_ */

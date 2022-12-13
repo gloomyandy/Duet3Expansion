@@ -10,7 +10,7 @@
 
 #include "RelativeEncoder.h"
 
-#if SUPPORT_CLOSED_LOOP && defined(EXP1HCLv1_0)
+#if SUPPORT_CLOSED_LOOP && (defined(EXP1HCLv1_0) || defined(M23CL))
 
 #include <General/FreelistManager.h>
 
@@ -21,8 +21,8 @@ public:
 	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<QuadratureEncoderPdec>(); }
 	void operator delete(void* p) noexcept { FreelistManager::Release<QuadratureEncoderPdec>(p); }
 
-	QuadratureEncoderPdec(uint32_t p_stepsPerRev, uint32_t p_countsPerRev) noexcept
-		: RelativeEncoder(p_stepsPerRev, 4 * p_countsPerRev), lastCount(0), counterHigh(0) {}
+	QuadratureEncoderPdec(uint32_t p_countsPerRev, uint32_t p_stepsPerRev) noexcept
+		: RelativeEncoder(4 * p_countsPerRev, p_stepsPerRev), lastCount(0), counterHigh(0) {}
 	~QuadratureEncoderPdec() { QuadratureEncoderPdec::Disable(); }
 
 	EncoderType GetType() const noexcept override { return EncoderType::rotaryQuadrature; }

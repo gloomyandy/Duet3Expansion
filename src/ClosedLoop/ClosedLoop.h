@@ -20,6 +20,10 @@
 # include <ClosedLoop/DerivativeAveragingFilter.h>
 # include "TuningErrors.h"
 
+constexpr float MaxSafeBacklash = 0.22;					// the maximum backlash in full steps that we can use - error if there is more
+constexpr float MaxGoodBacklash = 0.15;					// the maximum backlash in full steps that we are happy with - warn if there is more
+constexpr unsigned int LinearEncoderIncreaseFactor = 4;	// this should be a power of 2. Allowed backlash is increased by this amount for linear composite encoders.
+
 class Encoder;
 class SpiEncoder;
 
@@ -39,10 +43,10 @@ namespace ClosedLoop
 #endif
 
 	//TODO reduce the number of these public variables, preferably to zero. Use a cleaner interface between the tuning module and the main closed loop module.
-	extern Encoder *encoder;						// Pointer to the encoder object in use
-	extern volatile uint8_t tuning;					// Bitmask of any tuning manoeuvres that have been requested
-	extern TuningErrors tuningError;				// Flags for any tuning errors
-	extern uint32_t currentMotorPhase;				// the phase (0 to 4095) that the driver is set to
+	extern Encoder *encoder;								// Pointer to the encoder object in use
+	extern volatile uint8_t tuning;							// Bitmask of any tuning manoeuvres that have been requested
+	extern TuningErrors tuningError;						// Flags for any tuning errors
+	extern uint32_t currentMotorPhase;						// the phase (0 to 4095) that the driver is set to
 
 	// Closed loop public methods
 	void Init() noexcept;
