@@ -39,7 +39,7 @@
 # endif
 #endif
 
-#if SUPPORT_I2C_SENSORS && SUPPORT_LIS3DH
+#if SUPPORT_LIS3DH
 # include "AccelerometerHandler.h"
 #endif
 
@@ -531,7 +531,7 @@ static GCodeResult ProcessM569(const CanMessageGeneric& msg, const StringRef& re
 
 static GCodeResult ProcessM569Point2(const CanMessageGeneric& msg, const StringRef& reply)
 {
-#if SUPPORT_TMC22xx || SUPPORT_TMC51xx
+#if SUPPORT_TMC22xx || SUPPORT_TMC51xx || SUPPORT_TMC2160
 	CanMessageGenericParser parser(msg, M569Point2Params);
 	uint8_t drive;
 	uint8_t regNum;
@@ -1126,7 +1126,7 @@ void CommandProcessor::Spin()
 			break;
 #endif
 
-#if SUPPORT_I2C_SENSORS && SUPPORT_LIS3DH
+#if SUPPORT_LIS3DH
 		case CanMessageType::accelerometerConfig:
 			requestId = buf->msg.generic.requestId;
 			rslt = AccelerometerHandler::ProcessConfigRequest(buf->msg.generic, replyRef);

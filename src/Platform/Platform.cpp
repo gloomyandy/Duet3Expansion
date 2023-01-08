@@ -32,7 +32,7 @@
 # include <Hardware/SharedI2cMaster.h>
 #endif
 
-#if SUPPORT_I2C_SENSORS && SUPPORT_LIS3DH
+#if SUPPORT_LIS3DH
 # include <CommandProcessing/AccelerometerHandler.h>
 #endif
 
@@ -382,6 +382,7 @@ namespace Platform
 		NVIC_SetPriority(EIC_IRQn, NvicPriorityPins);
 #elif RP2040
 		NVIC_SetPriority((IRQn_Type)StepTcIRQn, NvicPriorityStep);
+		NVIC_SetPriority(IO_IRQ_BANK0_IRQn, NvicPriorityPins);
 #else
 # error Undefined processor
 #endif
@@ -533,7 +534,7 @@ namespace Platform
 		return (switches == 0) ? CanId::ExpansionBoardFirmwareUpdateAddress : switches;
 #elif defined(TOOL1LC)
 		return CanId::ToolBoardDefaultAddress;
-#elif defined(SAMMYC21) || defined(RPI_PICO)
+#elif defined(SAMMYC21) || defined(RPI_PICO) || defined(FLY36RRF)
 		return CanId::SammyC21DefaultAddress;
 #elif defined(EXP1XD)
 		return CanId::Exp1XDBoardDefaultAddress;
@@ -690,7 +691,7 @@ void Platform::Init()
 
 #if defined(SAMMYC21)
 	uart0.begin(115200);						// set up the UART with the same baud rate as the bootloader
-#elif defined(RPI_PICO)
+#elif defined(RPI_PICO) || defined(FLY36RRF)
 	serialUSB.Start(NoPin);
 #elif defined(DEBUG)
 	// Set up the UART to send to PanelDue for debugging
@@ -919,7 +920,13 @@ void Platform::Init()
 	SetPinFunction(SSPIMosiPin, SSPIMosiPinPeriphMode);
 	SetPinFunction(SSPISclkPin, SSPISclkPinPeriphMode);
 	SetPinFunction(SSPIMisoPin, SSPIMisoPinPeriphMode);
+# if SAME5x || SAMC21
 	sharedSpi = new SharedSpiDevice(SspiSercomNumber, SspiDataInPad);
+# elif RP2040
+	sharedSpi = new SharedSpiDevice(SspiSpiInstanceNumber);
+# else
+# error Unsupported processor
+# endif
 #endif
 
 #if SUPPORT_I2C_SENSORS
@@ -941,7 +948,7 @@ void Platform::Init()
 
 	InitialiseInterrupts();
 
-#if SUPPORT_I2C_SENSORS && SUPPORT_LIS3DH
+#if SUPPORT_LIS3DH
 # ifdef TOOL1LC
 	if (boardVariant != 0)
 # endif
@@ -1298,12 +1305,12 @@ void Platform::Spin()
 		}
 	}
 
-#if defined(SAMMYC21) || defined(RPI_PICO)
+#if defined(SAMMYC21) || defined(RPI_PICO) || defined(FLY36RRF)
 	//debugPrintf("IR=%" PRIx32 " ERR=%" PRIx32 " RXF0S=%" PRIx32 " RXF1S=%" PRIx32 " PSR=%" PRIx32 " CCCR=%" PRIx32 "\n",
 	//	CAN0->IR.reg, CAN0->ECR.reg, CAN0->RXF0S.reg, CAN0->RXF1S.reg, CAN0->PSR.reg, CAN0->CCCR.reg);
 
 	// If D is received from the USB port, output some diagnostics
-# if defined(RPI_PICO)
+# if defined(RPI_PICO) || defined(FLY36RRF)
 	while (serialUSB.available() != 0)
 # elif defined(SAMMYC21)
 	while (uart0.available() != 0)
@@ -1311,7 +1318,7 @@ void Platform::Spin()
 	{
 # if defined(SAMMYC21)
 		const char c = uart0.read();
-# elif defined(RPI_PICO)
+# elif defined(RPI_PICO) || defined(FLY36RRF)
 		const char c = serialUSB.read();
 # endif
 		if (c == 'D')
@@ -1339,8 +1346,8 @@ void Platform::Spin()
 # endif
 
 			//moveInstance->DebugPrintCdda();
-# if SUPPORT_I2C_SENSORS && SUPPORT_LIS3DH
-			debugPrintf("LIS3DH detected: %s", AccelerometerHandler::IsPresent() ? "yes" : "no");
+# if SUPPORT_LIS3DH
+			debugPrintf("Accelerometer detected: %s", AccelerometerHandler::IsPresent() ? "yes" : "no");
 # endif
 		}
 	}
@@ -1438,7 +1445,7 @@ uint32_t Platform::GetHeatTaskIdleTicks()
 // Output a character to the debug channel
 bool Platform::DebugPutc(char c)
 {
-#if defined(RPI_PICO)
+#if defined(RPI_PICO) || defined(FLY36RRF)
 	if (c != 0)
 	{
 		serialUSB.write(c);

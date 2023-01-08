@@ -7,7 +7,7 @@
 
 #include "LIS3DH.h"
 
-#if SUPPORT_I2C_SENSORS && SUPPORT_LIS3DH
+#if SUPPORT_LIS3DH
 
 #include <Hardware/IoPorts.h>
 #include <Movement/StepTimer.h>
@@ -20,24 +20,45 @@ constexpr uint16_t LisAddresses[] =
 	0b0011101						// LIS3DSH with SEL connected to Vcc
 };
 
-constexpr uint32_t Lis3dI2CTimeout = 25;
 constexpr uint8_t FifoInterruptLevel = 24;							// how full the FIFO must get before we want an interrupt
 
 static constexpr uint8_t WhoAmIValue_3DH = 0x33;
 static constexpr uint8_t WhoAmIValue_3DSH = 0x3F;
+
+#if ACCELEROMETER_USES_SPI
+
+constexpr uint32_t DefaultAccelerometerSpiFrequency = 2000000;
+constexpr SpiMode lisMode = SpiMode::mode3;
+constexpr uint32_t Lis3dSpiTimeout = 25;							// timeout while waiting for the SPI bus
+
+LIS3DH::LIS3DH(SharedSpiDevice& dev, Pin p_csPin, Pin p_int1Pin) noexcept
+	: SharedSpiClient(dev, DefaultAccelerometerSpiFrequency, lisMode, p_csPin, false),
+	  taskWaiting(nullptr), int1Pin(p_int1Pin)
+{
+	SetCsPin(p_csPin);
+}
+
+#else
+
+constexpr uint32_t Lis3dI2CTimeout = 25;
 
 LIS3DH::LIS3DH(SharedI2CMaster& dev, Pin p_int1Pin) noexcept
 	: SharedI2CClient(dev, LisAddresses[0]), taskWaiting(nullptr), int1Pin(p_int1Pin)
 {
 }
 
+#endif
+
 // Do a quick test to check whether the accelerometer is present, returning true if it is
 bool LIS3DH::CheckPresent() noexcept
 {
 	interruptError = false;
+
+#if !ACCELEROMETER_USES_SPI
 	for (uint16_t addr : LisAddresses)
 	{
 		SetAddress(addr);
+#endif
 		uint8_t val;
 		if (ReadRegister(LisRegister::WhoAmI, val))
 		{
@@ -52,7 +73,10 @@ bool LIS3DH::CheckPresent() noexcept
 				return true;
 			}
 		}
+#if !ACCELEROMETER_USES_SPI
 	}
+#endif
+
 	return false;
 }
 
@@ -259,11 +283,26 @@ void LIS3DH::StopCollecting() noexcept
 
 bool LIS3DH::ReadRegisters(LisRegister reg, size_t numToRead) noexcept
 {
+#if ACCELEROMETER_USES_SPI
+	if (!Select(Lis3dSpiTimeout))
+	{
+		return false;
+	}
+	delayMicroseconds(1);
+	// On the LIS3DH, bit 6 must be set to 1 to auto-increment the address when doing reading multiple registers
+	// On the LIS3DSH, bit 6 is an extra register address bit, so we must not set it.
+	// So that we can read the WHO_AM_I register of both chips before we know which chip we have, only set bit 6 if we have a LIS3DH and we are reading multiple registers.
+	transferBuffer[1] = (uint8_t)reg | ((numToRead > 1 && !is3DSH) ? 0xC0 : 0x80);
+	const bool ret = TransceivePacket(transferBuffer + 1, transferBuffer + 1, 1 + numToRead);
+	Deselect();
+	return ret;
+#else
 	// On the LIS3DH, bit 6 of the first byte must be set to 1 to auto-increment the address when doing reading multiple registers
 	// On the LIS3DSH, bit 6 is an extra register address bit, so we must not set it.
 	// So that we can read the WHO_AM_I register of both chips before we know which chip we have, only set bit 6 if we have a LIS3DH and we are reading multiple registers.
 	const uint8_t regAddr = (numToRead < 2 || is3DSH) ? (uint8_t)reg : (uint8_t)reg | 0x80;
 	return Transfer(regAddr, dataBuffer, 1, numToRead, Lis3dI2CTimeout);
+#endif
 }
 
 bool LIS3DH::WriteRegisters(LisRegister reg, size_t numToWrite) noexcept
@@ -272,22 +311,48 @@ bool LIS3DH::WriteRegisters(LisRegister reg, size_t numToWrite) noexcept
 	{
 		return false;
 	}
+
+#if ACCELEROMETER_USES_SPI
+	if (!Select(Lis3dSpiTimeout))
+	{
+		return false;
+	}
+	transferBuffer[1] = (numToWrite < 2 || is3DSH) ? (uint8_t)reg : (uint8_t)reg | 0x40;			// set auto increment bit if LIS3DH
+	const bool ret = TransceivePacket(transferBuffer + 1, transferBuffer + 1, 1 + numToWrite);
+	Deselect();
+	return ret;
+#else
 	const uint8_t regAddr = (numToWrite < 2 || is3DSH) ? (uint8_t)reg : (uint8_t)reg | 0x80;		// set auto increment bit if LIS3DH
 	return Transfer(regAddr, dataBuffer, 1 + numToWrite, 0, Lis3dI2CTimeout);
+#endif
 }
 
 bool LIS3DH::ReadRegister(LisRegister reg, uint8_t& val) noexcept
 {
+#if ACCELEROMETER_USES_SPI
+	const bool ret = ReadRegisters(reg, 1);
+	if (ret)
+	{
+		val = dataBuffer[0];
+	}
+	return ret;
+#else
 	return Transfer((uint8_t)reg, &val, 1, 1, Lis3dI2CTimeout);
+#endif
 }
 
 bool LIS3DH::WriteRegister(LisRegister reg, uint8_t val) noexcept
 {
+#if ACCELEROMETER_USES_SPI
+	dataBuffer[0] = val;
+	return WriteRegisters(reg, 1);
+#else
 	if ((uint8_t)reg < 0x1E)						// don't overwrite the factory calibration values
 	{
 		return false;
 	}
 	return Transfer((uint8_t)reg, &val, 2, 0, Lis3dI2CTimeout);
+#endif
 }
 
 void LIS3DH::Int1Isr() noexcept

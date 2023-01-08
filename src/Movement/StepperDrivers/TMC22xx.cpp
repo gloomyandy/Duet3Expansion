@@ -413,6 +413,9 @@ constexpr uint32_t DefaultPwmConfReg = 0xC10D0024;			// this is the reset defaul
 constexpr uint8_t REGNUM_PWM_SCALE = 0x71;
 constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
 
+static constexpr uint32_t MaxValidSgLoadRegister = 1023;
+static constexpr uint32_t InvalidSgLoadRegister = 1024;
+
 // Send/receive data and CRC stuff
 
 // Data format to write a driver register:
@@ -601,10 +604,11 @@ private:
 	void UpdateRegister(size_t regIndex, uint32_t regVal) noexcept;
 	void UpdateCurrent() noexcept;
 	void UpdateMaxOpenLoadStepInterval() noexcept;
+
 #if HAS_STALL_DETECT
 	void ResetLoadRegisters() noexcept
 	{
-		minSgLoadRegister = 9999;							// values read from the driver are in the range 0 to 1023, so 9999 indicates that it hasn't been read
+		minSgLoadRegister = InvalidSgLoadRegister;					// value InvalidSgLoadRegister indicates that it hasn't been read
 	}
 #endif
 
@@ -901,8 +905,7 @@ inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal) noexce
 	Cache::FlushBeforeDMAReceive(receiveData, sizeof(receiveData));
 
 #if RP2040
-	TmcUartInterface::SetTxData(sendData, 12);
-	TmcUartInterface::SetRxData(receiveData + 12, 8);
+	TmcUartInterface::SetDmaData(sendData, 12, receiveData + 12, 8);
 #elif TMC22xx_USES_SERCOM
 	DmacManager::SetSourceAddress(DmacChanTmcTx, sendData);
 	DmacManager::SetDestinationAddress(DmacChanTmcTx, &(sercom->USART.DATA));
@@ -970,8 +973,7 @@ inline void TmcDriverState::SetupDMARead(uint8_t regNum) noexcept
 	Cache::FlushBeforeDMAReceive(receiveData, sizeof(receiveData));
 
 #if RP2040
-	TmcUartInterface::SetTxData(sendData, 4);
-	TmcUartInterface::SetRxData(receiveData + 4, 8);
+	TmcUartInterface::SetDmaData(sendData, 4, receiveData + 4, 8);
 #elif TMC22xx_USES_SERCOM
 	DmacManager::SetSourceAddress(DmacChanTmcTx, sendData);
 	DmacManager::SetDestinationAddress(DmacChanTmcTx, &(sercom->USART.DATA));
@@ -1510,7 +1512,7 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 #endif
 
 #if HAS_STALL_DETECT
-	if (minSgLoadRegister <= 1023)
+	if (minSgLoadRegister <= MaxValidSgLoadRegister)
 	{
 		reply.catf(", SG min %u", minSgLoadRegister);
 	}
@@ -1859,6 +1861,7 @@ bool DoTransaction(size_t driverNumber)
 #else
 	dmaFinished = false;
 #endif
+	TaskBase::ClearCurrentTaskNotifyCount();
 	currentDriver->StartTransfer();
 
 	// Wait for the end-of-transfer interrupt
