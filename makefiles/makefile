@@ -15,7 +15,7 @@ OUTPUT_NAME ?= Duet3Firmware_RPiPico
 BUILD ?= Debug
 
 #Comment out to show compilation commands (verbose)
-#V=@
+V=@
 
 $(info Building RepRapFirmware Duet3Expansion:)
 
@@ -83,7 +83,7 @@ CXXFLAGS_CORE = $(FLAGS) -std=gnu++17 -O3 -fno-threadsafe-statics -fno-exception
 CXXFLAGS_RTOS = $(FLAGS) -std=gnu++17 -O3 -fno-threadsafe-statics -fno-exceptions -fno-rtti -Wno-register -Wsuggest-override
 CXXFLAGS_CANLIB = $(FLAGS) -std=gnu++17 -O2 -fno-threadsafe-statics -fno-exceptions -fno-rtti -Wno-register -Wsuggest-override
 
-$(info  - SDK Include: $(SDK_INCLUDES))
+#$(info  - SDK Include: $(SDK_INCLUDES))
 
 #all Includes (RRF + Core)
 INCLUDES = $(EXP_INCLUDES) $(CORE_INCLUDES) $(RTOS_INCLUDES) $(RRFLIBRARIES_INCLUDES) $(RRFLIBC_INCLUDES) $(SDK_INCLUDES) $(CANLIB_INCLUDES)
