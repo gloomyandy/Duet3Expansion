@@ -45,6 +45,7 @@ using std::numeric_limits;
 
 # include <math.h>
 # include <Platform/Platform.h>
+# include <Movement/Move.h>
 # include <General/Bitmap.h>
 # include <Platform/TaskPriorities.h>
 # include <CAN/CanInterface.h>
@@ -138,9 +139,7 @@ namespace ClosedLoop
 
 	// Working variables
 	// These variables are all used to calculate the required motor currents. They are declared here so they can be reported on by the data collection task
-	bool 	stepDirection = true;						// The direction the motor is attempting to take steps in
 	float	targetMotorSteps;							// The number of steps the motor should have taken relative to it's zero position
-	int32_t targetEncoderReading;						// The encoder reading we want, calculated from targetMotorSteps
 	float 	currentError;								// The current error in full steps
 
 	DerivativeAveragingFilter<DerivativeFilterSize> derivativeFilter;	// An averaging filter to smooth the derivative of the error
@@ -193,6 +192,11 @@ namespace ClosedLoop
 	GCodeResult ProcessBasicTuningResult(const StringRef& reply) noexcept;
 	GCodeResult ProcessCalibrationResult(const StringRef& reply) noexcept;
 	void ReportTuningErrors(TuningErrors tuningErrorBitmask, const StringRef& reply) noexcept;
+	void SetTargetToCurrentPosition() noexcept
+	{
+		targetMotorSteps = (float)encoder->GetCurrentCount() / encoder->GetCountsPerStep();
+		moveInstance->SetCurrentMotorSteps(0, targetMotorSteps);
+	}
 
 	extern "C" [[noreturn]] void DataTransmissionLoop(void *param) noexcept;
 	extern "C" [[noreturn]] void EncoderCalibrationLoop(void *param) noexcept;
@@ -210,15 +214,21 @@ static inline unsigned int CountVariablesCollected(uint16_t filter)
 }
 
 // Helper function to convert a time period (expressed in StepTimer::Ticks) to ms
-static inline float TickPeriodToTimePeriod(StepTimer::Ticks tickPeriod)
+static inline float TickPeriodToMillis(StepTimer::Ticks tickPeriod)
 {
 	return tickPeriod * StepTimer::StepClocksToMillis;
+}
+
+// Helper function to convert a time period (expressed in StepTimer::Ticks) to us
+static inline uint32_t TickPeriodToMicroseconds(StepTimer::Ticks tickPeriod)
+{
+	return (tickPeriod * 1000)/(StepTimer::GetTickRate()/1000);
 }
 
 // Helper function to convert a time period (expressed in StepTimer::Ticks) to a frequency in Hz
 static inline float TickPeriodToFreq(StepTimer::Ticks tickPeriod)
 {
-	return 1000.0l / TickPeriodToTimePeriod(tickPeriod);
+	return 1000.0l / TickPeriodToMillis(tickPeriod);
 }
 
 // Helper function to reset the 'monitoring variables' as defined above
@@ -255,7 +265,7 @@ void ClosedLoop::SetMotorPhase(uint16_t phase, float magnitude) noexcept
 	coilB = (int16_t)lrintf(sine * magnitude);
 
 # if SUPPORT_TMC2160 && SINGLE_DRIVER
-	SmartDrivers::SetRegister(0, SmartDriverRegister::xDirect, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF);
+	SmartDrivers::SetMotorCurrents(0, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF);
 # else
 #  error Cannot support closed loop with the specified hardware
 # endif
@@ -263,7 +273,8 @@ void ClosedLoop::SetMotorPhase(uint16_t phase, float magnitude) noexcept
 
 static void GenerateTmcClock()
 {
-	// Currently we program DPLL0 to generate 120MHz output, so to get 15MHz we divide by 8
+	// Currently we program DPLL0 to generate 120MHz output, so to get 15MHz with 1:1 ratio we divide by 8.
+	// We could divide by 7 instead giving 17.143MHz with 25ns and 33.3ns times. TMC2160A max is 18MHz, minimum 16ns and 16ns low.
 	ConfigureGclk(ClockGenGclkNumber, GclkSource::dpll0, 8, true);
 	SetPinFunction(ClockGenPin, ClockGenPinPeriphMode);
 	SmartDrivers::SetTmcExternalClock(15000000);
@@ -519,8 +530,7 @@ GCodeResult ClosedLoop::ProcessBasicTuningResult(const StringRef& reply) noexcep
 #endif
 	PIDITerm = 0.0;
 	derivativeFilter.Reset();
-	targetEncoderReading = encoder->GetCurrentCount();
-	targetMotorSteps = (float)targetEncoderReading / encoder->GetCountsPerStep();
+	SetTargetToCurrentPosition();
 	tuningError &= ~TuningError::TuningOrCalibrationInProgress;
 
 	const float hyst = encoder->GetMeasuredHysteresis();
@@ -612,8 +622,7 @@ GCodeResult ClosedLoop::ProcessCalibrationResult(const StringRef& reply) noexcep
 
 	PIDITerm = 0.0;
 	derivativeFilter.Reset();
-	targetEncoderReading = encoder->GetCurrentCount();
-	targetMotorSteps = (float)targetEncoderReading / encoder->GetCountsPerStep();
+	SetTargetToCurrentPosition();
 
 	const float hyst = encoder->GetMeasuredHysteresis();
 	if (hyst >= MaxSafeBacklash)
@@ -761,7 +770,7 @@ void ClosedLoop::ReadyToCalibrate(bool store) noexcept
 void ClosedLoop::AdjustTargetMotorSteps(float amount) noexcept
 {
 	targetMotorSteps += amount;
-	targetEncoderReading = lrintf(targetMotorSteps * encoder->GetCountsPerStep());
+	moveInstance->SetCurrentMotorSteps(0, lrintf(targetMotorSteps));
 }
 
 void ClosedLoop::ControlLoop() noexcept
@@ -776,6 +785,16 @@ void ClosedLoop::ControlLoop() noexcept
 	if (encoder != nullptr && !encoder->TakeReading())
 	{
 		// Calculate and store the current error in full steps
+		MotionParameters mParams;
+		const bool moving = moveInstance->GetCurrentMotion(0, loopCallTime, closedLoopEnabled, mParams);
+		targetMotorSteps = mParams.position;
+		if (moving && samplingMode == RecordingMode::OnNextMove)
+		{
+			dataCollectionStartTicks = whenNextSampleDue = StepTimer::GetTimerTicks();
+			samplingMode = RecordingMode::Immediate;
+		}
+
+		const float targetEncoderReading = rintf(targetMotorSteps * encoder->GetCountsPerStep());
 		currentError = (float)(targetEncoderReading - encoder->GetCurrentCount()) * encoder->GetStepsPerCount();
 		derivativeFilter.ProcessReading(currentError, loopCallTime);
 
@@ -926,7 +945,7 @@ void ClosedLoop::CollectSample() noexcept
 	}
 	else
 	{
-		sampleBuffer[wp++] = TickPeriodToTimePeriod(StepTimer::GetTimerTicks() - dataCollectionStartTicks);		// always collect this
+		sampleBuffer[wp++] = TickPeriodToMillis(StepTimer::GetTimerTicks() - dataCollectionStartTicks);		// always collect this
 
 		if (filterRequested & CL_RECORD_RAW_ENCODER_READING) 	{ sampleBuffer[wp++] = (float)encoder->GetCurrentCount(); }
 		if (filterRequested & CL_RECORD_CURRENT_MOTOR_STEPS) 	{ sampleBuffer[wp++] = (float)encoder->GetCurrentCount() * encoder->GetStepsPerCount(); }
@@ -968,8 +987,8 @@ inline void ClosedLoop::ControlMotorCurrents(StepTimer::Ticks ticksSinceLastCall
 	// Calculate the offset required to produce the torque in the correct direction
 	// i.e. if we are moving in the positive direction, we must apply currents with a positive phase shift
 	// The max abs value of phase shift we want is 1 full step i.e. 25%.
-	// Given that PIDControlSignal is -255 .. 255 and phase is 0 .. 4095
-	// and that 25% of 4095 ~= 1024, our max phase shift ~= 4 * PIDControlSignal
+	// Given that PIDControlSignal is -256 .. 256 and phase is 0 .. 4095
+	// and that 25% of 4096 = 1024, our max phase shift = 4 * PIDControlSignal
 	phaseShift = PIDControlSignal * 4.0;
 
 	// New control algorithm:
@@ -1036,8 +1055,8 @@ void ClosedLoop::Diagnostics(const StringRef& reply) noexcept
 #if 0	// DC disabled this because it doesn't work yet and the driver diagnostics were too long for the reply buffer
 		reply.catf(", ultimateGain=%f, oscillationPeriod=%f", (double) ultimateGain, (double) oscillationPeriod);
 #endif
-		reply.lcatf("Control loop runtime (ms): min=%.3f, max=%.3f, frequency (Hz): min=%ld, max=%ld",
-					(double) TickPeriodToTimePeriod(minControlLoopRuntime), (double)TickPeriodToTimePeriod(maxControlLoopRuntime),
+		reply.lcatf("Control loop runtime (us): min=%" PRIu32 ", max=%" PRIu32 ", frequency (Hz): min=%ld, max=%ld",
+					TickPeriodToMicroseconds(minControlLoopRuntime), TickPeriodToMicroseconds(maxControlLoopRuntime),
 					lrintf(TickPeriodToFreq(maxControlLoopCallInterval)), lrintf(TickPeriodToFreq(minControlLoopCallInterval)));
 
 		ResetMonitoringVariables();
@@ -1045,26 +1064,6 @@ void ClosedLoop::Diagnostics(const StringRef& reply) noexcept
 
 	//DEBUG
 	//reply.catf(", event status 0x%08" PRIx32 ", TCC2 CTRLA 0x%08" PRIx32 ", TCC2 EVCTRL 0x%08" PRIx32, EVSYS->CHSTATUS.reg, QuadratureTcc->CTRLA.reg, QuadratureTcc->EVCTRL.reg);
-}
-
-// TODO: Instead of having this take step, why not use the current DDA to calculate where we need to be?
-void ClosedLoop::TakeStep() noexcept
-{
-# if SUPPORT_TMC2160 && SINGLE_DRIVER
-	bool dummy;			// this receives the interpolation, but we don't use it
-	const unsigned int microsteps = SmartDrivers::GetMicrostepping(0, dummy);
-	const float microstepAngle = (microsteps == 0) ? 1.0 : 1.0/microsteps;
-	targetMotorSteps += (stepDirection ? -microstepAngle : +microstepAngle);
-	targetEncoderReading = lrintf(targetMotorSteps * encoder->GetCountsPerStep());
-
-	if (samplingMode == RecordingMode::OnNextMove)
-	{
-		dataCollectionStartTicks = whenNextSampleDue = StepTimer::GetTimerTicks();
-		samplingMode = RecordingMode::Immediate;
-	}
-# else
-#  error Cannot support closed loop with the specified hardware
-# endif
 }
 
 StandardDriverStatus ClosedLoop::ReadLiveStatus() noexcept
@@ -1078,14 +1077,13 @@ StandardDriverStatus ClosedLoop::ReadLiveStatus() noexcept
 	return result;
 }
 
-void ClosedLoop::SetStepDirection(bool dir) noexcept
+bool ClosedLoop::GetClosedLoopEnabled(size_t driver) noexcept
 {
-	stepDirection = dir;
-}
-
-bool ClosedLoop::GetClosedLoopEnabled() noexcept
-{
+ #if SINGLE_DRIVER
 	return closedLoopEnabled;
+ #else
+#  error Cannot support closed loop with the specified hardware
+# endif
 }
 
 void ClosedLoop::ResetError(size_t driver) noexcept
@@ -1097,8 +1095,7 @@ void ClosedLoop::ResetError(size_t driver) noexcept
 		const bool err = encoder->TakeReading();
 		(void)err;		//TODO handle error
 		derivativeFilter.Reset();
-		targetEncoderReading = encoder->GetCurrentCount();
-		targetMotorSteps = targetEncoderReading * encoder->GetStepsPerCount();
+		SetTargetToCurrentPosition();
 	}
 # else
 #  error Cannot support closed loop with the specified hardware
@@ -1144,8 +1141,7 @@ bool ClosedLoop::SetClosedLoopEnabled(size_t driver, bool enabled, const StringR
 		desiredStepPhase = initialStepPhase;							// set this to be picked up later in DriverSwitchedToClosedLoop
 		PIDITerm = 0.0;
 		derivativeFilter.Reset();
-		targetEncoderReading = encoder->GetCurrentCount();
-		targetMotorSteps = (float)targetEncoderReading / encoder->GetCountsPerStep();
+		SetTargetToCurrentPosition();
 
 		// Set the target position to the current position
 		ResetError(0);													// this calls ReadState again and sets up targetMotorSteps

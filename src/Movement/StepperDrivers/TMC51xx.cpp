@@ -85,11 +85,12 @@ constexpr float RecipFullScaleCurrent = Tmc5160SenseResistor/325.0;		// 1.0 divi
 // There are 40 bits to send per driver, so on the 3HC the total is 120 bits
 // With a 2MHz SPI clock, on the 3HC the TMC task takes about 25% of the CPU time. So we now use 500kHz. This means the SPI transfer will complete in a little over 240us.
 #if SUPPORT_CLOSED_LOOP
-const uint32_t DriversSpiClockFrequency = 1000000;			// 1MHz SPI clock
+constexpr uint32_t DriversSpiClockFrequency = 6000000;		// 6MHz SPI clock (max is half the TMC clock; TMC clock is currently 15MHz)
+constexpr uint32_t ClosedLoopSleepMicroseconds = 40;		// how long the closed loop task sleeps for in each cycle
 #else
-const uint32_t DriversSpiClockFrequency = 500000;			// 500kHz SPI clock
+constexpr uint32_t DriversSpiClockFrequency = 500000;		// 500kHz SPI clock
 #endif
-const uint32_t TransferTimeout = 2;							// any transfer should complete within 2 ticks @ 1ms/tick
+constexpr uint32_t TransferTimeout = 2;						// any transfer should complete within 2 ticks @ 1ms/tick
 
 // GCONF register (0x00, RW)
 constexpr uint8_t REGNUM_GCONF = 0x00;
@@ -341,6 +342,7 @@ public:
 #if SUPPORT_CLOSED_LOOP
 	unsigned int GetMicrostepShift() const noexcept { return microstepShiftFactor; }
 	uint16_t GetMicrostepPosition() const noexcept { return readRegisters[ReadMsCnt] & 1023; }
+	void SetXdirect(uint32_t regVal) noexcept;
 #endif
 	bool SetDriverMode(unsigned int mode) noexcept;
 	DriverMode GetDriverMode() const noexcept;
@@ -392,13 +394,11 @@ private:
 	static constexpr unsigned int Write5160ShortConf = 8;	// short circuit detection configuration
 	static constexpr unsigned int Write5160DrvConf = 9;		// driver timing
 	static constexpr unsigned int Write5160GlobalScaler = 10; // motor current scaling
-
-# if TMC_TYPE == 5160
-	static constexpr unsigned int NumWriteRegisters = 11;	// the number of registers that we write to
-# else
-	static constexpr unsigned int Write2160XDirect = 11;	// coil current values for direct mode
-
+# if SUPPORT_CLOSED_LOOP
+	static constexpr unsigned int Write5160XDirect = 11;	// coil current values for direct mode
 	static constexpr unsigned int NumWriteRegisters = 12;	// the number of registers that we write to
+# else
+	static constexpr unsigned int NumWriteRegisters = 11;	// the number of registers that we write to
 # endif
 #else
 	static constexpr unsigned int NumWriteRegisters = 8;	// the number of registers that we write to
@@ -521,7 +521,7 @@ pre(!driversPowered)
 }
 
 // Set a register value and flag it for updating
-void TmcDriverState::UpdateRegister(size_t regIndex, uint32_t regVal) noexcept
+inline void TmcDriverState::UpdateRegister(size_t regIndex, uint32_t regVal) noexcept
 {
 	writeRegisters[regIndex] = regVal;
 	newRegistersToUpdate.fetch_or(1u << regIndex);						// flag it for sending
@@ -608,17 +608,20 @@ bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal) noexc
 		UpdateRegister (WriteTcoolthrs, regVal & ((1u << 20) - 1));
 		return true;
 
-#if SUPPORT_TMC2160
-	case SmartDriverRegister::xDirect:
-		UpdateRegister(Write2160XDirect, regVal);
-		return true;
-#endif
-
 	case SmartDriverRegister::hdec:
 	default:
 		return false;
 	}
 }
+
+#if SUPPORT_CLOSED_LOOP
+
+inline void TmcDriverState::SetXdirect(uint32_t regVal) noexcept
+{
+	UpdateRegister(Write5160XDirect, regVal);
+}
+
+#endif
 
 uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 {
@@ -822,7 +825,7 @@ void TmcDriverState::UpdateCurrent() noexcept
 	constexpr uint32_t MaxStandstillCurrentTimes256 = 256 * (uint32_t)MaximumStandstillCurrent;
 	const uint16_t desiredStandstillCurrentFraction =
 #if SUPPORT_CLOSED_LOOP
-		(ClosedLoop::GetClosedLoopEnabled()) ? 256 : standstillCurrentFraction;
+		(ClosedLoop::GetClosedLoopEnabled(axisNumber)) ? 256 : standstillCurrentFraction;
 #else
 		standstillCurrentFraction;
 #endif
@@ -1274,11 +1277,25 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 #endif
 	dmaFinishedReason = reason;
 	fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
+#if !SUPPORT_CLOSED_LOOP
+	tmcTask.GiveFromISR();
+#endif
+}
+
+#if SUPPORT_CLOSED_LOOP
+static StepTimer tmcTimer;
+
+static void TmcTimerCallback(CallbackParameter) noexcept
+{
 	tmcTask.GiveFromISR();
 }
+#endif
 
 extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 {
+#if SUPPORT_CLOSED_LOOP
+	tmcTimer.SetCallback(TmcTimerCallback, (CallbackParameter)0);
+#endif
 	bool timedOut = true;
 	for (;;)
 	{
@@ -1355,7 +1372,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			SetupDMA();											// set up the PDC or DMAC
 			dmaFinishedReason = DmaCallbackReason::none;
 
-			InterruptCriticalSectionLocker lock2;
+			AtomicCriticalSectionLocker lock2;
 
 			fastDigitalWriteLow(GlobalTmc51xxCSPin);			// set CS low
 			TaskBase::ClearCurrentTaskNotifyCount();
@@ -1363,6 +1380,12 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			ResetSpi();
 			EnableDma();
 			EnableSpi();
+#if SUPPORT_CLOSED_LOOP
+			// We run the SPI bus at high speeds so that motor currents get updated as quickly as possible.
+			// If we wake up as soon as the transfer has completed then we will use too much of the available CPU time.
+			// So schedule a wakeup call instead.
+			tmcTimer.ScheduleCallbackFromIsr(StepTimer::GetTimerTicks() + (StepTimer::StepClockRate * ClosedLoopSleepMicroseconds)/1000000);
+#endif
 		}
 
 		// Wait for the end-of-transfer interrupt
@@ -1599,6 +1622,11 @@ unsigned int SmartDrivers::GetMicrostepShift(size_t driver) noexcept
 uint16_t SmartDrivers::GetMicrostepPosition(size_t driver) noexcept
 {
 	return (driver < numTmc51xxDrivers) ? driverStates[driver].GetMicrostepPosition() : 0;
+}
+
+void SmartDrivers::SetMotorCurrents(size_t driver, uint32_t regVal) noexcept
+{
+	driverStates[driver].SetXdirect(regVal);
 }
 
 #endif

@@ -13,8 +13,12 @@
 
 #if SUPPORT_DRIVERS
 
-#include "DriveMovement.h"
-#include "StepTimer.h"
+# include "DriveMovement.h"
+# include "StepTimer.h"
+
+# if SUPPORT_CLOSED_LOOP
+#  include <ClosedLoop/ClosedLoop.h>
+# endif
 
 struct CanMessageMovementLinear;
 struct CanMessageStopMovement;
@@ -46,7 +50,7 @@ public:
 	bool Init(const CanMessageMovementLinear& msg) noexcept SPEED_CRITICAL;		// Set up a move from a CAN message
 	void Start(uint32_t tim) noexcept SPEED_CRITICAL;							// Start executing the DDA, i.e. move the move.
 	void StepDrivers(uint32_t now) noexcept SPEED_CRITICAL;						// Take one step of the DDA, called by timed interrupt.
-	bool ScheduleNextStepInterrupt(StepTimer& timer) const noexcept SPEED_CRITICAL;		// Schedule the next interrupt, returning true if we can't because it is already due
+	bool ScheduleNextStepInterrupt(StepTimer& timer) const noexcept SPEED_CRITICAL;	// Schedule the next interrupt, returning true if we can't because it is already due
 
 	void SetNext(DDA *n) noexcept { next = n; }
 	void SetPrevious(DDA *p) noexcept { prev = p; }
@@ -72,15 +76,17 @@ public:
 	int32_t GetPosition(size_t driver) const noexcept { return endPoint[driver]; }
 
 #if HAS_SMART_DRIVERS
-	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
+	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept;					// Get the current full step interval for this axis or extruder
 #endif
 
 #if SUPPORT_CLOSED_LOOP
-	void GetCurrentMotion(MotionParameters& mParams, int32_t netMicrostepsTaken, int microstepShift) const noexcept;
+	void GetCurrentMotion(size_t driver, uint32_t ticksSinceStart, MotionParameters& mParams) const noexcept;	// get the current desired position, speed and acceleration
+	uint32_t GetStartTime() const noexcept { return afterPrepare.moveStartTime; }
+	void SetCompleted() noexcept { state = completed; }
 #endif
 
-	void DebugPrint() const noexcept;												// print the DDA only
-	void DebugPrintAll() const noexcept;												// print the DDA and active DMs
+	void DebugPrint() const noexcept;																// print the DDA only
+	void DebugPrintAll() const noexcept;															// print the DDA and active DMs
 
 	static unsigned int GetAndClearStepErrors() noexcept;
 	static uint32_t GetAndClearMaxTicksOverdue() noexcept;
@@ -120,7 +126,6 @@ public:
 	static uint32_t stepsRequested[NumDrivers], stepsDone[NumDrivers];
 
 private:
-	void StopDrive(size_t drive) noexcept;								// stop movement of a drive and recalculate the endpoint
 	uint32_t WhenNextInterruptDue() const noexcept;						// return when the next interrupt is due relative to the move start time
 
 #if !SINGLE_DRIVER
@@ -159,6 +164,10 @@ private:
 	float decelDistance;
 
 	uint32_t clocksNeeded;
+#if SUPPORT_CLOSED_LOOP
+	uint32_t accelClocks;
+	uint32_t accelPlusSteadyClocks;
+#endif
 
 	// Values that are not set or accessed before Prepare is called
 	struct
@@ -205,9 +214,14 @@ inline uint32_t DDA::WhenNextInterruptDue() const noexcept
 // Base priority must be >= NvicPriorityStep or interrupts disabled when calling this
 inline bool DDA::ScheduleNextStepInterrupt(StepTimer& timer) const noexcept
 {
-	if (likely(state == executing))
+#if SUPPORT_CLOSED_LOOP
+	if (!ClosedLoop::GetClosedLoopEnabled(0))
+#endif
 	{
-		return timer.ScheduleCallbackFromIsr(WhenNextInterruptDue() + afterPrepare.moveStartTime);
+		if (likely(state == executing))
+		{
+			return timer.ScheduleCallbackFromIsr(WhenNextInterruptDue() + afterPrepare.moveStartTime);
+		}
 	}
 	return false;
 }
@@ -227,7 +241,7 @@ inline void DDA::InsertHiccup(uint32_t now) noexcept
 }
 
 // Return the number of net steps already taken in this move by a particular drive
-inline int32_t DDA::GetStepsTaken(size_t drive) const
+inline int32_t DDA::GetStepsTaken(size_t drive) const noexcept
 {
 	return ddms[drive].GetNetStepsTaken();
 }
@@ -251,10 +265,36 @@ inline uint32_t DDA::GetStepInterval(size_t axis, uint32_t microstepShift) const
 
 #if SUPPORT_CLOSED_LOOP
 
-// Get the current position, speed and acceleration
-inline void DDA::GetCurrentMotion(MotionParameters& mParams, int32_t netMicrostepsTaken, int microstepShift) const noexcept
+// Get the current position, speed and acceleration. Interrupts are disabled on entry and must remain disabled.
+// Return true if successful, false if no move is in progress.
+inline void DDA::GetCurrentMotion(size_t driver, uint32_t ticksSinceStart, MotionParameters& mParams) const noexcept
 {
-	return ddms[0].GetCurrentMotion(mParams, netMicrostepsTaken, microstepShift);
+	//TODO allow for pressure advance
+	float pos, speed, acc;
+	if (ticksSinceStart < accelClocks)
+	{
+		pos = (startSpeed + 0.5 * acceleration * (float)ticksSinceStart) * (float)ticksSinceStart;
+		speed = startSpeed + acceleration * (float)ticksSinceStart;
+		acc = acceleration;
+	}
+	else if (ticksSinceStart < accelPlusSteadyClocks)
+	{
+		pos = accelDistance + topSpeed * (float)(ticksSinceStart - accelClocks);
+		speed = topSpeed;
+		acc = 0.0;
+	}
+	else
+	{
+		const float timeDecelerating = (float)(ticksSinceStart - accelPlusSteadyClocks);
+		pos = (1.0 - decelDistance) + (topSpeed - 0.5 * deceleration * timeDecelerating) * timeDecelerating;
+		speed = topSpeed - timeDecelerating * deceleration;
+		acc = -deceleration;
+	}
+
+	const DriveMovement& dm = ddms[driver];
+	mParams.position = pos * (float)dm.netSteps;
+	mParams.speed = speed * (float)dm.netSteps;
+	mParams.acceleration = acc * (float)dm.netSteps;
 }
 
 #endif

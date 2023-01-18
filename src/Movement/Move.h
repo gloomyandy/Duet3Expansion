@@ -15,6 +15,10 @@
 #include "DDA.h"								// needed because of our inline functions
 #include "Kinematics/Kinematics.h"
 
+#if SUPPORT_CLOSED_LOOP
+# include "StepperDrivers/TMC51xx.h"				// for SmartDrivers::GetMicrostepShift
+#endif
+
 // Define the number of DDAs
 const unsigned int DdaRingLength = 50;
 
@@ -66,7 +70,9 @@ public:
 	[[noreturn]] void TaskLoop() noexcept;
 
 #if SUPPORT_CLOSED_LOOP
-	void GetCurrentMotion(MotionParameters& mParams) const noexcept;				// get the net full steps taken, including in the current move so far, also speed and acceleration
+	bool GetCurrentMotion(size_t driver, uint32_t when, bool closedLoopEnabled, MotionParameters& mParams) noexcept;
+																					// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
+	void SetCurrentMotorSteps(size_t driver, float fullSteps) noexcept;
 #endif
 
 	const volatile int32_t *GetLastMoveStepsTaken() const noexcept { return lastMoveStepsTaken; }
@@ -85,6 +91,9 @@ private:
 	StepTimer timer;
 	volatile int32_t lastMoveStepsTaken[NumDrivers];								// how many steps were taken in the last move we did
 	volatile int32_t movementAccumulators[NumDrivers]; 								// Accumulated motor steps
+#if SUPPORT_CLOSED_LOOP
+	int32_t netMicrostepsTaken[NumDrivers];											// the net microsteps taken not counting any move that is in progress
+#endif
 	volatile uint32_t extrudersPrintingSince;										// The milliseconds clock time when extrudersPrinting was set to true
 	volatile bool extrudersPrinting;												// Set whenever an extruder starts a printing move, cleared by a non-printing extruder move
 	TaskBase * volatile taskWaitingForMoveToComplete;
@@ -96,15 +105,6 @@ private:
 	volatile uint32_t completedMoves;												// This one is modified by an ISR, hence volatile
 	uint32_t numHiccups;															// How many times we delayed an interrupt to avoid using too much CPU time in interrupts
 	uint32_t maxPrepareTime;
-
-#if SUPPORT_CLOSED_LOOP
-# if SINGLE_DRIVER
-	int32_t netMicrostepsTaken;														// the net microsteps taken not counting any move that is in progress
-	int driver0MicrostepShift;														// the microstepping set for driver 0 as a negative shift factor
-# else
-#  error Only one closed loop driver supported by this code
-# endif
-#endif
 };
 
 //******************************************************************************************************
@@ -123,20 +123,68 @@ inline uint32_t Move::GetStepInterval(size_t axis, uint32_t microstepShift) cons
 
 #if SUPPORT_CLOSED_LOOP
 
-// Get the net full steps taken, including in the current move so far, also speed and acceleration
-inline void Move::GetCurrentMotion(MotionParameters& mParams) const noexcept
+// Get the motor position in the current move so far, also speed and acceleration
+// Inlined because it is only called from one place
+inline bool Move::GetCurrentMotion(size_t driver, uint32_t when, bool closedLoopEnabled, MotionParameters& mParams) noexcept
 {
-	AtomicCriticalSectionLocker lock;
-	const DDA * const cdda = currentDda;			// capture volatile variable
-	if (cdda != nullptr)
+	AtomicCriticalSectionLocker lock;				// we don't want an interrupt changing currentDda or netMicrostepsTaken while we execute this
+	for (;;)
 	{
-		cdda->GetCurrentMotion(mParams, netMicrostepsTaken, driver0MicrostepShift);
+		DDA * cdda = currentDda;					// capture volatile variable
+		if (cdda == nullptr)
+		{
+			break;
+		}
+
+		const uint32_t clocksSinceMoveStart = when - cdda->GetStartTime();
+		if (clocksSinceMoveStart <= cdda->GetClocksNeeded())
+		{
+			// This move is executing
+			cdda->GetCurrentMotion(driver, clocksSinceMoveStart, mParams);
+
+			// Convert microsteps to full steps. We use ldexpf to avoid a division.
+			const int negMicrostepShift = -(int)SmartDrivers::GetMicrostepShift(driver);
+			mParams.position = ldexpf(mParams.position + (float)netMicrostepsTaken[driver], negMicrostepShift);
+			mParams.speed = ldexp(mParams.speed, negMicrostepShift);
+			mParams.acceleration = ldexp(mParams.acceleration, negMicrostepShift);
+			return true;
+		}
+
+		// If the machine has been idle, a move is made current a little ahead of when it is due, so check whether the move hasn't started yet
+		if ((int32_t)clocksSinceMoveStart < 0)
+		{
+			break;
+		}
+
+		// This move has finished. If we are running in closed loop mode, mark it as completed because there will be no interrupt to do that.
+		if (!closedLoopEnabled)
+		{
+			break;
+		}
+
+		const uint32_t finishTime = cdda->GetMoveFinishTime();	// calculate when this move should finish
+		cdda->SetCompleted();
+		CurrentMoveCompleted();
+
+		// Start the next move if one is ready
+		cdda = ddaRingGetPointer;
+		if (cdda->GetState() != DDA::frozen)
+		{
+			break;
+		}
+
+		StartNextMove(cdda, finishTime);
 	}
-	else
-	{
-		mParams.position = ldexp((float)netMicrostepsTaken, driver0MicrostepShift);
-		mParams.speed = mParams.acceleration = 0.0;
-	}
+
+	// Here when there is no current move
+	mParams.position = ldexpf((float)netMicrostepsTaken[driver], -(int)SmartDrivers::GetMicrostepShift(driver));
+	mParams.speed = mParams.acceleration = 0.0;
+	return false;
+}
+
+inline void Move::SetCurrentMotorSteps(size_t driver, float fullSteps) noexcept
+{
+	netMicrostepsTaken[driver] = lrintf(ldexpf(fullSteps, (int)SmartDrivers::GetMicrostepShift(driver)));
 }
 
 #endif
