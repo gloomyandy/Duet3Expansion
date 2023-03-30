@@ -85,7 +85,7 @@ Move::Move() noexcept
 	{
 		movementAccumulators[i] = 0;
 #if SUPPORT_CLOSED_LOOP
-		netMicrostepsTaken[i] = 0;
+		netMicrostepsTaken[i] = 0.0;
 #endif
 	}
 }
@@ -225,15 +225,30 @@ void Move::StartNextMove(DDA *cdda, uint32_t startTime) noexcept
 		CanMessageBuffer *buf = CanInterface::GetCanMove(TaskBase::TimeoutUnlimited);
 #endif
 		MicrosecondsTimer prepareTimer;
-		if (ddaRingAddPointer->Init(buf->msg.moveLinear))
+		const CanMessageType msgType = buf->id.MsgType();
+		switch (msgType)
 		{
-			ddaRingAddPointer = ddaRingAddPointer->GetNext();
-			scheduledMoves++;
-		}
-		const uint32_t elapsedTime = prepareTimer.Read();
-		if (elapsedTime > Move::maxPrepareTime)
-		{
-			Move::maxPrepareTime = elapsedTime;
+		case CanMessageType::movementLinear:
+		case CanMessageType::movementLinearShaped:
+			{
+				const bool moveAdded = (msgType == CanMessageType::movementLinearShaped)
+										? ddaRingAddPointer->Init(buf->msg.moveLinearShaped)
+											: ddaRingAddPointer->Init(buf->msg.moveLinear);
+				if (moveAdded)
+				{
+					ddaRingAddPointer = ddaRingAddPointer->GetNext();
+					scheduledMoves++;
+				}
+				const uint32_t elapsedTime = prepareTimer.Read();
+				if (elapsedTime > Move::maxPrepareTime)
+				{
+					Move::maxPrepareTime = elapsedTime;
+				}
+			}
+			break;
+
+		default:				// should not happen
+			break;
 		}
 
 		CanMessageBuffer::Free(buf);
@@ -303,7 +318,7 @@ void Move::CurrentMoveCompleted() noexcept
 		movementAccumulators[0] += stepsTaken;
 		lastMoveStepsTaken[0] = stepsTaken;
 # if SUPPORT_CLOSED_LOOP
-		netMicrostepsTaken[0] += stepsTaken;
+		netMicrostepsTaken[0] += cdda->GetFullDistance(0);
 # endif
 #else
 		for (size_t driver = 0; driver < NumDrivers; ++driver)
@@ -312,7 +327,7 @@ void Move::CurrentMoveCompleted() noexcept
 			lastMoveStepsTaken[driver] = stepsTaken;
 			movementAccumulators[driver] += stepsTaken;
 # if SUPPORT_CLOSED_LOOP
-			netMicrostepsTaken[driver] += stepsTaken;
+			netMicrostepsTaken[driver] += cdda->GetFullDistance(driver);
 # endif
 		}
 #endif
@@ -360,13 +375,6 @@ void Move::StopDrivers(uint16_t whichDrives) noexcept
 #else
 # error Unsupported processor
 #endif
-}
-
-// Input shaping support
-GCodeResult Move::HandleInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept
-{
-	//TODO
-	return GCodeResult::ok;
 }
 
 // Filament monitor support

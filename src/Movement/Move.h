@@ -14,6 +14,8 @@
 
 #include "DDA.h"								// needed because of our inline functions
 #include "Kinematics/Kinematics.h"
+#include "AxisShaper.h"
+#include "ExtruderShaper.h"
 
 #if SUPPORT_CLOSED_LOOP
 # include "StepperDrivers/TMC51xx.h"			// for SmartDrivers::GetMicrostepShift
@@ -63,7 +65,14 @@ public:
 	uint32_t ExtruderPrintingSince() const noexcept { return extrudersPrintingSince; }	// When we started doing normal moves after the most recent extruder-only move
 
 	// Input shaping support
-	GCodeResult HandleInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept;
+	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
+	GCodeResult HandleInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept
+	{
+		return axisShaper.EutSetInputShaping(msg, dataLength, reply);
+	}
+
+	// Pressure advance
+	ExtruderShaper& GetExtruderShaper(size_t extruder) noexcept { return extruderShapers[extruder]; }
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept;	// Get the current step interval for this axis or extruder
@@ -98,7 +107,7 @@ private:
 	volatile int32_t lastMoveStepsTaken[NumDrivers];								// how many steps were taken in the last move we did
 	volatile int32_t movementAccumulators[NumDrivers]; 								// Accumulated motor steps
 #if SUPPORT_CLOSED_LOOP
-	int32_t netMicrostepsTaken[NumDrivers];											// the net microsteps taken not counting any move that is in progress
+	float netMicrostepsTaken[NumDrivers];											// the net microsteps taken not counting any move that is in progress
 #endif
 	volatile uint32_t extrudersPrintingSince;										// The milliseconds clock time when extrudersPrinting was set to true
 	volatile bool extrudersPrinting;												// Set whenever an extruder starts a printing move, cleared by a non-printing extruder move
@@ -107,6 +116,8 @@ private:
 
 	Kinematics *kinematics;															// What kinematics we are using
 
+	AxisShaper axisShaper;
+	ExtruderShaper extruderShapers[NumDrivers];
 	uint32_t scheduledMoves;														// Move counters for the code queue
 	volatile uint32_t completedMoves;												// This one is modified by an ISR, hence volatile
 	uint32_t numHiccups;															// How many times we delayed an interrupt to avoid using too much CPU time in interrupts
@@ -129,7 +140,7 @@ inline uint32_t Move::GetStepInterval(size_t axis, uint32_t microstepShift) cons
 
 #if SUPPORT_CLOSED_LOOP
 
-// Get the motor position in the current move so far, also speed and acceleration
+// Get the motor position in the current move so far, also speed and acceleration. Units are full steps and step clocks.
 // Inlined because it is only called from one place
 inline bool Move::GetCurrentMotion(size_t driver, uint32_t when, bool closedLoopEnabled, MotionParameters& mParams) noexcept
 {
@@ -149,10 +160,10 @@ inline bool Move::GetCurrentMotion(size_t driver, uint32_t when, bool closedLoop
 			// This move is executing
 			cdda->GetCurrentMotion(driver, clocksSinceMoveStart, mParams);
 
-			// Convert microsteps to full steps and account for possible reversal of the rotation direction. We use ldexp to avoid a division.
-			mParams.position = (mParams.position + (float)netMicrostepsTaken[driver]) * multiplier;
-			mParams.speed = mParams.speed * multiplier;
-			mParams.acceleration = mParams.acceleration * multiplier;
+			// Convert microsteps to full steps
+			mParams.position = (mParams.position + netMicrostepsTaken[driver]) * multiplier;
+			mParams.speed *= multiplier;
+			mParams.acceleration *= multiplier;
 			return true;
 		}
 
@@ -183,15 +194,15 @@ inline bool Move::GetCurrentMotion(size_t driver, uint32_t when, bool closedLoop
 	}
 
 	// Here when there is no current move
-	mParams.position = (float)netMicrostepsTaken[driver] * multiplier;
+	mParams.position = netMicrostepsTaken[driver] * multiplier;
 	mParams.speed = mParams.acceleration = 0.0;
 	return false;
 }
 
 inline void Move::SetCurrentMotorSteps(size_t driver, float fullSteps) noexcept
 {
-	const float multiplier = ldexp((Platform::GetDirectionValueNoCheck(driver)) ? -1.0 : 1.0, (int)SmartDrivers::GetMicrostepShift(driver));
-	netMicrostepsTaken[driver] = lrintf(fullSteps * multiplier);
+	const float multiplier = ldexpf(1.0, (int)SmartDrivers::GetMicrostepShift(driver));
+	netMicrostepsTaken[driver] = fullSteps * multiplier;
 }
 
 // Invert the current number of microsteps taken. Called when the driver direction control is changed.
@@ -200,7 +211,7 @@ inline void Move::InvertCurrentMotorSteps(size_t driver) noexcept
 	netMicrostepsTaken[driver] = -netMicrostepsTaken[driver];
 }
 
-#endif
+#endif	// SUPPORT_CLOSED_LOOP
 
 #endif	// SUPPORT_DRIVERS
 

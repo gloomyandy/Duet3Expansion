@@ -284,7 +284,7 @@ static FirmwareFlashErrorCode RequestBootloaderBlock(uint32_t fileOffset, uint32
 // Get a buffer of data from the host, returning true if successful
 static FirmwareFlashErrorCode GetBootloaderBlock(uint8_t *blockBuffer)
 {
-	CanMessageBuffer buf(nullptr);
+	CanMessageBuffer buf;
 	const FirmwareFlashErrorCode err = RequestBootloaderBlock(0, FlashBlockSize, buf);	// ask for 16K or 64K as a single block
 	if (err != FirmwareFlashErrorCode::ok)
 	{
@@ -543,10 +543,10 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 			stateText = "ready";
 			break;
 		case esNotifyWaiting:
-			stateText = "notifyWait";
+			stateText = "nWait";
 			break;
 		case esResourceWaiting:
-			stateText = "resourceWait:";
+			stateText = "rWait:";
 			break;
 		case esDelaying:
 			stateText = "delaying";
@@ -562,7 +562,7 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 			break;
 		}
 
-		const char *mutexName = nullptr;
+		const char *mutexName = "";
 		if (taskDetails.eCurrentState == esResourceWaiting)
 		{
 			const Mutex *m = Mutex::GetMutexList();
