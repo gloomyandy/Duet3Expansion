@@ -81,7 +81,7 @@ static uint32_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (
 // CanClock task
 constexpr size_t CanClockTaskStackWords =
 #if RP2040
-										400;		// to allow calls to debugPrintf
+										600;		// to allow calls to debugPrintf
 #else
 										130;
 #endif
@@ -91,7 +91,7 @@ static Task<CanClockTaskStackWords> canClockTask;
 // CanReceiver management task
 constexpr size_t CanReceiverTaskStackWords =
 #if RP2040
-										400;		// to allow calls to debugPrintf
+										600;		// to allow calls to debugPrintf
 #else
 										120;
 #endif
@@ -99,7 +99,7 @@ constexpr size_t CanReceiverTaskStackWords =
 static Task<CanReceiverTaskStackWords> canReceiverTask;
 
 // Async sender task
-constexpr size_t CanAsyncSenderTaskStackWords = 100;
+constexpr size_t CanAsyncSenderTaskStackWords = 600;
 static Task<CanAsyncSenderTaskStackWords> canAsyncSenderTask;
 
 static bool mainBoardAcknowledgedAnnounce = false;	// true after the main board has acknowledged our announcement
@@ -159,6 +159,8 @@ namespace CanInterface
 // Initialise this module and the CAN hardware
 void CanInterface::Init(CanAddress defaultBoardAddress, bool useAlternatePins, bool full) noexcept
 {
+	delay(10000);
+	debugPrintf("Starting CAN\n");
 	// Create the mutex
 	txFifoMutex.Create("CANtx");
 
@@ -268,7 +270,7 @@ void CanInterface::Init(CanAddress defaultBoardAddress, bool useAlternatePins, b
 		// Create the task that send endstop etc. updates
 		canAsyncSenderTask.Create(CanAsyncSenderLoop, "CanAsync", nullptr, TaskPriority::CanAsyncSenderPriority);
 	}
-
+debugPrintf("CanInit end\n");
 #if SUPPORT_DRIVERS
 	ResetAdvance();
 #endif
@@ -433,7 +435,8 @@ CanMessageBuffer *CanInterface::ProcessReceivedMessage(CanMessageBuffer *buf) no
 
 			// Track how much processing delay there was
 			{
-#if RP2040
+//#if RP2040
+#if 0
 				// RP2040 uses the low 16 bits of the step counter for the time stamp
 				const uint16_t timeStampNow = StepTimer::GetTimerTicks();
 				const uint32_t timeStampDelay = (uint32_t)((timeStampNow - buf->timeStamp) & 0xFFFF);	// the delay in step clocks
@@ -552,7 +555,8 @@ CanMessageBuffer *CanInterface::ProcessReceivedMessage(CanMessageBuffer *buf) no
 
 			// Track how much processing delay there was
 			{
-#if RP2040
+//#if RP2040
+#if 0
 				// RP2040 uses the low 16 bits of the step counter for the time stamp
 				const uint16_t timeStampNow = StepTimer::GetTimerTicks();
 				const uint32_t timeStampDelay = (uint32_t)((timeStampNow - buf->timeStamp) & 0xFFFF);	// the delay in step clocks
@@ -700,7 +704,8 @@ void CanInterface::Diagnostics(const StringRef& reply) noexcept
 {
 	unsigned int messagesQueuedForSending, messagesReceived, messagesLost, busOffCount;
 	can0dev->GetAndClearStats(messagesQueuedForSending, messagesReceived, messagesLost, busOffCount);
-#if RP2040
+#if 0
+//#if RP2040
 	reply.lcatf("CAN messages queued %u, send timeouts %u, received %u, free buffers %u, min %u",
 					messagesQueuedForSending, txTimeouts, messagesReceived, CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers());
 	CanErrorCounts errs;
@@ -817,8 +822,8 @@ bool CanInterface::GetCanMessage(CanMessageBuffer *buf) noexcept
 	return can0dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo0, 0, buf);
 }
 
-#if !RP2040
-
+//#if !RP2040
+#if 1
 uint16_t CanInterface::GetTimeStampCounter() noexcept
 {
 	return can0dev->ReadTimeStampCounter();

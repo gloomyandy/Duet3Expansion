@@ -93,7 +93,8 @@ void StepTimer::Init() noexcept
 
 /*static*/ void StepTimer::ProcessTimeSyncMessage(const CanMessageTimeSync& msg, size_t msgLen, uint16_t timeStamp) noexcept
 {
-#if RP2040
+//#if RP2040
+#if 0
 	// On the RP2040 the timestamp counter is the same as the step counter
 	const uint32_t localTimeNow = StepTimer::GetTimerTicks();
 	const uint32_t timeStampDelay = (localTimeNow - timeStamp) & 0xFFFF;
@@ -101,7 +102,7 @@ void StepTimer::Init() noexcept
 	uint32_t localTimeNow;
 	uint16_t timeStampNow;
 	{
-		AtomicCriticalSectionLocker lock;							// there must be no delay between calling GetTimerTicks and GetTimeStampCounter
+		//AtomicCriticalSectionLocker lock;							// there must be no delay between calling GetTimerTicks and GetTimeStampCounter
 		localTimeNow = StepTimer::GetTimerTicks();
 		timeStampNow = CanInterface::GetTimeStampCounter();
 	}
