@@ -57,7 +57,7 @@ spi_inst_t *spiCanHardware = (spiCanSpiInstanceNumber == 0) ? spi0 : spi1;
 extern "C" bool DRV_SPI_Initialize()
 {
 	debugPrintf("SPI init start\n");
-	spiCanMutex.Create("SPICAN");
+	//spiCanMutex.Create("SPICAN");
 	SetPinFunction(SPICanMosiPin, SPICanMosiPinPeriphMode);
 	SetPinFunction(SPICanSclkPin, SPICanSclkPinPeriphMode);
 	SetPinFunction(SPICanMisoPin, SPICanMisoPinPeriphMode);
@@ -71,17 +71,21 @@ extern "C" bool DRV_SPI_Initialize()
 
 extern "C" void DRV_SPI_Select()
 {
+#if 0
 	const bool ok = spiCanMutex.Take(TaskBase::TimeoutUnlimited);
 	if (ok)
 	{
 		//IoPort::WriteDigital(SPICanCsPin, 0);
 	}
+#endif
 }
 
 extern "C" void DRV_SPI_Deselect()
 {
+#if 0
 	//IoPort::WriteDigital(SPICanCsPin, 1);
 	spiCanMutex.Release();
+#endif
 }
 
 extern "C" int8_t DRV_SPI_TransferData(uint32_t index, uint8_t *SpiTxData, uint8_t *SpiRxData, size_t spiTransferSize)

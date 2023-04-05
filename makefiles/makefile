@@ -41,8 +41,8 @@ include $(MAKE_DIR)/EXP.mk
 
 FLAGS=
 ifeq ($(PROCESSOR),RP2040)
-	FLAGS  += -D__RP2040__ -DFLY36RRF 
-#	FLAGS  += -D__RP2040__ -DRPI_PICO 
+#	FLAGS  += -D__RP2040__ -DFLY36RRF -DUSE_SPICAN
+	FLAGS  += -D__RP2040__ -DRPI_PICO -DUSE_SPICAN
 	PROCFLAGS = -mfp16-format=ieee -mcpu=cortex-m0plus -mthumb
     $(info - Processor: $(PROCESSOR)) 
 endif
