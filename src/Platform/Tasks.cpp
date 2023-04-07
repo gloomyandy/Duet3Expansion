@@ -256,6 +256,9 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 #if SUPPORT_DRIVERS
 		FilamentMonitor::Spin();
 #endif
+#if RP2040
+		serialUSB.Spin();
+#endif
 	}
 }
 
