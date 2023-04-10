@@ -205,4 +205,15 @@ const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interru
 const NvicPriority NvicPriorityAdc = 3;
 const NvicPriority NvicPriorityUSB = 3;
 
+#if SUPPORT_CAN && USE_SPICAN
+constexpr uint8_t spiCanSpiInstanceNumber = 0;
+constexpr Pin SPICanMosiPin = GpioPin(19);
+constexpr GpioPinFunction SPICanMosiPinPeriphMode = GpioPinFunction::Spi;
+constexpr Pin SPICanSclkPin = GpioPin(18);
+constexpr GpioPinFunction SPICanSclkPinPeriphMode = GpioPinFunction::Spi;
+constexpr Pin SPICanMisoPin = GpioPin(16);
+constexpr GpioPinFunction SPICanMisoPinPeriphMode = GpioPinFunction::Spi;
+constexpr Pin SPICanCsPin = GpioPin(17);
+#endif
+
 #endif /* SRC_CONFIG_FLY36_RRF_H_ */

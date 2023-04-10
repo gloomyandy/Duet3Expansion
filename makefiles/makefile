@@ -1,6 +1,7 @@
 PROCESSOR ?= RP2040
 
-
+BOARD ?= FLY36RRF
+CANFLAGS ?= -DUSE_SPICAN
 BUILD_DIR ?= ./expbuild
 EXP_DIR ?= ./Duet3Expansion
 REPRAPFIRMWARE_DIR ?= ./RepRapFirmware
@@ -10,7 +11,7 @@ FREERTOS_DIR ?= ./FreeRTOS
 CANLIB_DIR ?= ./CANlib
 SDK_DIR ?= $(COREN2G_DIR)/src/RP2040/pico-sdk
 LDNAME ?= rp2040_flash
-OUTPUT_NAME ?= Duet3Firmware_RPiPico
+OUTPUT_NAME ?= Duet3Firmware_$(BOARD)
 
 BUILD ?= Debug
 
@@ -41,10 +42,11 @@ include $(MAKE_DIR)/EXP.mk
 
 FLAGS=
 ifeq ($(PROCESSOR),RP2040)
-#	FLAGS  += -D__RP2040__ -DFLY36RRF -DUSE_SPICAN
-	FLAGS  += -D__RP2040__ -DRPI_PICO -DUSE_SPICAN
+	FLAGS  += -D__RP2040__ -D$(BOARD) $(CANFLAGS)
 	PROCFLAGS = -mfp16-format=ieee -mcpu=cortex-m0plus -mthumb
-    $(info - Processor: $(PROCESSOR)) 
+    $(info - Processor: $(PROCESSOR))
+    $(info - Board: $(BOARD))
+    $(info - Can options: $(CANFLAGS))
 endif
 
 ifeq ($(BUILD),Debug)
