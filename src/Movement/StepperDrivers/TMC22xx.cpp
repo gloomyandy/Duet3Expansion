@@ -1529,8 +1529,8 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 	}
 #endif
 
-	reply.catf(", read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u, CC errors %u",
-					readErrors, writeErrors, lastIfCount, numReads, numWrites, numTimeouts, numDmaErrors, badChopConfErrors);
+	reply.catf(", read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u, CC errors %u, %umA",
+					readErrors, writeErrors, lastIfCount, numReads, numWrites, numTimeouts, numDmaErrors, badChopConfErrors, (unsigned)motorCurrent);
 	if (failedOp != 0xFF)
 	{
 		reply.catf(", failedOp 0x%02x", failedOp);

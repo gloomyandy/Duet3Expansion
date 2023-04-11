@@ -48,6 +48,10 @@
 # include <hpl_user_area.h>
 #endif
 
+#if RP2040
+# include <pico/bootrom.h>
+#endif
+
 #if SAME5x
 
 # include <hri_nvmctrl_e54.h>
@@ -441,6 +445,7 @@ namespace Platform
 		while (!hri_nvmctrl_get_interrupt_READY_bit(NVMCTRL)) { }
 		hri_nvmctrl_clear_STATUS_reg(NVMCTRL, NVMCTRL_STATUS_MASK);
 #elif RP2040
+		 reset_usb_boot	(LedPins[0], 0);
 		//TODO
 #else
 # error Unsupported processor
