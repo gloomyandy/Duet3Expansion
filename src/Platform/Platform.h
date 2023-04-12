@@ -296,13 +296,6 @@ namespace Platform
 	GCodeResult DoDiagnosticTest(const CanMessageDiagnosticTest& msg, const StringRef& reply);
 
 	void EmergencyStop();
-
-	[[noreturn]]inline void ResetProcessor()
-	{
-		SCB->AIRCR = (0x5FA << 16) | (1u << 2);						// reset the processor
-		for (;;) { }
-	}
-
 #if HAS_VOLTAGE_MONITOR
 	MinCurMax GetPowerVoltages(bool resetMinMax) noexcept;
 	float GetCurrentVinVoltage() noexcept;

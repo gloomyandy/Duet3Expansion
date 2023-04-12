@@ -31,7 +31,7 @@ void SoftwareReset(SoftwareResetReason initialReason, const uint32_t *_ecv_array
 	srd->Populate(fullReason, stk);
 	mem->EnsureWritten();
 
-	Platform::ResetProcessor();
+	ResetProcessor();
 	for(;;) {}
 }
 
