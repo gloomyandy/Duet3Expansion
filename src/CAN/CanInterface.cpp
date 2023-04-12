@@ -24,7 +24,9 @@
 #include <Hardware/IoPorts.h>
 #include <Version.h>
 
-#if !RP2040
+#if RP2040
+# include <NonVolatileMemory.h>
+#else
 # include <hpl_user_area.h>
 #endif
 
@@ -165,8 +167,11 @@ void CanInterface::Init(CanAddress defaultBoardAddress, bool useAlternatePins, b
 	CanTiming timing;
 
 #if RP2040
-	//TODO read timing data from flash
-	timing.SetDefaults_1Mb();
+	{
+		NonVolatileMemory mem(NvmPage::common);
+		mem.GetCanSettings(canConfigData);
+		canConfigData.GetTiming(timing);
+	}
 #else
 	// Read the CAN timing data from the top part of the NVM User Row
 	canConfigData = *reinterpret_cast<CanUserAreaData*>(NVMCTRL_USER + CanUserAreaDataOffset);
@@ -782,9 +787,9 @@ GCodeResult CanInterface::ChangeAddressAndDataRate(const CanMessageSetAddressAnd
 		if (seen)
 		{
 #if RP2040
-			//TODO
-			reply.copy("Flash write not yet implemented on RP2040");
-			return GCodeResult::error;
+			NonVolatileMemory mem(NvmPage::common);
+			mem.SetCanSettings(canConfigData);
+			mem.EnsureWritten();
 #else
 			const int32_t rc = _user_area_write(reinterpret_cast<void*>(NVMCTRL_USER), CanUserAreaDataOffset, reinterpret_cast<const uint8_t*>(&canConfigData), sizeof(canConfigData));
 			if (rc != 0)
