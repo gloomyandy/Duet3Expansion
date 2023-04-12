@@ -137,6 +137,10 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 	return ret;
 }
 
+#if RP2040
+bool watchdogCausedReboot = false;
+#endif
+
 // Application entry point
 [[noreturn]] void AppMain() noexcept
 {
@@ -145,6 +149,9 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 #ifndef DEBUG
 
 # if RP2040
+	// Did the watchdog cause the last reboot? We need to capture this before we enable
+	// the watchdog otherwise the result is invalid.
+	watchdogCausedReboot = watchdog_enable_caused_reboot();
 	//TODO
 # else
 	// Check that the bootloader is protected and EEPROM is configured
@@ -592,7 +599,7 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 #if RP2040
 	{
 		const uint32_t reason = watchdog_hw->reason & 0x03;
-		if (reason != 0 && watchdog_enable_caused_reboot())
+		if (watchdogCausedReboot && reason != 0)
 		{
 			switch (reason)
 			{
@@ -600,6 +607,11 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 			case 2: reply.cat("watchdog force"); break;
 			case 3: reply.cat("watchdog force and timer"); break;
 			}
+		}
+		else if (reason != 0)
+		{
+			// Software resets use the watchdog timer to force a reset
+			reply.cat("software");
 		}
 		else
 		{
