@@ -32,6 +32,7 @@
 # include <hardware/dma.h>
 # include <hardware/watchdog.h>
 # include <hardware/structs/vreg_and_chip_reset.h>
+# include <hardware/structs/watchdog.h>
 #else
 # include <hpl_user_area.h>
 #endif
@@ -43,7 +44,26 @@ constexpr uint32_t FlashBlockSize = 0x00010000;					// the erase size we assume 
 # include <hri_wdt_c21.h>
 constexpr uint32_t FlashBlockSize = 0x00004000;					// the erase size we assume for flash, and the bootloader size (16K)
 #elif RP2040
-constexpr uint32_t FlashBlockSize = 0x00004000;					// the erase size we assume for flash, and the bootloader size (16K)
+constexpr uint32_t FlashBlockSize = 0x00001000;					// the erase size we assume for flash, and the bootloader size (4K)
+constexpr uint32_t MaxFirmwareSize = 200*1024;					// Max size of firmware we can flash
+struct UF2_Block
+{
+	// 32 byte header
+	uint32_t magicStart0;
+	uint32_t magicStart1;
+	uint32_t flags;
+	uint32_t targetAddr;
+	uint32_t payloadSize;
+	uint32_t blockNo;
+	uint32_t numBlocks;
+	uint32_t fileSize;		// or familyID
+	uint32_t data[476/4];
+	uint32_t magicEnd;
+
+	static constexpr uint32_t MagicStart0Val = 0x0A324655;
+	static constexpr uint32_t MagicStart1Val = 0x9E5D5157;
+	static constexpr uint32_t MagicEndVal = 0x0AB16F30;
+};
 #endif
 
 // Define replacement standard library functions
@@ -93,6 +113,7 @@ extern "C" void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuf
 
 extern "C" [[noreturn]] void MainTask(void * pvParameters) noexcept;
 extern "C" [[noreturn]] void UpdateBootloaderTask(void * pvParameters) noexcept;
+extern "C" [[noreturn]] void UpdateFirmwareTask(void * pvParameters) noexcept;
 
 // We need to make malloc/free thread safe. We must use a recursive mutex for it.
 extern "C" void __malloc_lock (struct _reent *_r) noexcept
@@ -144,7 +165,7 @@ bool watchdogCausedReboot = false;
 // Application entry point
 [[noreturn]] void AppMain() noexcept
 {
-	bool updateBootloader = false;
+	bool updateNeeded = false;
 
 #ifndef DEBUG
 
@@ -152,7 +173,14 @@ bool watchdogCausedReboot = false;
 	// Did the watchdog cause the last reboot? We need to capture this before we enable
 	// the watchdog otherwise the result is invalid.
 	watchdogCausedReboot = watchdog_enable_caused_reboot();
-	//TODO
+	// Do we need to try and update the firmware?
+	if (watchdog_hw->scratch[UpdateFirmwareMagicWordIndex] == UpdateFirmwareMagicValue)
+	{
+		debugPrintf("Firmware update requested\n");
+		updateNeeded = true;
+		// clear the update flag
+		watchdog_hw->scratch[UpdateFirmwareMagicWordIndex] = 0;
+	}
 # else
 	// Check that the bootloader is protected and EEPROM is configured
 	union
@@ -183,7 +211,7 @@ bool watchdogCausedReboot = false;
 		nvmUserRow.b32[UpdateBootloaderMagicWordIndex] = 0xFFFFFFFF;								// clear the bootloader update flag
 		_user_area_write(reinterpret_cast<void*>(NVMCTRL_USER), 0, reinterpret_cast<const uint8_t*>(&nvmUserRow), sizeof(nvmUserRow));
 		delayMicroseconds(10000);																	// in case we reset early due to low voltage etc.
-		updateBootloader = true;																	// we can't update it until we have started RTOS
+		updateNeeded = true;																	// we can't update it until we have started RTOS
 	}
 	else if ((nvmUserRow0 & mask) != reqValue)
 	{
@@ -230,7 +258,13 @@ bool watchdogCausedReboot = false;
 #endif
 
 	// Create the startup task and memory allocation mutex
-	mainTask.Create((updateBootloader) ? UpdateBootloaderTask : MainTask, "MAIN", nullptr, TaskPriority::SpinPriority);
+	mainTask.Create((updateNeeded) ?
+#if RP2040
+						UpdateFirmwareTask
+#else
+						UpdateBootloaderTask
+#endif
+									: MainTask, "MAIN", nullptr, TaskPriority::SpinPriority);
 	mallocMutex.Create("Malloc");
 
 	// Initialise watchdog clock
@@ -270,7 +304,89 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 }
 
 #if RP2040
-//TODO implement flashing the CAN bootloader
+static void RequestFirmwareBlock(uint32_t fileOffset, uint32_t numBytes, CanMessageBuffer& buf)
+{
+	//debugPrintf("Request block %d\n", fileOffset);
+	CanMessageFirmwareUpdateRequest * const msg = buf.SetupRequestMessage<CanMessageFirmwareUpdateRequest>(0, CanInterface::GetCanAddress(), CanId::MasterAddress);
+	SafeStrncpy(msg->boardType, BOARD_TYPE_NAME, sizeof(msg->boardType));
+	msg->boardVersion = 0;
+	msg->bootloaderVersion = CanMessageFirmwareUpdateRequest::BootloaderVersion0;
+	msg->uf2Format = true;											// firmware files for RP2040 are shipped in .uf2 format
+	msg->fileWanted = (uint32_t)FirmwareModule::main;
+	msg->fileOffset = fileOffset;
+	msg->lengthRequested = numBytes;
+	buf.dataLength = msg->GetActualDataLength();
+	CanInterface::Send(&buf);
+}
+
+// Get a buffer of data from the host
+static FirmwareFlashErrorCode GetBlock(uint32_t startingOffset, uint32_t& fileSize, uint8_t *blockBuffer)
+{
+	CanMessageBuffer buf;
+//debugPrintf("ask for block %d\n", startingOffset);
+	RequestFirmwareBlock(startingOffset, FlashBlockSize, buf);	// ask for 4K from the starting offset
+//debugPrintf("After request\n");
+	uint32_t whenStartedWaiting = millis();
+	uint32_t bytesReceived = 0;
+	bool done = false;
+	do
+	{
+		const bool ok = CanInterface::GetCanMessage(&buf);
+		if (ok)
+		{
+			//debugPrintf("Got reply %d\n", buf.id.MsgType());
+			if (buf.id.MsgType() == CanMessageType::firmwareBlockResponse)
+			{
+				const CanMessageFirmwareUpdateResponse& response = buf.msg.firmwareUpdateResponse;
+				//debugPrintf("Response err %x offset %d len %d\n", response.err, response.fileOffset, response.dataLength);
+				switch (response.err)
+				{
+				case CanMessageFirmwareUpdateResponse::ErrNoFile:
+					return FirmwareFlashErrorCode::noFile;
+
+				case CanMessageFirmwareUpdateResponse::ErrBadOffset:
+					return FirmwareFlashErrorCode::badOffset;
+
+				case CanMessageFirmwareUpdateResponse::ErrOther:
+					return FirmwareFlashErrorCode::hostOther;
+
+				case CanMessageFirmwareUpdateResponse::ErrNone:
+					if (response.fileOffset >= startingOffset && response.fileOffset <= startingOffset + bytesReceived)
+					{
+						const uint32_t bufferOffset = response.fileOffset - startingOffset;
+						const uint32_t bytesToCopy = min<uint32_t>(FlashBlockSize - bufferOffset, response.dataLength);
+						//debugPrintf("About to store response off %d start %d %d bytes to offset %d\n", response.fileOffset, startingOffset, bytesToCopy, bufferOffset);
+						memcpy(blockBuffer + bufferOffset, response.data, bytesToCopy);
+						if (response.fileOffset + bytesToCopy > startingOffset + bytesReceived)
+						{
+							bytesReceived = response.fileOffset - startingOffset + bytesToCopy;
+						}
+						if (bytesReceived == FlashBlockSize || bytesReceived >= response.fileLength - startingOffset)
+						{
+							//debugPrintf("Received %d bytes flock full or eof\n", bytesReceived);
+							// Reached the end of the file
+							memset(blockBuffer + bytesReceived, 0xFF, FlashBlockSize - bytesReceived);
+							fileSize = response.fileLength;
+							done = true;
+						}
+					}
+					whenStartedWaiting = millis();
+				}
+			}
+		}
+		else if (millis() - whenStartedWaiting > BlockReceiveTimeout/4)
+		{
+			//debugPrintf("Timeout\n");
+			if (bytesReceived == 0)
+			{
+				return FirmwareFlashErrorCode::blockReceiveTimeout;
+			}
+			RequestFirmwareBlock(startingOffset + bytesReceived, FlashBlockSize - bytesReceived, buf);		// ask for 4K from the starting offset
+			whenStartedWaiting = millis();
+		}
+	} while (!done);
+	return FirmwareFlashErrorCode::ok;
+}
 
 #else
 
@@ -358,9 +474,11 @@ static FirmwareFlashErrorCode GetBootloaderBlock(uint8_t *blockBuffer)
 
 	return FirmwareFlashErrorCode::ok;
 }
+#endif	// !RP2040
 
 static void ReportFlashError(FirmwareFlashErrorCode err)
 {
+	debugPrintf("Firmware update error %d\n", err);
 	for (unsigned int i = 0; i < (unsigned int)err; ++i)
 	{
 		Platform::WriteLed(0, true);
@@ -372,7 +490,6 @@ static void ReportFlashError(FirmwareFlashErrorCode err)
 	delay(1000);
 }
 
-#endif	// !RP2040
 
 // Compute the CRC32 of a dword-aligned block of memory
 // This assumes the caller has exclusive use of the DMAC
@@ -432,7 +549,157 @@ bool CheckCRC(uint32_t *blockBuffer) noexcept
 	return ComputeCRC32(blockBuffer, blockBuffer + crcOffset/4) == expectedCRC;
 }
 
-#if !RP2040
+#if RP2040
+#include <hardware/flash.h>
+// We allocate one sector for each type of non-volatile memory page. We store the page within the sector using wear levelling.
+constexpr uint32_t FlashSectorSize = 4096;									// the flash chip has 4K sectors
+constexpr uint32_t FlashSize = 2 * 1024 * 1024;								// the flash chip size in bytes (2Mbytes = 16Mbits)
+constexpr uint32_t FlashStart = XIP_BASE;
+
+uint32_t eraseTime = 0;
+uint32_t flashTime = 0;
+// Erase flash and write the firmware to it. 
+// NOTE: during this operation we must not execute any code from flash.
+[[noreturn]] void RAMFUNC WriteFirmwareToFlash(uint32_t *firmware, uint32_t length)
+{
+	uint32_t start = StepTimer::GetTimerTicks();
+	// make sure that nothing runs from flash memory
+	IrqDisable();
+	// Reboot in 10 seconds no matter what happens (The flash operation usually takes less than 2 seconds)!
+	watchdog_reboot(0, 0, 10000);
+	// Erase the flash pages
+	flash_range_erase(0, length);
+	eraseTime = StepTimer::GetTimerTicks() - start;
+	// now write the flash data
+	flash_range_program(0, (uint8_t *)firmware, length);
+	flashTime = StepTimer::GetTimerTicks() - start;
+	// Spin waiting for reboot
+	for(;;)
+	{
+	}
+}
+
+// The task that runs to update the firmware
+extern "C" [[noreturn]] void UpdateFirmwareTask(void *pvParameters) noexcept
+{
+	// Allocate a buffer large enough to contain the entire bootloader
+	Platform::InitMinimal();
+	delay(10000);
+	debugPrintf("Starting firmware update\n");
+	uint8_t * blockBuffer = (uint8_t *)(new uint32_t[FlashBlockSize/4]);		// if this fails then an OutOfMemory reset will occur;
+	debugPrintf("After memory allocation1\n");
+	uint32_t * firmwareBuffer = new uint32_t[MaxFirmwareSize/4];	// if this fails then an OutOfMemory reset will occur;
+	debugPrintf("After memory allocation2\n");
+	uint32_t bufferStartOffset = 0;
+	uint32_t roundedUpLength = 0;
+	for (;;)
+	{
+		Platform::WriteLed(0, false);
+		const uint32_t start = millis();
+		do
+		{
+			Platform::SpinMinimal();								// make sure the currentVin is up to date and the green LED gets turned off
+		} while (millis() - start < 300);
+
+		uint32_t fileSize;
+//debugPrintf("Request block %d\n", bufferStartOffset);
+		const FirmwareFlashErrorCode err = GetBlock(bufferStartOffset, fileSize, reinterpret_cast<uint8_t*>(blockBuffer));
+		if (err != FirmwareFlashErrorCode::ok)
+		{
+			ReportFlashError(err);
+			continue;
+		}
+debugPrintf("Got block %d\n", bufferStartOffset);
+		if (bufferStartOffset == 0)
+		{
+			// First block received, so unlock and erase the firmware
+			const uint32_t firmwareSize = fileSize/2;			// using UF2 format with 256 data bytes per 512b block
+			roundedUpLength = ((firmwareSize + (FlashBlockSize - 1))/FlashBlockSize) * FlashBlockSize;
+			debugPrintf("Got first block file size %d flash size %d rounded %d\n", fileSize, firmwareSize, roundedUpLength);
+			if (roundedUpLength > MaxFirmwareSize)
+			{
+				ReportFlashError(FirmwareFlashErrorCode::noMemory);
+				continue;
+			}
+		}
+
+		// If we have both red and green LEDs, the green one indicates CAN activity. Use the red one to indicate writing to flash.
+		Platform::WriteLed(0, true);
+
+		// The file being fetched is in .uf2 format, so extract the data from the buffer and write it
+		// On the SAME5x we fetch 64kb at a time, so we have up to 128 blocks in the buffer
+		for (unsigned int block = 0; block < FlashBlockSize/512 && bufferStartOffset + (512 * (block + 1)) <= fileSize; ++block)
+		{
+			const UF2_Block *const currentBlock = reinterpret_cast<const UF2_Block*>(blockBuffer + (512 * block));
+			if (   currentBlock->magicStart0 == UF2_Block::MagicStart0Val
+				&& currentBlock->magicStart1 == UF2_Block::MagicStart1Val
+				&& currentBlock->magicEnd == UF2_Block::MagicEndVal
+				&& currentBlock->payloadSize <= 256
+			   )
+			{
+				const uint32_t firmwareOffset = (bufferStartOffset/2) + (block * 256);
+				//debugPrintf("Write 256 bytes to %d payload size %d\n", firmwareOffset, currentBlock->payloadSize);
+				memcpy(((uint8_t *)firmwareBuffer) + firmwareOffset, currentBlock->data, 256); 
+			}
+			else
+			{
+				debugPrintf("Bad UF2 file block %d size %d magic0 %x(%x) magic1 %x(%x) magixe %x(%x)\n", block, currentBlock->payloadSize, 
+								currentBlock->magicStart0, UF2_Block::MagicStart0Val, currentBlock->magicStart1, UF2_Block::MagicStart1Val,
+								currentBlock->magicEnd, UF2_Block::MagicEndVal );
+				//ReportFlashError(FirmwareFlashErrorCode::invalidFirmware);
+				continue;
+			}
+		}
+		bufferStartOffset += FlashBlockSize;
+		if (bufferStartOffset >= fileSize)
+		{
+			debugPrintf("About to pad block by %d bytes offset %d\n", roundedUpLength - fileSize/2, fileSize/2);
+			delay(100);
+			// Pad last block if needed
+			memset(((uint8_t *)firmwareBuffer) + fileSize/2, 0xff, roundedUpLength - fileSize/2);
+			break;
+		}
+	}
+debugPrintf("Download complete\n");
+String<StringLength256> reply;
+CanInterface::Diagnostics(reply.GetRef());
+debugPrintf("%s\n", reply.c_str());
+reply.Clear();
+debugPrintf("Verifying...\n");
+for(uint32_t offset = 0; offset < roundedUpLength/4; offset++)
+{
+	if (firmwareBuffer[offset] != ((uint32_t *)FlashStart)[offset])
+	{
+		debugPrintf("Diff found at offset %d(%d) actual %x expected %x\n", offset, offset*4, ((uint32_t *)FlashStart)[offset], firmwareBuffer[offset]);
+		break;
+	}
+}
+debugPrintf("Verify 1 complete, writing to flash, wait for reboot in 10 seconds\n");
+delay(100);
+	CanInterface::Shutdown();
+	WriteFirmwareToFlash(firmwareBuffer, roundedUpLength);
+	debugPrintf("Flash write complete erase time %d flash time %d\n", (int)(eraseTime*StepTimer::StepClocksToMillis), (int)(flashTime*StepTimer::StepClocksToMillis));
+debugPrintf("Verifying\n");
+for(uint32_t offset = 0; offset < roundedUpLength/4; offset++)
+{
+	if (firmwareBuffer[offset] != ((uint32_t *)(FlashStart + (1024*1024)))[offset])
+	{
+		debugPrintf("Diff found at offset %d(%d) actual %x expected %x\n", offset, offset*4, ((uint32_t *)FlashStart)[offset], firmwareBuffer[offset]);
+		break;
+	}
+}
+debugPrintf("Verify 2 complete, wait for reboot...\n");
+delay(100);
+IrqDisable();
+for(;;)
+{
+}
+	// If we reset immediately then the user area write doesn't complete and the bits get set to all 1s.
+	//delayMicroseconds(10000);
+	//ResetProcessor();
+}
+
+#else
 
 // The task that runs to update the bootloader
 extern "C" [[noreturn]] void UpdateBootloaderTask(void *pvParameters) noexcept

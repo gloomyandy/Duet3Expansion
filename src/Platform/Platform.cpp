@@ -49,7 +49,7 @@
 #endif
 
 #if RP2040
-# include <pico/bootrom.h>
+# include <hardware/structs/watchdog.h>
 #endif
 
 #if SAME5x
@@ -410,6 +410,7 @@ namespace Platform
 #endif
 	}
 
+#if !RP2040
 	// Erase the firmware (but not the bootloader) and reset the processor
 	[[noreturn]] RAMFUNC static void EraseAndReset()
 	{
@@ -444,14 +445,12 @@ namespace Platform
 
 		while (!hri_nvmctrl_get_interrupt_READY_bit(NVMCTRL)) { }
 		hri_nvmctrl_clear_STATUS_reg(NVMCTRL, NVMCTRL_STATUS_MASK);
-#elif RP2040
-		 reset_usb_boot	(LedPins[0], 0);
-		//TODO
 #else
 # error Unsupported processor
 #endif
 		ResetProcessor();
 	}
+#endif
 
 	static void ShutdownAll()
 	{
@@ -492,14 +491,20 @@ namespace Platform
 			NVIC->ICER[i] = 0xFFFFFFFF;					// Disable IRQs
 			NVIC->ICPR[i] = 0xFFFFFFFF;					// Clear pending IRQs
 		}
-#elif SAMC21 || RP2040
+#elif SAMC21
 		NVIC->ICER[0] = 0xFFFFFFFF;						// Disable IRQs
 		NVIC->ICPR[0] = 0xFFFFFFFF;						// Clear pending IRQs
+#elif RP2040
+		// We reboot and update the firmware in a similar manner to bootloader updates on other boards
+		watchdog_hw->scratch[UpdateFirmwareMagicWordIndex] = UpdateFirmwareMagicValue;
+		ResetProcessor();
 #else
 # error Unsupported processor
 #endif
 
+#if !RP2040
 		EraseAndReset();
+#endif
 	}
 
 	// Update the CAN bootloader
@@ -508,7 +513,7 @@ namespace Platform
 		ShutdownAll();									// turn everything off
 
 #if RP2040
-		//TODO
+		// We don't need to update the bootloader
 #else
 		// Remove the bootloader protection and set the bootloader update flag
 		// On the SAME5x the first 8x 32-bit words are reserved. We store the bootloader flag in the 10th word.
@@ -995,6 +1000,7 @@ void Platform::InitMinimal()
 	InitLeds();
 	InitVinMonitor();
 	InitialiseInterrupts();
+	serialUSB.Start(NoPin);
 	CanInterface::Init(GetCanAddress(), UseAlternateCanPins, false);
 }
 
