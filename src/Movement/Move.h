@@ -49,10 +49,12 @@ public:
 	bool SetKinematics(KinematicsType k) noexcept;									// Set kinematics, return true if successful
 #endif
 
+#if !DEDICATED_STEP_TIMER
 	static void TimerCallback(CallbackParameter cb) noexcept
 	{
 		static_cast<Move*>(cb.vp)->Interrupt();
 	}
+#endif
 
 	void PrintCurrentDda() const noexcept;											// For debugging
 
@@ -103,7 +105,10 @@ private:
 	DDA* volatile ddaRingGetPointer;
 	DDA* ddaRingCheckPointer;
 
+#if !DEDICATED_STEP_TIMER
 	StepTimer timer;
+#endif
+
 	volatile int32_t lastMoveStepsTaken[NumDrivers];								// how many steps were taken in the last move we did
 	volatile int32_t movementAccumulators[NumDrivers]; 								// Accumulated motor steps
 #if SUPPORT_CLOSED_LOOP
@@ -201,7 +206,7 @@ inline bool Move::GetCurrentMotion(size_t driver, uint32_t when, bool closedLoop
 
 inline void Move::SetCurrentMotorSteps(size_t driver, float fullSteps) noexcept
 {
-	const float multiplier = ldexpf(1.0, (int)SmartDrivers::GetMicrostepShift(driver));
+	const float multiplier = ldexpf((Platform::GetDirectionValueNoCheck(driver)) ? -1.0 : 1.0, (int)SmartDrivers::GetMicrostepShift(driver));
 	netMicrostepsTaken[driver] = fullSteps * multiplier;
 }
 
