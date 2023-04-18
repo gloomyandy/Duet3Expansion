@@ -22,14 +22,14 @@ V=@
 $(info Building RepRapFirmware Duet3Expansion:)
 
 ## Cross-compilation commands 
-CC      = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-gcc"
-CXX     = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-g++"
-LD      = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-gcc"
-AR      = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-ar"
-AS      = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-as"
-OBJCOPY = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-objcopy"
-OBJDUMP = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-objdump"
-SIZE    = "/c/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin/arm-none-eabi-size"
+CC      = $(GCC_PATH)arm-none-eabi-gcc
+CXX     = $(GCC_PATH)arm-none-eabi-g++
+LD      = $(GCC_PATH)arm-none-eabi-gcc
+AR      = $(GCC_PATH)arm-none-eabi-ar
+AS      = $(GCC_PATH)arm-none-eabi-as
+OBJCOPY = $(GCC_PATH)arm-none-eabi-objcopy
+OBJDUMP = $(GCC_PATH)arm-none-eabi-objdump
+SIZE    = $(GCC_PATH)arm-none-eabi-size
 
 MKDIR = mkdir -p
 
@@ -127,7 +127,7 @@ $(BUILD_DIR)/libFreeRTOS.a: $(RTOS_OBJS)
 $(BUILD_DIR)/$(OUTPUT_NAME).elf: $(BUILD_DIR)/libCoreN2G.a $(BUILD_DIR)/libFreeRTOS.a $(BUILD_DIR)/libRRFLibraries.a $(BUILD_DIR)/libCANlib.a $(EXP_OBJS)
 	@echo "\nCreating $(OUTPUT_NAME).bin"
 	$(V)$(MKDIR) $(dir $@)
-	$(V)$(CXX) -L$(BUILD_DIR)/ -L$(COREN2G_DIR)/src/RP2040/Tools/Build-pico-sdk/build/ -Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -fno-exceptions -mcpu=cortex-m0plus -T$(LINKER_SCRIPT) -Wl,-Map,$(BUILD_DIR)/$(OUTPUT_NAME).map -o $(BUILD_DIR)/$(OUTPUT_NAME).elf $(EXP_OBJS) -lRRFLibraries -lCoreN2G -lCANlib -lFreeRTOS -lpico -lRRFLibraries -lCoreN2G -lCANlib -lFreeRTOS -lpico
+	$(V)$(CXX) -L$(BUILD_DIR)/ -L$(COREN2G_DIR)/src/RP2040/Tools/Build-pico-sdk/build/ -Os --specs=nano.specs -Wl,--gc-sections -Wl,--fatal-warnings -Wl,--no-warn-rwx-segment -fno-exceptions -mcpu=cortex-m0plus -T$(LINKER_SCRIPT) -Wl,-Map,$(BUILD_DIR)/$(OUTPUT_NAME).map -o $(BUILD_DIR)/$(OUTPUT_NAME).elf $(EXP_OBJS) -lRRFLibraries -lCoreN2G -lCANlib -lFreeRTOS -lpico -lRRFLibraries -lCoreN2G -lCANlib -lFreeRTOS -lpico
 	$(V)$(OBJCOPY) --strip-unneeded -O binary $(BUILD_DIR)/$(OUTPUT_NAME).elf $(BUILD_DIR)/$(OUTPUT_NAME).bin
 	$(V)$(SIZE) $(BUILD_DIR)/$(OUTPUT_NAME).elf
 	$(V)python $(REPRAPFIRMWARE_DIR)/Tools/uf2conv/uf2conv.py  -b 0x10000000 -f 0xe48bff56 -c -o $(BUILD_DIR)/$(OUTPUT_NAME).uf2 $(BUILD_DIR)/$(OUTPUT_NAME).bin
