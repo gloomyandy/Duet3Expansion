@@ -383,7 +383,7 @@ static FirmwareFlashErrorCode GetBlock(uint32_t startingOffset, uint32_t& fileSi
 				}
 			}
 		}
-		else if (millis() - whenStartedWaiting > BlockReceiveTimeout/4)
+		else if (millis() - whenStartedWaiting > BlockReceiveTimeout)
 		{
 			//debugPrintf("Timeout\n");
 			if (bytesReceived == 0)
