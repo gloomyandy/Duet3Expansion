@@ -340,6 +340,7 @@ static FirmwareFlashErrorCode GetBlock(uint32_t startingOffset, uint32_t& fileSi
 	bool done = false;
 	do
 	{
+		Platform::SpinMinimal();									// check if it's time to turn the LED off
 		const bool ok = CanInterface::GetCanMessage(&buf);
 		if (ok)
 		{
