@@ -7,6 +7,7 @@
 
 #ifndef SRC_CONFIG_FLY36_RRF_H_
 #define SRC_CONFIG_FLY36_RRF_H_
+#define BOARD_REV 0
 
 #include <Hardware/PinDescription.h>
 
@@ -300,5 +301,5 @@ constexpr Pin SPICanMisoPin = GpioPin(16);
 constexpr GpioPinFunction SPICanMisoPinPeriphMode = GpioPinFunction::Spi;
 constexpr Pin SPICanCsPin = GpioPin(17);
 #endif
-
+#endif
 #endif /* SRC_CONFIG_FLY36_RRF_H_ */
