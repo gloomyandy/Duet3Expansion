@@ -7,7 +7,6 @@
 
 #ifndef SRC_CONFIG_FLY36_RRF_H_
 #define SRC_CONFIG_FLY36_RRF_H_
-#define BOARD_REV 0
 
 #include <Hardware/PinDescription.h>
 

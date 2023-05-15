@@ -1,7 +1,8 @@
 PROCESSOR ?= RP2040
 
-#BOARD ?= FLY36RRF
-BOARD ?= RPI_PICO
+BOARD ?= FLY36RRF
+#BOARD ?= RPI_PICO
+BOARD_REV ?= 1
 CANFLAGS ?= -DUSE_SPICAN
 BUILD_DIR ?= ./expbuild
 EXP_DIR ?= ./Duet3Expansion
@@ -43,10 +44,10 @@ include $(MAKE_DIR)/EXP.mk
 
 FLAGS=
 ifeq ($(PROCESSOR),RP2040)
-	FLAGS  += -D__RP2040__ -D$(BOARD) $(CANFLAGS)
+	FLAGS  += -D__RP2040__ -D$(BOARD) $(CANFLAGS) -DBOARD_REV=$(BOARD_REV)
 	PROCFLAGS = -mfp16-format=ieee -mcpu=cortex-m0plus -mthumb
     $(info - Processor: $(PROCESSOR))
-    $(info - Board: $(BOARD))
+    $(info - Board: $(BOARD)  Rev: $(BOARD_REV))
     $(info - Can options: $(CANFLAGS))
 endif
 
