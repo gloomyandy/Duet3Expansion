@@ -34,52 +34,54 @@
  * The basic motion equation for an acceleration segment is:
  *   s = s0 + u*f*(t - ts) + 0.5*a*f*(t - ts)t^2
  * Solving for t:
- *   t = ts - u/a + sqrt((-u/a)^2 + 2*(s-s0)/(a*f))
+ *   t = ts - u/a + sqrt((-u/a)^2 + 2*(s-s0)/af
  * If we take s0 = S0 * f:
- *   t = ts - u/a + sqrt((-u/a)^2 + 2*s/(a*f) - 2*S0/a)
+ *   t = ts - u/a + sqrt((-u/a)^2 + 2*s/af - 2*S0/a)
  * Substituting s = n/m:
- *   t = ts - u/a + sqrt((-u/a)^2 + 2*n/(f*m*a) - 2*S0/a)
+ *   t = ts - u/a + sqrt((-u/a)^2 + 2*n/amf - 2*S0/a)
  * For a deceleration segment, just set a = -d:
- *   t = ts + u/d + sqrt((u/d)^2 - 2*n/(f*m*d) + 2*S0/d)
+ *   t = ts + u/d + sqrt((u/d)^2 - 2*n/dmf + 2*S0/d)
  * For a linear segment:
  *   s = s0 + u*f*(t - ts)
  * from which:
- *   t = ts + (s - s0)/(u*f)
+ *   t = ts + (s - s0)/uf
  * If we take s0 = S0 * f:
- *   t = ts - S0/u + s/(u*f)
+ *   t = ts - S0/u + s/uf
  * Substituting s = n/m:
  *   t = n/(u*f*m) + ts - S0/u
  *
  * Now add pressure advance with constant k seconds.
  * For the acceleration segment, u is replaced by u+(k*a):
- *   t = ts - u/a - k + sqrt((-u/a - k)^2 + 2*n/(f*m*a) - 2*S0/a)
- * For the deceleration segment, u is replaced by u-(k*d). Additionally, S0 is replaced by S0 + EAD where EAD stands for extra acceleration distance, EAD = (vaccel-uaccel)*k = a*T*k where T was the acceleration time:
- *   t = ts + u/d - k + sqrt((u/d - k)^2 - 2*n/(f*m*d) + 2*(S0 + EAD)/d)
+ *   t = ts - u/a - k + sqrt((-u/a - k)^2 + 2*n/amf - 2*S0/a)
+ * For the deceleration segment, u is replaced by u-(k*d). Additionally, S0 is replaced by S0 + EAD where EAD stands for
+ * extra acceleration distance, EAD = (vaccel-uaccel)*k = a*T*k where T was the acceleration time:
+ *   t = ts + u/d - k + sqrt((u/d - k)^2 - 2*n/dmf) + 2*(S0 + EAD)/d)
  * For the linear segment, S0 must include EAD again:
- *   t = ts - (S0 + EAD)/u + n/(u*f*m)
- * Now assume that there is also a fractional step p brought forward, where 0 <= p < 1.0. This must be subtracted from s0. Equivalently, add p/f to S0.
+ *   t = ts - (S0 + EAD)/u + n/umf
+ *
+ * Now assume that there is also an overdue fractional step p brought forward, where -1.0 < p < 1.0. This must be added to s0. Equivalently, add p/mf to S0.
  * Acceleration segment:
- *   t = ts - u/a - k + sqrt((-u/a - k)^2 + 2*n/(f*m*a) - 2*(S0 + p/f)/a)
+ *   t = ts - u/a - k + sqrt((-u/a - k)^2 + 2*n/amf - 2*(S0 + p/mf)/a)
  * Deceleration segment:
- *   t = ts + u/d - k + sqrt((u/d - k)^2 - 2*n/(f*m*d) + 2*(S0 + p/f + EAD)/d)
+ *   t = ts + u/d - k + sqrt((u/d - k)^2 - 2*n/dmf + 2*(S0 + p/mf + EAD)/d)
  * Linear segment:
- *   t = ts - (S0 + p/f + EAD)/u + n/(u*f*m)
+ *   t = ts - (S0 + p/mf + EAD)/u + n/umf
  *
  * We can summarise like this. For an acceleration or deceleration segment:
- *   t = ts + B + sqrt(A + C*n/(f*m))
+ *   t = ts + B + sqrt(A + C*n/mf)
  * where for an acceleration segment:
  *   B = -u/a - k
- *   A = B^2 - 2*(S0 + p/f)/a = B^2 - C * (S0 + p/f)
+ *   A = B^2 - 2*(S0 + p/mf)/a = B^2 - C * (S0 + p/mf)
  *   C = 2/a
  * and for a deceleration segment:
  *   B = u/d - k
- *   A = B^2 + 2*(S0 + EAD + p/f)/d = B^2 - C * (S0 + p/f)
+ *   A = B^2 + 2*(S0 + EAD + p/mf)/d = B^2 - C * (S0 + p/mf)
  *   C = -2/d
  *
  * For a linear segment:
- *   t = ts + B + C*n/(f*m)
+ *   t = ts + B + C*n/mf
  * where:
- *   B = -(S0 + EAD + p/f)/u
+ *   B = -(S0 + EAD + p/mf)/u
  *   C = 1/u
  *
  * For accelerating moves we can interpret (-A/C) as the (negative) distance at which the move reversed, and B is the time at which it reversed (negative so in the past)
@@ -94,20 +96,20 @@
  * For accel/decel segments:
  *   A' = B^2 - C*Dprev
  *   B' = B + ts
- *   C' = C * 1/(f*m)
+ *   C' = C * 1/mf
  * (for axis segments we could instead include ts in B, but we can't do that for common extruder segments, see later)
  * For linear segments:
  *   B' = Dprev*C + ts
- *   C' = C * 1/(f*m)
+ *   C' = C * 1/mf
  *
  * Assuming we share common segments between all extruders and account for PA and fractional steps when starting them, then when starting a segment we need to calculate the coefficients as follows:
  * For accel/decel segments:
- *   A' = (B - k)^2 + C*(Dprev + p/f)
+ *   A' = (B - k)^2 + C*(Dprev + p/mf)
  *   B' = (B - k) + ts
- *   C' = C * 1/(f*m)
+ *   C' = C * 1/mf
  * For linear segments:
- *   B' = -(Dprev + p/f)*C + ts
- *   C' = C * 1/(f*m)
+ *   B' = -(Dprev + p/mf)*C + ts
+ *   C' = C * 1/mf
  *
  * In closed loop mode we need to invert the above. For an acceleration or deceleration segment this gives:
  *   s = ((t - B')^2 - A')/C
@@ -145,8 +147,8 @@
 class MoveSegment
 {
 public:
-	void* operator new(size_t count) { return Tasks::AllocPermanent(count); }
-	void* operator new(size_t count, std::align_val_t align) { return Tasks::AllocPermanent(count, align); }
+	void* operator new(size_t count) noexcept { return Tasks::AllocPermanent(count); }
+	void* operator new(size_t count, std::align_val_t align) noexcept { return Tasks::AllocPermanent(count, align); }
 	void operator delete(void* ptr) noexcept {}
 	void operator delete(void* ptr, std::align_val_t align) noexcept {}
 
@@ -173,7 +175,7 @@ public:
 
 	// Calculate the move A coefficient in step_clocks^2 for an accelerating or decelerating move
 	float CalcNonlinearA(float startDistance) const noexcept pre(!IsLinear());
-	float CalcNonlinearA(float startDistance, float pressureAdvanceK) pre(!IsLinear()) const noexcept pre(!IsLinear());
+	float CalcNonlinearA(float startDistance, float pressureAdvanceK) const noexcept pre(!IsLinear());
 
 	// Calculate the move B coefficient in step_clocks for an accelerating or decelerating move
 	float CalcNonlinearB(float startTime) const noexcept pre(!IsLinear());
@@ -183,10 +185,13 @@ public:
 	float CalcLinearB(float startDistance, float startTime) const noexcept pre(IsLinear());
 
 	// Calculate the move C coefficient in step_clocks/step for a linear move, or step_clocks^2/step for an accelerating or decelerating move
-	float CalcC(float mmPerStep) const noexcept;
+	float CalcCFromMmPerStep(float mmPerStep) const noexcept;
 
-	// Return the C coefficient
-	float GetC() const noexcept { return c; }
+	// Calculate the move C coefficient in step_clocks/step for a linear move, or step_clocks^2/step for an accelerating or decelerating move
+	float CalcCFromStepsPerMm(float stepsPerMm) const noexcept;
+
+	// For a decelerating move, calculate the distance before the move reverses
+	float GetDistanceToReverse(float startSpeed) const noexcept;
 
 	// Return the acceleration, needed by closed loop builds
 	float GetAcceleration() const noexcept { return acceleration; }
@@ -295,9 +300,23 @@ inline float MoveSegment::CalcLinearB(float startDistance, float startTime) cons
 	return startTime - (startDistance * c);
 }
 
-inline float MoveSegment::CalcC(float mmPerStep) const noexcept
+inline float MoveSegment::CalcCFromMmPerStep(float mmPerStep) const noexcept
 {
 	return c * mmPerStep;
+}
+
+// Calculate the move C coefficient in step_clocks/step for a linear move, or step_clocks^2/step for an accelerating or decelerating move
+inline float MoveSegment::CalcCFromStepsPerMm(float stepsPerMm) const noexcept
+{
+	return c/stepsPerMm;
+}
+
+// For a decelerating move with positive start speed, calculate the distance before the move reverses
+// From (v^2-u^2) = 2as, if v=0 then s=-u^2/2a = u^2/2d
+// But c = -2/d, so d = -2/c, so s = u^2/(-4/c) = 0.25 * u^2 * c.
+inline float MoveSegment::GetDistanceToReverse(float startSpeed) const noexcept
+{
+	return fsquare(startSpeed) * c * (-0.25);
 }
 
 inline void MoveSegment::SetLinear(float pSegmentLength, float p_segTime, float p_c) noexcept

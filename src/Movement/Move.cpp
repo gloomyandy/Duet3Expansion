@@ -54,7 +54,7 @@ unsigned int moveCompleteTimeoutErrs;
 unsigned int getCanMoveTimeoutErrs;
 #endif
 
-constexpr size_t MoveTaskStackWords = 200;
+constexpr size_t MoveTaskStackWords = 220;
 static Task<MoveTaskStackWords> *moveTask;
 
 extern "C" [[noreturn]] void MoveLoop(void * param) noexcept
@@ -286,6 +286,10 @@ void Move::Diagnostics(const StringRef& reply) noexcept
 	maxPrepareTime = 0;
 #if 1	//debug
 	reply.catf(", mcErrs %u, gcmErrs %u", moveCompleteTimeoutErrs, getCanMoveTimeoutErrs);
+#endif
+#if 1	//debug
+	reply.catf(", ebfmin %.2f, ebfmax %.2f", (double)minExtrusionPending, (double)maxExtrusionPending);
+	minExtrusionPending = maxExtrusionPending = 0.0;
 #endif
 }
 
