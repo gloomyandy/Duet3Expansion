@@ -246,7 +246,7 @@ inline uint32_t DDA::WhenNextInterruptDue() const noexcept
 inline bool DDA::ScheduleNextStepInterrupt() const noexcept
 {
 #if SUPPORT_CLOSED_LOOP
-	if (!ClosedLoop::GetClosedLoopEnabled(0))
+	if (!closedLoopInstance->GetClosedLoopEnabled(0))
 #endif
 	{
 		if (likely(state == executing))
@@ -293,7 +293,7 @@ inline void DDA::InsertHiccup(uint32_t now) noexcept
 inline int32_t DDA::GetStepsTaken(size_t drive) const noexcept
 {
 #if SUPPORT_CLOSED_LOOP
-	if (ClosedLoop::GetClosedLoopEnabled(drive))
+	if (closedLoopInstance->GetClosedLoopEnabled(drive))
 	{
 		return ddms[drive].GetNetStepsTakenClosedLoop(topSpeed, (int32_t)(StepTimer::GetTimerTicks() - afterPrepare.moveStartTime));
 	}
@@ -325,7 +325,7 @@ inline uint32_t DDA::GetStepInterval(size_t axis, uint32_t microstepShift) const
 // Interrupts are disabled on entry and must remain disabled.
 inline void DDA::GetCurrentMotion(size_t driver, uint32_t ticksSinceStart, MotionParameters& mParams) noexcept
 {
-	return ddms[driver].GetCurrentMotion(topSpeed, ticksSinceStart, mParams);
+	return ddms[driver].GetCurrentMotion(*this, ticksSinceStart, mParams);
 }
 
 #endif
