@@ -489,7 +489,7 @@ static FirmwareFlashErrorCode GetBootloaderBlock(uint8_t *blockBuffer)
 
 static void ReportFlashError(FirmwareFlashErrorCode err)
 {
-	debugPrintf("Firmware update error %d\n", err);
+	debugPrintf("Firmware update error %d\n", (int)err);
 	for (unsigned int i = 0; i < (unsigned int)err; ++i)
 	{
 		Platform::WriteLed(0, true);
@@ -610,23 +610,20 @@ extern "C" [[noreturn]] void UpdateFirmwareTask(void *pvParameters) noexcept
 		do
 		{
 			Platform::SpinMinimal();								// make sure the currentVin is up to date and the green LED gets turned off
-		} while (millis() - start < 300);
+		} while (millis() - start < 100);
 
 		uint32_t fileSize;
-//debugPrintf("Request block %d\n", bufferStartOffset);
 		const FirmwareFlashErrorCode err = GetBlock(bufferStartOffset, fileSize, reinterpret_cast<uint8_t*>(blockBuffer));
 		if (err != FirmwareFlashErrorCode::ok)
 		{
 			ReportFlashError(err);
 			continue;
 		}
-debugPrintf("Got block %d\n", bufferStartOffset);
 		if (bufferStartOffset == 0)
 		{
 			// First block received, so unlock and erase the firmware
 			const uint32_t firmwareSize = fileSize/2;			// using UF2 format with 256 data bytes per 512b block
 			roundedUpLength = ((firmwareSize + (FlashBlockSize - 1))/FlashBlockSize) * FlashBlockSize;
-			debugPrintf("Got first block file size %d flash size %d rounded %d\n", fileSize, firmwareSize, roundedUpLength);
 			if (roundedUpLength > MaxFirmwareSize)
 			{
 				ReportFlashError(FirmwareFlashErrorCode::noMemory);
@@ -654,24 +651,24 @@ debugPrintf("Got block %d\n", bufferStartOffset);
 			}
 			else
 			{
-				debugPrintf("Bad UF2 file block %d size %d magic0 %x(%x) magic1 %x(%x) magixe %x(%x)\n", block, currentBlock->payloadSize, 
-								currentBlock->magicStart0, UF2_Block::MagicStart0Val, currentBlock->magicStart1, UF2_Block::MagicStart1Val,
-								currentBlock->magicEnd, UF2_Block::MagicEndVal );
-				//ReportFlashError(FirmwareFlashErrorCode::invalidFirmware);
+				debugPrintf("Bad UF2 file block %d size %u magic0 %x(%x) magic1 %x(%x) magice %x(%x)\n", block, (unsigned)currentBlock->payloadSize, 
+								(unsigned)currentBlock->magicStart0, (unsigned)UF2_Block::MagicStart0Val, (unsigned)currentBlock->magicStart1, (unsigned)UF2_Block::MagicStart1Val,
+								(unsigned)currentBlock->magicEnd, (unsigned)UF2_Block::MagicEndVal );
+				ReportFlashError(FirmwareFlashErrorCode::invalidFirmware);
 				continue;
 			}
 		}
 		bufferStartOffset += FlashBlockSize;
 		if (bufferStartOffset >= fileSize)
 		{
-			debugPrintf("About to pad block by %d bytes offset %d\n", roundedUpLength - fileSize/2, fileSize/2);
 			delay(100);
 			// Pad last block if needed
 			memset(((uint8_t *)firmwareBuffer) + fileSize/2, 0xff, roundedUpLength - fileSize/2);
 			break;
 		}
 	}
-debugPrintf("Download complete\n");
+	debugPrintf("Download complete\n");
+#if 0
 String<StringLength256> reply;
 CanInterface::Diagnostics(reply.GetRef());
 debugPrintf("%s\n", reply.c_str());
@@ -687,9 +684,11 @@ for(uint32_t offset = 0; offset < roundedUpLength/4; offset++)
 }
 debugPrintf("Verify 1 complete, writing to flash, wait for reboot in 10 seconds\n");
 delay(100);
+#endif
 	CanInterface::Shutdown();
 	WriteFirmwareToFlash(firmwareBuffer, roundedUpLength);
-	debugPrintf("Flash write complete erase time %d flash time %d\n", (int)(eraseTime*StepTimer::StepClocksToMillis), (int)(flashTime*StepTimer::StepClocksToMillis));
+#if 0
+debugPrintf("Flash write complete erase time %d flash time %d\n", (int)(eraseTime*StepTimer::StepClocksToMillis), (int)(flashTime*StepTimer::StepClocksToMillis));
 debugPrintf("Verifying\n");
 for(uint32_t offset = 0; offset < roundedUpLength/4; offset++)
 {
@@ -705,9 +704,7 @@ IrqDisable();
 for(;;)
 {
 }
-	// If we reset immediately then the user area write doesn't complete and the bits get set to all 1s.
-	//delayMicroseconds(10000);
-	//ResetProcessor();
+#endif
 }
 
 #else
