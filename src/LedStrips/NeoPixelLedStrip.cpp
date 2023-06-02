@@ -10,12 +10,44 @@
 #if SUPPORT_LED_STRIPS
 
 #include <Movement/StepTimer.h>
+#if SUPPORT_PIO_NEOPIXEL
+NeoPixelLedStrip* NeoPixelLedStrip::activePIOStrip = nullptr;
+WS2812* NeoPixelLedStrip::ws2812Device = nullptr;
+#endif
 
 NeoPixelLedStrip::NeoPixelLedStrip(bool p_isRGBW) noexcept
 	: LocalLedStrip((p_isRGBW) ? LedStripType::NeoPixel_RGBW : LedStripType::NeoPixel_RGB, DefaultNeoPixelSpiClockFrequency),
 	  isRGBW(p_isRGBW)
 {
+#if SUPPORT_PIO_NEOPIXEL
+	// We currently support only a single PIO based strip, this can use any pin.
+	if (activePIOStrip == nullptr)
+	{
+		// no strip currently using PIO, so we can use it
+		activePIOStrip = this;
+		useDma = true;
+	}
+	else
+	{
+		useDma = false;
+	}
+#endif
 }
+
+#if SUPPORT_PIO_NEOPIXEL
+NeoPixelLedStrip::~NeoPixelLedStrip()
+{
+	if (activePIOStrip == this)
+	{
+		if (ws2812Device != nullptr)
+		{
+			delete ws2812Device;
+			ws2812Device = nullptr;
+		}
+		activePIOStrip = nullptr;
+	}	
+}
+#endif
 
 GCodeResult NeoPixelLedStrip::Configure(CanMessageGenericParser& parser, const StringRef& reply, uint8_t& extra) noexcept
 {
@@ -23,7 +55,17 @@ GCodeResult NeoPixelLedStrip::Configure(CanMessageGenericParser& parser, const S
 	GCodeResult rslt = CommonConfigure(parser, reply, seen, extra);
 	if (seen)
 	{
-		// Nothing specific to configure for Neopixel strips in Duet3D builds
+#if SUPPORT_PIO_NEOPIXEL
+	// We currently support only a single PIO based strip, this can use any pin.
+	if (UsesDma())
+	{
+		if (ws2812Device != nullptr)
+		{
+			delete ws2812Device;
+		}
+		ws2812Device = new WS2812(port.GetPin(), isRGBW, DmaChanWS2812);
+	}
+#endif
 		return rslt;
 	}
 
@@ -54,6 +96,12 @@ GCodeResult NeoPixelLedStrip::HandleM150(CanMessageGenericParser& parser, const 
 		SpiSendNeoPixelData(params);
 	}
 	else
+#elif SUPPORT_PIO_NEOPIXEL
+	if (UsesDma())
+	{
+		PioSendNeoPixelData(params);
+	}
+	else
 #endif
 	{
 		BitBangNeoPixelData(params);
@@ -65,7 +113,12 @@ GCodeResult NeoPixelLedStrip::HandleM150(CanMessageGenericParser& parser, const 
 size_t NeoPixelLedStrip::GetBytesPerLed() const noexcept
 {
 	const size_t bytesPerLed = (isRGBW) ? 4 : 3;
+#if SUPPORT_PIO_NEOPIXEL
+	// PIO strings always use 4 bytes per pixel
+	return (useDma) ? 4 : bytesPerLed;
+#else
 	return (useDma) ? bytesPerLed * 4 : bytesPerLed;
+#endif
 }
 
 #if SUPPORT_DMA_NEOPIXEL
@@ -123,6 +176,34 @@ GCodeResult NeoPixelLedStrip::SpiSendNeoPixelData(const LedParams& params) noexc
 	}
 	return GCodeResult::ok;
 }
+#elif SUPPORT_PIO_NEOPIXEL
+// Send data to NeoPixel LEDs by DMA to SPI
+GCodeResult NeoPixelLedStrip::PioSendNeoPixelData(const LedParams& params) noexcept
+{
+	const unsigned int bytesPerLed = 4;
+	unsigned int numLeds = params.numLeds;
+	uint8_t *p = chunkBuffer + (bytesPerLed * numAlreadyInBuffer);
+	while (numLeds != 0 && p + bytesPerLed <= chunkBuffer + chunkBufferSize)
+	{
+		*p++ = isRGBW ? (uint8_t)params.white : 0;
+		*p++ = (uint8_t)params.blue;
+		*p++ = (uint8_t)params.red;
+		*p++ = (uint8_t)params.green;
+		--numLeds;
+		++numAlreadyInBuffer;
+	}
+	if (!params.following)
+	{
+		if (ws2812Device != nullptr)
+		{
+			ws2812Device->SendData((uint32_t *)chunkBuffer, numAlreadyInBuffer);
+		}
+		numAlreadyInBuffer = 0;
+		needStartDelay = true;
+	}
+	return GCodeResult::ok;
+
+}
 #endif
 
 // Bit bang data to Neopixels
@@ -137,7 +218,12 @@ constexpr uint32_t T1H = NanosecondsToCycles(800);
 constexpr uint32_t T1L = NanosecondsToCycles(475);
 
 // Send data to NeoPixel LEDs by bit banging
+#if RP2040
+[[gnu::optimize("03")]]
+GCodeResult RAMFUNC NeoPixelLedStrip::BitBangNeoPixelData(const LedParams& params) noexcept
+#else
 GCodeResult NeoPixelLedStrip::BitBangNeoPixelData(const LedParams& params) noexcept
+#endif
 {
 	const unsigned int bytesPerLed = (isRGBW) ? 4 : 3;
 	unsigned int numLeds = params.numLeds;
