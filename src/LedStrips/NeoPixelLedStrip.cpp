@@ -219,15 +219,9 @@ constexpr uint32_t T1L = NanosecondsToCycles(475);
 
 // Send data to NeoPixel LEDs by bit banging
 #if RP2040
-<<<<<<< HEAD
-[[gnu::optimize("03")]]
-GCodeResult RAMFUNC NeoPixelLedStrip::BitBangNeoPixelData(const LedParams& params) noexcept
-#else
-=======
 // When bit-banging Neopixels we can't afford to wait for instructions to be fetched from flash memory
 [[gnu::optimize("03")]] __attribute__((section(".time_critical")))
 #endif
->>>>>>> upstream/3.5-dev
 GCodeResult NeoPixelLedStrip::BitBangNeoPixelData(const LedParams& params) noexcept
 #endif
 {
