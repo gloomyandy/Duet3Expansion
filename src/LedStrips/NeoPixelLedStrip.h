@@ -20,9 +20,6 @@ class NeoPixelLedStrip : public LocalLedStrip
 {
 public:
 	NeoPixelLedStrip(bool p_isRGBW) noexcept;
-#if SUPPORT_PIO_NEOPIXEL
-	~NeoPixelLedStrip() override;
-#endif
 
 	GCodeResult Configure(CanMessageGenericParser& parser, const StringRef& reply, uint8_t& extra) noexcept override;
 	GCodeResult HandleM150(CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
@@ -39,7 +36,6 @@ private:
 	GCodeResult SpiSendNeoPixelData(const LedParams& params) noexcept;
 #elif SUPPORT_PIO_NEOPIXEL
 	GCodeResult PioSendNeoPixelData(const LedParams& params) noexcept;
-	static NeoPixelLedStrip* activePIOStrip;
 	static WS2812* ws2812Device;
 #endif
 	unsigned int numAlreadyInBuffer = 0;												// number of pixels already store in the buffer

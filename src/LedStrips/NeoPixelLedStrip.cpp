@@ -11,7 +11,6 @@
 
 #include <Movement/StepTimer.h>
 #if SUPPORT_PIO_NEOPIXEL
-NeoPixelLedStrip* NeoPixelLedStrip::activePIOStrip = nullptr;
 WS2812* NeoPixelLedStrip::ws2812Device = nullptr;
 #endif
 
@@ -20,34 +19,14 @@ NeoPixelLedStrip::NeoPixelLedStrip(bool p_isRGBW) noexcept
 	  isRGBW(p_isRGBW)
 {
 #if SUPPORT_PIO_NEOPIXEL
-	// We currently support only a single PIO based strip, this can use any pin.
-	if (activePIOStrip == nullptr)
+	// Create the PIO device if this is the first string
+	if (ws2812Device == nullptr)
 	{
-		// no strip currently using PIO, so we can use it
-		activePIOStrip = this;
-		useDma = true;
+		ws2812Device = new WS2812(NoPin, false, DmaChanWS2812);
 	}
-	else
-	{
-		useDma = false;
-	}
+	useDma = true;
 #endif
 }
-
-#if SUPPORT_PIO_NEOPIXEL
-NeoPixelLedStrip::~NeoPixelLedStrip()
-{
-	if (activePIOStrip == this)
-	{
-		if (ws2812Device != nullptr)
-		{
-			delete ws2812Device;
-			ws2812Device = nullptr;
-		}
-		activePIOStrip = nullptr;
-	}	
-}
-#endif
 
 GCodeResult NeoPixelLedStrip::Configure(CanMessageGenericParser& parser, const StringRef& reply, uint8_t& extra) noexcept
 {
@@ -55,17 +34,7 @@ GCodeResult NeoPixelLedStrip::Configure(CanMessageGenericParser& parser, const S
 	GCodeResult rslt = CommonConfigure(parser, reply, seen, extra);
 	if (seen)
 	{
-#if SUPPORT_PIO_NEOPIXEL
-	// We currently support only a single PIO based strip, this can use any pin.
-	if (UsesDma())
-	{
-		if (ws2812Device != nullptr)
-		{
-			delete ws2812Device;
-		}
-		ws2812Device = new WS2812(port.GetPin(), isRGBW, DmaChanWS2812);
-	}
-#endif
+		// Nothing specific to configure for Neopixel strips in Duet3D builds
 		return rslt;
 	}
 
@@ -196,6 +165,7 @@ GCodeResult NeoPixelLedStrip::PioSendNeoPixelData(const LedParams& params) noexc
 	{
 		if (ws2812Device != nullptr)
 		{
+			ws2812Device->Configure(port.GetPin(), isRGBW);
 			ws2812Device->SendData((uint32_t *)chunkBuffer, numAlreadyInBuffer);
 		}
 		numAlreadyInBuffer = 0;
