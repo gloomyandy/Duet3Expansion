@@ -223,7 +223,6 @@ constexpr uint32_t T1L = NanosecondsToCycles(475);
 [[gnu::optimize("03")]] __attribute__((section(".time_critical")))
 #endif
 GCodeResult NeoPixelLedStrip::BitBangNeoPixelData(const LedParams& params) noexcept
-#endif
 {
 	const unsigned int bytesPerLed = (isRGBW) ? 4 : 3;
 	unsigned int numLeds = params.numLeds;
