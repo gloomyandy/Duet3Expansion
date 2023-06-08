@@ -414,7 +414,7 @@ namespace Platform
 	// Erase the firmware (but not the bootloader) and reset the processor
 	[[noreturn]] RAMFUNC static void EraseAndReset()
 	{
-#if SAME5x
+# if SAME5x
 		while (!hri_nvmctrl_get_STATUS_READY_bit(NVMCTRL)) { }
 
 		// Unlock the block of flash
@@ -428,7 +428,7 @@ namespace Platform
 		hri_nvmctrl_write_CTRLB_reg(NVMCTRL, NVMCTRL_CTRLB_CMD_EB | NVMCTRL_CTRLB_CMDEX_KEY);
 
 		while (!hri_nvmctrl_get_STATUS_READY_bit(NVMCTRL)) { }
-#elif SAMC21
+# elif SAMC21
 		while (!hri_nvmctrl_get_interrupt_READY_bit(NVMCTRL)) { }
 		hri_nvmctrl_clear_STATUS_reg(NVMCTRL, NVMCTRL_STATUS_MASK);
 
@@ -445,9 +445,9 @@ namespace Platform
 
 		while (!hri_nvmctrl_get_interrupt_READY_bit(NVMCTRL)) { }
 		hri_nvmctrl_clear_STATUS_reg(NVMCTRL, NVMCTRL_STATUS_MASK);
-#else
-# error Unsupported processor
-#endif
+# else
+#  error Unsupported processor
+# endif
 		ResetProcessor();
 	}
 #endif
@@ -713,11 +713,11 @@ void Platform::Init()
 		}
 	}
 
-#if defined(SAMMYC21)
+#if defined(SAMMYC21) && USE_SERIAL_DEBUG
 	uart0.begin(115200);						// set up the UART with the same baud rate as the bootloader
 #elif defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040v1_0)
 	serialUSB.Start(NoPin);
-#elif defined(DEBUG)
+#elif USE_SERIAL_DEBUG
 	// Set up the UART to send to PanelDue for debugging
 	// CAUTION! This sends data to pin io0.out on a tool board, which interferes with a BLTouch connected to that pin. So don't do it in normal use.
 	uart0.begin(57600);
@@ -996,7 +996,9 @@ void Platform::InitMinimal()
 	InitLeds();
 	InitVinMonitor();
 	InitialiseInterrupts();
+#if RP2040
 	serialUSB.Start(NoPin);
+#endif
 	CanInterface::Init(GetCanAddress(), UseAlternateCanPins, false);
 }
 
@@ -1738,7 +1740,7 @@ void Platform::SetDirection(bool direction)
 # endif
 
 # if SUPPORT_CLOSED_LOOP
-	if (closedLoopInstance->GetClosedLoopEnabled(0))
+	if (closedLoopInstance->GetClosedLoopEnabled())
 	{
 		return;
 	}
@@ -1837,7 +1839,7 @@ void Platform::EnableDrive(size_t driver, uint16_t brakeOffDelay)
 		{
 			driverAtIdleCurrent[driver] = false;
 #  if SUPPORT_CLOSED_LOOP
-			closedLoopInstance->ResetError(driver);
+			closedLoopInstance->ResetError();
 #  endif
 			UpdateMotorCurrent(driver);
 		}

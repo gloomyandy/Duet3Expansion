@@ -16,6 +16,10 @@
 #include<WS2812.h>
 #endif
 
+#if SUPPORT_PIO_NEOPIXEL
+# include <WS2812.h>
+#endif
+
 class NeoPixelLedStrip : public LocalLedStrip
 {
 public:

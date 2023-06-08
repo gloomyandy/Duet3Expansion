@@ -113,8 +113,11 @@ extern "C" void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuf
 #endif
 
 extern "C" [[noreturn]] void MainTask(void * pvParameters) noexcept;
-extern "C" [[noreturn]] void UpdateBootloaderTask(void * pvParameters) noexcept;
+#if RP2040
 extern "C" [[noreturn]] void UpdateFirmwareTask(void * pvParameters) noexcept;
+#else
+extern "C" [[noreturn]] void UpdateBootloaderTask(void * pvParameters) noexcept;
+#endif
 
 // We need to make malloc/free thread safe. We must use a recursive mutex for it.
 // RP2040 builds use standard malloc from newlib. Other builds use our own version of nano_mallocr.
@@ -169,7 +172,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 }
 
 #if RP2040
-bool watchdogCausedReboot = false;
+static bool watchdogCausedReboot = false;
 #endif
 
 // Application entry point
@@ -221,7 +224,7 @@ bool watchdogCausedReboot = false;
 		nvmUserRow.b32[UpdateBootloaderMagicWordIndex] = 0xFFFFFFFF;								// clear the bootloader update flag
 		_user_area_write(reinterpret_cast<void*>(NVMCTRL_USER), 0, reinterpret_cast<const uint8_t*>(&nvmUserRow), sizeof(nvmUserRow));
 		delayMicroseconds(10000);																	// in case we reset early due to low voltage etc.
-		updateNeeded = true;																	// we can't update it until we have started RTOS
+		updateNeeded = true;																		// we can't update it until we have started RTOS
 	}
 	else if ((nvmUserRow0 & mask) != reqValue)
 	{
@@ -493,7 +496,9 @@ static FirmwareFlashErrorCode GetBootloaderBlock(uint8_t *blockBuffer)
 
 static void ReportFlashError(FirmwareFlashErrorCode err)
 {
+#if RP2040
 	debugPrintf("Firmware update error %d\n", (int)err);
+#endif
 	for (unsigned int i = 0; i < (unsigned int)err; ++i)
 	{
 		Platform::WriteLed(0, true);
@@ -504,7 +509,6 @@ static void ReportFlashError(FirmwareFlashErrorCode err)
 
 	delay(1000);
 }
-
 
 // Compute the CRC32 of a dword-aligned block of memory
 // This assumes the caller has exclusive use of the DMAC
@@ -565,7 +569,9 @@ bool CheckCRC(uint32_t *blockBuffer) noexcept
 }
 
 #if RP2040
-#include <hardware/flash.h>
+
+# include <hardware/flash.h>
+
 // We allocate one sector for each type of non-volatile memory page. We store the page within the sector using wear levelling.
 constexpr uint32_t FlashSectorSize = 4096;									// the flash chip has 4K sectors
 constexpr uint32_t FlashSize = 2 * 1024 * 1024;								// the flash chip size in bytes (2Mbytes = 16Mbits)
@@ -573,7 +579,7 @@ constexpr uint32_t FlashStart = XIP_BASE;
 
 uint32_t eraseTime = 0;
 uint32_t flashTime = 0;
-// Erase flash and write the firmware to it. 
+// Erase flash and write the firmware to it.
 // NOTE: during this operation we must not execute any code from flash.
 [[noreturn]] void RAMFUNC WriteFirmwareToFlash(uint32_t *firmware, uint32_t length)
 {
@@ -651,11 +657,11 @@ extern "C" [[noreturn]] void UpdateFirmwareTask(void *pvParameters) noexcept
 			{
 				const uint32_t firmwareOffset = (bufferStartOffset/2) + (block * 256);
 				//debugPrintf("Write 256 bytes to %d payload size %d\n", firmwareOffset, currentBlock->payloadSize);
-				memcpy(((uint8_t *)firmwareBuffer) + firmwareOffset, currentBlock->data, 256); 
+				memcpy(((uint8_t *)firmwareBuffer) + firmwareOffset, currentBlock->data, 256);
 			}
 			else
 			{
-				debugPrintf("Bad UF2 file block %d size %u magic0 %x(%x) magic1 %x(%x) magice %x(%x)\n", block, (unsigned)currentBlock->payloadSize, 
+				debugPrintf("Bad UF2 file block %d size %u magic0 %x(%x) magic1 %x(%x) magice %x(%x)\n", block, (unsigned)currentBlock->payloadSize,
 								(unsigned)currentBlock->magicStart0, (unsigned)UF2_Block::MagicStart0Val, (unsigned)currentBlock->magicStart1, (unsigned)UF2_Block::MagicStart1Val,
 								(unsigned)currentBlock->magicEnd, (unsigned)UF2_Block::MagicEndVal );
 				ReportFlashError(FirmwareFlashErrorCode::invalidFirmware);
@@ -867,7 +873,8 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 
 		const float cpuPercent = (100 * (float)taskDetails.ulRunTimeCounter)/(float)timeSinceLastCall;
 		totalCpuPercent += cpuPercent;
-		reply.catf(" %s(%s%s,%.1f%%,%u)", taskDetails.pcTaskName, stateText, mutexName, (double)cpuPercent, (unsigned int)taskDetails.usStackHighWaterMark);
+		reply.catf(" %s(%u,%s%s,%.1f%%,%u)",
+					taskDetails.pcTaskName, (unsigned int)taskDetails.uxCurrentPriority, stateText, mutexName, (double)cpuPercent, (unsigned int)taskDetails.usStackHighWaterMark);
 	}
 	reply.catf(", total %.1f%%", (double)totalCpuPercent);
 

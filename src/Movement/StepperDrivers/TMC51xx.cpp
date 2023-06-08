@@ -719,7 +719,7 @@ bool TmcDriverState::SetChopConf(uint32_t newVal) noexcept
 	return true;
 }
 
-// Set the driver mode
+// Set the driver mode, returning true if successful
 bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 {
 	// In the following, on the closed loop node we need to clear GCONF_DIRECT_MODE when switching away from closed loop mode. It does not harm to do this on other boards too.
@@ -776,8 +776,8 @@ bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 #endif
 
 #if SUPPORT_CLOSED_LOOP
-	case (unsigned int)DriverMode::foc:
-	case (unsigned int)DriverMode::semiOpen:
+	case (unsigned int)DriverMode::direct:
+	case (unsigned int)DriverMode::direct + 1:
 		UpdateRegister(WriteGConf, (writeRegisters[WriteGConf] & ~GCONF_STEALTHCHOP) | GCONF_DIRECT_MODE);
 		UpdateCurrent();		// when entering closed loop mode we need to update the standstill current
 		return true;
@@ -793,7 +793,7 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 {
 	return
 #if TMC_TYPE == 2160
-		  ((writeRegisters[WriteGConf] & GCONF_DIRECT_MODE) != 0) ? DriverMode::foc :
+		  ((writeRegisters[WriteGConf] & GCONF_DIRECT_MODE) != 0) ? DriverMode::direct :
 #endif
 		  ((writeRegisters[WriteGConf] & GCONF_STEALTHCHOP) != 0) ? DriverMode::stealthChop
 		: ((configuredChopConfReg & CHOPCONF_CHM) == 0) ? DriverMode::spreadCycle
@@ -840,7 +840,7 @@ void TmcDriverState::UpdateCurrent() noexcept
 	constexpr uint32_t MaxStandstillCurrentTimes256 = 256 * (uint32_t)MaximumStandstillCurrent;
 	const uint16_t desiredStandstillCurrentFraction =
 #if SUPPORT_CLOSED_LOOP
-		(closedLoopInstance->GetClosedLoopEnabled(axisNumber)) ? 256 : standstillCurrentFraction;
+		(closedLoopInstance->GetClosedLoopEnabled()) ? 256 : standstillCurrentFraction;
 #else
 		standstillCurrentFraction;
 #endif
@@ -1720,7 +1720,7 @@ bool SmartDrivers::SetDriverMode(size_t driver, unsigned int mode) noexcept
 	const bool ret = driver < numTmc51xxDrivers && driverStates[driver].SetDriverMode(mode);
 	if (ret && driver == 0)
 	{
-		tmcTask.SetPriority((mode >= (unsigned int)DriverMode::foc) ? TaskPriority::TmcClosedLoop : TaskPriority::TmcOpenLoop);
+		tmcTask.SetPriority((mode == (unsigned int)DriverMode::direct) ? TaskPriority::TmcClosedLoop : TaskPriority::TmcOpenLoop);
 	}
 	return ret;
 #else
@@ -1730,7 +1730,11 @@ bool SmartDrivers::SetDriverMode(size_t driver, unsigned int mode) noexcept
 
 DriverMode SmartDrivers::GetDriverMode(size_t driver) noexcept
 {
-	return (driver < numTmc51xxDrivers) ? driverStates[driver].GetDriverMode() : DriverMode::unknown;
+	if (driver < numTmc51xxDrivers)
+	{
+		return driverStates[driver].GetDriverMode();
+	}
+	return DriverMode::unknown;
 }
 
 // Flag that the the drivers have been powered up or down
@@ -1861,7 +1865,7 @@ StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bo
 	{
 		rslt = driverStates[driver].GetStatus(accumulated, clearAccumulated);
 #if SUPPORT_CLOSED_LOOP
-		rslt = closedLoopInstance->ModifyDriverStatus(driver, rslt);
+		rslt = closedLoopInstance->ModifyDriverStatus(rslt);
 #endif
 	}
 	return rslt;

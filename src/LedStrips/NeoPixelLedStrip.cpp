@@ -9,7 +9,6 @@
 
 #if SUPPORT_LED_STRIPS
 
-#include <Movement/StepTimer.h>
 #if SUPPORT_PIO_NEOPIXEL
 WS2812* NeoPixelLedStrip::ws2812Device = nullptr;
 #endif
@@ -145,7 +144,9 @@ GCodeResult NeoPixelLedStrip::SpiSendNeoPixelData(const LedParams& params) noexc
 	}
 	return GCodeResult::ok;
 }
+
 #elif SUPPORT_PIO_NEOPIXEL
+
 // Send data to NeoPixel LEDs by DMA to SPI
 GCodeResult NeoPixelLedStrip::PioSendNeoPixelData(const LedParams& params) noexcept
 {
