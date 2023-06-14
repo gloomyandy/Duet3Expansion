@@ -45,7 +45,7 @@ constexpr uint32_t FlashBlockSize = 0x00010000;					// the erase size we assume 
 constexpr uint32_t FlashBlockSize = 0x00004000;					// the erase size we assume for flash, and the bootloader size (16K)
 #elif RP2040
 constexpr uint32_t FlashBlockSize = 0x00001000;					// the erase size we assume for flash, and the bootloader size (4K)
-constexpr uint32_t MaxFirmwareSize = 200*1024;					// Max size of firmware we can flash
+constexpr uint32_t MaxFirmwareSize = 190*1024;					// Max size of firmware we can flash
 struct UF2_Block
 {
 	// 32 byte header
@@ -606,11 +606,11 @@ extern "C" [[noreturn]] void UpdateFirmwareTask(void *pvParameters) noexcept
 	// Allocate a buffer large enough to contain the entire bootloader
 	Platform::InitMinimal();
 	delay(10000);
-	debugPrintf("Starting firmware update\n");
+	debugPrintf("Starting firmware update free RAM %d\n", Tasks::GetNeverUsedRam());
 	uint8_t * blockBuffer = (uint8_t *)(new uint32_t[FlashBlockSize/4]);		// if this fails then an OutOfMemory reset will occur;
-	debugPrintf("After memory allocation1\n");
+	debugPrintf("After memory allocation1 free %d\n", Tasks::GetNeverUsedRam());
 	uint32_t * firmwareBuffer = new uint32_t[MaxFirmwareSize/4];	// if this fails then an OutOfMemory reset will occur;
-	debugPrintf("After memory allocation2\n");
+	debugPrintf("After memory allocation2 free %d\n", Tasks::GetNeverUsedRam());
 	uint32_t bufferStartOffset = 0;
 	uint32_t roundedUpLength = 0;
 	for (;;)
@@ -634,6 +634,7 @@ extern "C" [[noreturn]] void UpdateFirmwareTask(void *pvParameters) noexcept
 			// First block received, so unlock and erase the firmware
 			const uint32_t firmwareSize = fileSize/2;			// using UF2 format with 256 data bytes per 512b block
 			roundedUpLength = ((firmwareSize + (FlashBlockSize - 1))/FlashBlockSize) * FlashBlockSize;
+			debugPrintf("Firmware size %d bytes\n", roundedUpLength);
 			if (roundedUpLength > MaxFirmwareSize)
 			{
 				ReportFlashError(FirmwareFlashErrorCode::noMemory);
@@ -677,7 +678,7 @@ extern "C" [[noreturn]] void UpdateFirmwareTask(void *pvParameters) noexcept
 			break;
 		}
 	}
-	debugPrintf("Download complete\n");
+	debugPrintf("Download complete bytes used %d\n", roundedUpLength);
 #if 0
 String<StringLength256> reply;
 CanInterface::Diagnostics(reply.GetRef());
