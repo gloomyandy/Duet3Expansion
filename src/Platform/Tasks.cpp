@@ -634,7 +634,7 @@ extern "C" [[noreturn]] void UpdateFirmwareTask(void *pvParameters) noexcept
 			// First block received, so unlock and erase the firmware
 			const uint32_t firmwareSize = fileSize/2;			// using UF2 format with 256 data bytes per 512b block
 			roundedUpLength = ((firmwareSize + (FlashBlockSize - 1))/FlashBlockSize) * FlashBlockSize;
-			debugPrintf("Firmware size %d bytes\n", roundedUpLength);
+			debugPrintf("Firmware size %d bytes\n", (int)roundedUpLength);
 			if (roundedUpLength > MaxFirmwareSize)
 			{
 				ReportFlashError(FirmwareFlashErrorCode::noMemory);
@@ -678,7 +678,7 @@ extern "C" [[noreturn]] void UpdateFirmwareTask(void *pvParameters) noexcept
 			break;
 		}
 	}
-	debugPrintf("Download complete bytes used %d\n", roundedUpLength);
+	debugPrintf("Download complete bytes used %d\n", (int)roundedUpLength);
 #if 0
 String<StringLength256> reply;
 CanInterface::Diagnostics(reply.GetRef());
