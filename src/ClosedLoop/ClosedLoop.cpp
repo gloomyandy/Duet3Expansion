@@ -97,6 +97,9 @@ static inline uint32_t TickPeriodToFreq(StepTimer::Ticks tickPeriod) noexcept
 	return StepTimer::StepClockRate/tickPeriod;
 }
 
+// Table of pointers to closed loop instances
+ClosedLoop *ClosedLoop::closedLoopInstances[NumDrivers] = { 0 };
+
 // Helper function to reset the 'monitoring variables' as defined above
 void ClosedLoop::ResetMonitoringVariables() noexcept
 {
@@ -161,7 +164,17 @@ static void GenerateTmcClock()
 	SmartDrivers::SetTmcExternalClock(15000000);
 }
 
-void ClosedLoop::Init() noexcept
+// Module initialisation
+/*static*/ void ClosedLoop::Init() noexcept
+{
+	for (size_t i = 0; i < NumDrivers; ++i)
+	{
+		closedLoopInstances[i] = new ClosedLoop();
+		closedLoopInstances[i]->InitInstance();
+	}
+}
+
+void ClosedLoop::InitInstance() noexcept
 {
 	pinMode(EncoderCsPin, OUTPUT_HIGH);											// make sure that any attached SPI encoder is not selected
 
@@ -183,10 +196,25 @@ void ClosedLoop::Init() noexcept
 	dataTransmissionTask->Create(DataTransmissionTaskEntry, "CLSend", this, TaskPriority::ClosedLoopDataTransmission);
 }
 
-GCodeResult ClosedLoop::ProcessM569Point1(const CanMessageGeneric &msg, const StringRef &reply) noexcept
+/*static*/ GCodeResult ClosedLoop::ProcessM569Point1(const CanMessageGeneric &msg, const StringRef &reply) noexcept
 {
 	CanMessageGenericParser parser(msg, M569Point1Params);
+	uint8_t drive;
+	if (!parser.GetUintParam('P', drive))
+	{
+		reply.copy("missing P parameter in CAN message");
+		return GCodeResult::error;
+	}
+	if (drive >= NumDrivers)
+	{
+		reply.copy("no such driver");
+		return GCodeResult::error;
+	}
+	return closedLoopInstances[drive]->InstanceProcessM569Point1(parser, reply);
+}
 
+GCodeResult ClosedLoop::InstanceProcessM569Point1(CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
 	// Set default parameters
 	uint8_t tempEncoderType = GetEncoderType().ToBaseType();
 	float tempCPR;
@@ -198,7 +226,7 @@ GCodeResult ClosedLoop::ProcessM569Point1(const CanMessageGeneric &msg, const St
 	uint16_t tempStepsPerRev = 200;
 	size_t numThresholds = 2;
 	float tempErrorThresholds[numThresholds];
-	float holdingCurrentPercent;
+	float holdingCurrentPercent, tempTorquePerAmp;
 
 	// Pull changed parameters
 	const bool seenT = parser.GetUintParam('T', tempEncoderType);
@@ -208,9 +236,10 @@ GCodeResult ClosedLoop::ProcessM569Point1(const CanMessageGeneric &msg, const St
 	const bool seenE = parser.GetFloatArrayParam('E', numThresholds, tempErrorThresholds);
 	const bool seenH = parser.GetFloatParam('H', holdingCurrentPercent);
 	const bool seenS = parser.GetUintParam('S', tempStepsPerRev);
+	const bool seenQ = parser.GetFloatParam('Q', tempTorquePerAmp);
 
 	// Report back if no parameters to change
-	if (!(seenT || seenC || seenPid || seenE || seenH))
+	if (!(seenT || seenC || seenPid || seenE || seenH || seenQ))
 	{
 		if (encoder == nullptr)
 		{
@@ -220,8 +249,8 @@ GCodeResult ClosedLoop::ProcessM569Point1(const CanMessageGeneric &msg, const St
 		{
 			reply.catf("Encoder type: %s", GetEncoderType().ToString());
 			encoder->AppendStatus(reply);
-			reply.lcatf("PID parameters P=%.1f I=%.3f D=%.3f V=%.1f A=%.1f, min. current %" PRIi32 "%%",
-						(double)Kp, (double)Ki, (double)Kd, (double)Kv, (double)Ka, lrintf(holdCurrentFraction * 100.0));
+			reply.lcatf("PID parameters P=%.1f I=%.3f D=%.3f V=%.1f A=%.1f, min. current %" PRIi32 "%%, torque constant %.2fNm/A",
+						(double)Kp, (double)Ki, (double)Kd, (double)Kv, (double)Ka, lrintf(holdCurrentFraction * 100.0), (double)torquePerAmp);
 			reply.lcatf("Warning/error threshold %.2f/%.2f", (double)errorThresholds[0], (double)errorThresholds[1]);
 		}
 		return GCodeResult::ok;
@@ -255,6 +284,11 @@ GCodeResult ClosedLoop::ProcessM569Point1(const CanMessageGeneric &msg, const St
 		reply.copy("Encoder counts/rev must be at least four times steps/rev");
 		return GCodeResult::error;
 	}
+	if (seenQ && tempTorquePerAmp <= 0.0)
+	{
+		reply.copy("Torque per amp must be positive");
+		return GCodeResult::error;
+	}
 
 	// Set the new params
 	TaskCriticalSectionLocker lock;			// don't allow the closed loop task to see an inconsistent combination of these values
@@ -280,6 +314,11 @@ GCodeResult ClosedLoop::ProcessM569Point1(const CanMessageGeneric &msg, const St
 	{
 		errorThresholds[0] = tempErrorThresholds[0];
 		errorThresholds[1] = tempErrorThresholds[1];
+	}
+
+	if (seenQ)
+	{
+		torquePerAmp = tempTorquePerAmp;
 	}
 
 	if (seenT)
@@ -329,9 +368,81 @@ GCodeResult ClosedLoop::ProcessM569Point1(const CanMessageGeneric &msg, const St
 	return GCodeResult::ok;
 }
 
-GCodeResult ClosedLoop::ProcessM569Point5(const CanMessageStartClosedLoopDataCollection& msg, const StringRef& reply) noexcept
+// M569.4 Set torque mode
+/*static*/ GCodeResult ClosedLoop::ProcessM569Point4(const CanMessageGeneric& msg, const StringRef& reply) noexcept
 {
-	if (encoder == nullptr || msg.deviceNumber != 0)
+	CanMessageGenericParser parser(msg, M569Point4Params);
+	uint8_t drive;
+	if (!parser.GetUintParam('P', drive))
+	{
+		reply.copy("missing P parameter in CAN message");
+		return GCodeResult::error;
+	}
+	if (drive >= NumDrivers)
+	{
+		reply.copy("no such driver");
+		return GCodeResult::error;
+	}
+	return closedLoopInstances[drive]->InstanceProcessM569Point4(parser, reply);
+}
+
+// M569.4 Set torque mode
+GCodeResult ClosedLoop::InstanceProcessM569Point4(CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+	float requestedTorque;
+	if (!parser.GetFloatParam('T', requestedTorque))
+	{
+		reply.copy("missing T parameter in CAN message");
+		return GCodeResult::error;
+	}
+	float maxSpeed = torqueModeMaxSpeed;
+	(void)parser.GetFloatParam('V', maxSpeed);
+
+	if (currentMode == ClosedLoopMode::open || tuning != 0 || tuningError != 0)
+	{
+		reply.copy("torque mode not available when driver is in open loop mode, has not been tuned, or is being tuned");
+		return GCodeResult::error;
+	}
+
+	{
+		TaskCriticalSectionLocker lock;
+
+		if (requestedTorque == 0.0)					// if asking to exit torque mode
+		{
+			if (inTorqueMode)
+			{
+				ExitTorqueMode();
+			}
+			return GCodeResult::ok;
+		}
+
+		if (!hasMovementCommand)
+		{
+			torqueModeDirection = (Platform::GetDirectionValueNoCheck(0) == (requestedTorque > 0.0));
+			torqueModeCurrentFraction = min<float>(fabsf(requestedTorque)/(torquePerAmp * SmartDrivers::GetCurrent(0) * 0.001), 1.0);
+			torqueModeMaxSpeed = maxSpeed;
+			inTorqueMode = true;
+			return GCodeResult::ok;
+		}
+	}
+
+	reply.copy("cannot enter torque mode while moving");
+	return GCodeResult::error;
+}
+
+/*static*/ GCodeResult ClosedLoop::ProcessM569Point5(const CanMessageStartClosedLoopDataCollection& msg, const StringRef& reply) noexcept
+{
+	if (msg.deviceNumber >= NumDrivers)
+	{
+		reply.copy("no such driver");
+		return GCodeResult::error;
+	}
+	return closedLoopInstances[msg.deviceNumber]->InstanceProcessM569Point5(msg, reply);
+}
+
+GCodeResult ClosedLoop::InstanceProcessM569Point5(const CanMessageStartClosedLoopDataCollection& msg, const StringRef& reply) noexcept
+{
+	if (encoder == nullptr)
 	{
 		reply.copy("No encoder has been configured");
 		return GCodeResult::error;
@@ -380,6 +491,110 @@ GCodeResult ClosedLoop::ProcessM569Point5(const CanMessageStartClosedLoopDataCol
 		StartTuning(msg.movement);
 	}
 	return GCodeResult::ok;
+}
+
+/*static*/ GCodeResult ClosedLoop::ProcessM569Point6(const CanMessageGeneric &msg, const StringRef &reply) noexcept
+{
+	CanMessageGenericParser parser(msg, M569Point6Params);
+	uint8_t drive;
+	if (!parser.GetUintParam('P', drive))
+	{
+		reply.copy("missing P parameter in CAN message");
+		return GCodeResult::error;
+	}
+	if (drive >= NumDrivers)
+	{
+		reply.copy("no such driver");
+		return GCodeResult::error;
+	}
+	return closedLoopInstances[drive]->InstanceProcessM569Point6(parser, reply);
+}
+
+GCodeResult ClosedLoop::InstanceProcessM569Point6(CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+	if (encoder == nullptr)
+	{
+		reply.copy("no encoder configured");
+		return GCodeResult::error;
+	}
+
+	uint8_t desiredTuning;
+	if (!parser.GetUintParam('V', desiredTuning))
+	{
+		// We have been called to return the status after the previous call returned "not finished"
+		if (tuning != 0)
+		{
+			return GCodeResult::notFinished;
+		}
+
+		// If we were checking the calibration, report the result
+		return (basicTuningDataReady) ? ProcessBasicTuningResult(reply) : ProcessCalibrationResult(reply);
+	}
+
+	switch (desiredTuning)
+	{
+	default:
+		reply.copy("invalid tuning mode");
+		return GCodeResult::error;
+
+	case 1:		// basic calibration
+		if (!encoder->UsesBasicTuning())
+		{
+			reply.copy("basic tuning is not applicable to absolute encoders");
+			return GCodeResult::error;
+		}
+		break;
+
+	case 2:
+	case 3:
+	case 4:
+		if (!encoder->UsesCalibration())
+		{
+			reply.copy("calibration is not applicable to the configured encoder type");
+			return GCodeResult::error;
+		}
+		if (desiredTuning == 4)
+		{
+			// Tuning move 4 just clears the lookup table
+			encoder->ScrubLUT();
+			reply.copy("Encoder calibration cleared");
+			tuningError |= TuningError::NotCalibrated;
+			return GCodeResult::ok;
+		}
+		break;
+
+	case 64:
+		break;
+	}
+
+	// Here if this is a new command to start a tuning move
+	// Check we are in direct drive mode
+	if (SmartDrivers::GetDriverMode(0) != DriverMode::direct)
+	{
+		reply.copy("Driver is not in direct mode");
+		return GCodeResult::error;
+	}
+
+	if (!Platform::EnableIfIdle(0))
+	{
+		reply.copy("Driver is not enabled");
+		return GCodeResult::error;
+	}
+
+	StartTuning(desiredTuning);
+	return GCodeResult::notFinished;
+}
+
+/*static*/ bool ClosedLoop::OkayToSetDriverIdle(size_t driver) noexcept
+{
+	const ClosedLoop *const p = GetClosedLoopInstance(driver);
+	return p == nullptr || p->OkayToSetDriverIdle();
+}
+
+bool ClosedLoop::OkayToSetDriverIdle() const noexcept
+{
+	//TODO should we forbid idle current in closed loop and assisted open loop modes too?
+	return !inTorqueMode;
 }
 
 // This is called when tuning has finished and the basicTuningDataReady flag is set
@@ -537,83 +752,6 @@ GCodeResult ClosedLoop::ProcessCalibrationResult(const StringRef& reply) noexcep
 	return GCodeResult::ok;
 }
 
-GCodeResult ClosedLoop::ProcessM569Point6(const CanMessageGeneric &msg, const StringRef &reply) noexcept
-{
-	if (encoder == nullptr)
-	{
-		reply.copy("no encoder configured");
-		return GCodeResult::error;
-	}
-
-	CanMessageGenericParser parser(msg, M569Point6Params);
-
-	uint8_t desiredTuning;
-	if (!parser.GetUintParam('V', desiredTuning))
-	{
-		// We have been called to return the status after the previous call returned "not finished"
-		if (tuning != 0)
-		{
-			return GCodeResult::notFinished;
-		}
-
-		// If we were checking the calibration, report the result
-		return (basicTuningDataReady) ? ProcessBasicTuningResult(reply) : ProcessCalibrationResult(reply);
-	}
-
-	switch (desiredTuning)
-	{
-	default:
-		reply.copy("invalid tuning mode");
-		return GCodeResult::error;
-
-	case 1:		// basic calibration
-		if (!encoder->UsesBasicTuning())
-		{
-			reply.copy("basic tuning is not applicable to absolute encoders");
-			return GCodeResult::error;
-		}
-		break;
-
-	case 2:
-	case 3:
-	case 4:
-		if (!encoder->UsesCalibration())
-		{
-			reply.copy("calibration is not applicable to the configured encoder type");
-			return GCodeResult::error;
-		}
-		if (desiredTuning == 4)
-		{
-			// Tuning move 4 just clears the lookup table
-			encoder->ScrubLUT();
-			reply.copy("Encoder calibration cleared");
-			tuningError |= TuningError::NotCalibrated;
-			return GCodeResult::ok;
-		}
-		break;
-
-	case 64:
-		break;
-	}
-
-	// Here if this is a new command to start a tuning move
-	// Check we are in direct drive mode
-	if (SmartDrivers::GetDriverMode(0) != DriverMode::direct)
-	{
-		reply.copy("Driver is not in direct mode");
-		return GCodeResult::error;
-	}
-
-	if (!Platform::EnableIfIdle(0))
-	{
-		reply.copy("Driver is not enabled");
-		return GCodeResult::error;
-	}
-
-	StartTuning(desiredTuning);
-	return GCodeResult::notFinished;
-}
-
 void ClosedLoop::StartTuning(uint8_t tuningMode) noexcept
 {
 	if (tuningMode != 0)
@@ -653,7 +791,7 @@ void ClosedLoop::AdjustTargetMotorSteps(float amount) noexcept
 	moveInstance->SetCurrentMotorSteps(0, lrintf(mParams.position));
 }
 
-void ClosedLoop::ControlLoop() noexcept
+void ClosedLoop::InstanceControlLoop() noexcept
 {
 	// Record the control loop call interval
 	const StepTimer::Ticks loopCallTime = StepTimer::GetTimerTicks();
@@ -666,11 +804,18 @@ void ClosedLoop::ControlLoop() noexcept
 	if (encoder != nullptr && !encoder->TakeReading())
 	{
 		// Calculate and store the current error in full steps
-		const bool moving = moveInstance->GetCurrentMotion(0, loopCallTime, currentMode != ClosedLoopMode::open, mParams);
-		if (moving && samplingMode == RecordingMode::OnNextMove)
+		hasMovementCommand = moveInstance->GetCurrentMotion(0, loopCallTime, currentMode != ClosedLoopMode::open, mParams);
+		if (hasMovementCommand)
 		{
-			dataCollectionStartTicks = whenNextSampleDue = StepTimer::GetTimerTicks();
-			samplingMode = RecordingMode::Immediate;
+			if (inTorqueMode)
+			{
+				ExitTorqueMode();
+			}
+			if (samplingMode == RecordingMode::OnNextMove)
+			{
+				dataCollectionStartTicks = whenNextSampleDue = StepTimer::GetTimerTicks();
+				samplingMode = RecordingMode::Immediate;
+			}
 		}
 
 		const float targetEncoderReading = rintf(mParams.position * encoder->GetCountsPerStep());
@@ -699,27 +844,34 @@ void ClosedLoop::ControlLoop() noexcept
 			{
 				ControlMotorCurrents(timeElapsed);						// otherwise control those motor currents!
 
-				// Look for a stall or pre-stall
-				const float positionErr = fabsf(currentError);
-				if (stall)
+				if (inTorqueMode)
 				{
-					// Reset the stall flag when the position error falls to below half the tolerance, to avoid generating too many stall events
-					//TODO do we need a minimum delay before resetting too?
-					if (errorThresholds[1] <= 0 || positionErr < errorThresholds[1]/2)
-					{
-						stall = false;
-					}
+					stall = preStall = false;
 				}
 				else
 				{
-					stall = errorThresholds[1] > 0 && positionErr > errorThresholds[1];
+					// Look for a stall or pre-stall
+					const float positionErr = fabsf(currentError);
 					if (stall)
 					{
-						Platform::NewDriverFault();
+						// Reset the stall flag when the position error falls to below half the tolerance, to avoid generating too many stall events
+						//TODO do we need a minimum delay before resetting too?
+						if (errorThresholds[1] <= 0 || positionErr < errorThresholds[1]/2)
+						{
+							stall = false;
+						}
 					}
 					else
 					{
-						preStall = errorThresholds[0] > 0 && positionErr > errorThresholds[0];
+						stall = errorThresholds[1] > 0 && positionErr > errorThresholds[1];
+						if (stall)
+						{
+							Platform::NewDriverFault();
+						}
+						else
+						{
+							preStall = errorThresholds[0] > 0 && positionErr > errorThresholds[0];
+						}
 					}
 				}
 			}
@@ -825,7 +977,7 @@ void ClosedLoop::CollectSample() noexcept
 		if (filterRequested & CL_RECORD_PID_A_TERM)  			{ sampleBuffer.PutF16(PIDATerm); }
 		if (filterRequested & CL_RECORD_CURRENT_STEP_PHASE)  	{ sampleBuffer.PutU16(encoder->GetCurrentPhasePosition()); }
 		if (filterRequested & CL_RECORD_DESIRED_STEP_PHASE)  	{ sampleBuffer.PutU16(desiredStepPhase); }
-		if (filterRequested & CL_RECORD_PHASE_SHIFT)  			{ sampleBuffer.PutU16(phaseShift % 4096); }
+		if (filterRequested & CL_RECORD_PHASE_SHIFT)  			{ sampleBuffer.PutU16(0); }
 		if (filterRequested & CL_RECORD_COIL_A_CURRENT) 		{ sampleBuffer.PutI16(coilA); }
 		if (filterRequested & CL_RECORD_COIL_B_CURRENT) 		{ sampleBuffer.PutI16(coilB); }
 
@@ -845,46 +997,55 @@ inline void ClosedLoop::ControlMotorCurrents(StepTimer::Ticks ticksSinceLastCall
 	// Get the time delta in seconds
 	const float timeDelta = (float)ticksSinceLastCall * (1.0/(float)StepTimer::StepClockRate);
 
-	// Use a PID controller to calculate the required 'torque' - the control signal
-	// We choose to use a PID control signal in the range -256 to +256. This is arbitrary.
-	PIDPTerm = constrain<float>(Kp * currentError, -256.0, 256.0);
-	PIDDTerm = constrain<float>(Kd * errorDerivativeFilter.GetDerivative() * StepTimer::StepClockRate, -256.0, 256.0);	// constrain D so that we can graph it more sensibly after a sudden step input
-
-	if (currentMode == ClosedLoopMode::closed)
+	if (inTorqueMode)
 	{
-		PIDITerm = constrain<float>(PIDITerm + Ki * currentError * timeDelta, -PIDIlimit, PIDIlimit);	// constrain I to prevent it running away
-		PIDVTerm = mParams.speed * Kv * ticksSinceLastCall;
-		PIDATerm = mParams.acceleration * Ka * fsquare(ticksSinceLastCall);
-		PIDControlSignal = constrain<float>(PIDPTerm + PIDITerm + PIDDTerm + PIDVTerm + PIDATerm, -256.0, 256.0);	// clamp the sum between +/- 256
-
-		// Calculate the offset required to produce the torque in the correct direction
-		// i.e. if we are moving in the positive direction, we must apply currents with a positive phase shift
-		// The max abs value of phase shift we want is 1 full step i.e. 25%.
-		// Given that PIDControlSignal is -256 .. 256 and phase is 0 .. 4095
-		// and that 25% of 4096 = 1024, our max phase shift = 4 * PIDControlSignal
-
-		// New algorithm: phase of motor current is always +/- 1 full step relative to current position, but motor current is adjusted according to the PID result
-		// The following assumes that signed arithmetic is 2's complement
-		const float PhaseFeedForwardFactor = 1000.0;
-		const int16_t phaseFeedForward = lrintf(constrain<float>(speedFilter.GetDerivative() * ticksSinceLastCall * PhaseFeedForwardFactor, -256.0, 256.0));
 		const uint32_t measuredStepPhase = encoder->GetCurrentPhasePosition();
-		desiredStepPhase = (uint16_t)((int16_t)measuredStepPhase + phaseShift + phaseFeedForward) % 4096u;
-		const uint16_t commandedStepPhase = (((PIDControlSignal < 0.0) ? (3 * 1024) : 1024) + desiredStepPhase) % 4096u;
-		SetSpecialMotorPhase(commandedStepPhase, fabsf(PIDControlSignal) * (1.0/256.0));
+		const uint16_t commandedStepPhase = (uint16_t)((((torqueModeDirection) ? (3 * 1024) : 1024) + measuredStepPhase) % 4096u);
+		SetMotorPhase(commandedStepPhase, torqueModeCurrentFraction);
 	}
 	else
 	{
-		// Driver is in assisted open loop mode
-		// In this mode the I term is not used and the A and V terms are independent of the loop time.
-		constexpr float scalingFactor = 100.0;
-		PIDVTerm = mParams.speed * Kv * scalingFactor;
-		PIDATerm = mParams.acceleration * Ka * fsquare(scalingFactor);
-		PIDControlSignal = min<float>(fabsf(PIDPTerm + PIDDTerm) + fabsf(PIDVTerm) + fabsf(PIDATerm), 256.0);
+		// Use a PID controller to calculate the required 'torque' - the control signal
+		// We choose to use a PID control signal in the range -256 to +256. This is arbitrary.
+		PIDPTerm = constrain<float>(Kp * currentError, -256.0, 256.0);
+		PIDDTerm = constrain<float>(Kd * errorDerivativeFilter.GetDerivative() * StepTimer::StepClockRate, -256.0, 256.0);	// constrain D so that we can graph it more sensibly after a sudden step input
 
-		const uint16_t stepPhase = (uint16_t)llrintf(mParams.position * 1024.0);
-		desiredStepPhase = (stepPhase + phaseOffset) % 4096u;
-		const float currentFraction = holdCurrentFraction + (1.0 - holdCurrentFraction) * min<float>(PIDControlSignal * (1.0/256.0), 1.0);
-		SetMotorPhase(desiredStepPhase, currentFraction);
+		if (currentMode == ClosedLoopMode::closed)
+		{
+			PIDITerm = constrain<float>(PIDITerm + Ki * currentError * timeDelta, -PIDIlimit, PIDIlimit);	// constrain I to prevent it running away
+			PIDVTerm = mParams.speed * Kv * ticksSinceLastCall;
+			PIDATerm = mParams.acceleration * Ka * fsquare(ticksSinceLastCall);
+			PIDControlSignal = constrain<float>(PIDPTerm + PIDITerm + PIDDTerm + PIDVTerm + PIDATerm, -256.0, 256.0);	// clamp the sum between +/- 256
+
+			// Calculate the offset required to produce the torque in the correct direction
+			// i.e. if we are moving in the positive direction, we must apply currents with a positive phase shift
+			// The max abs value of phase shift we want is 1 full step i.e. 25%.
+			// Given that PIDControlSignal is -256 .. 256 and phase is 0 .. 4095
+			// and that 25% of 4096 = 1024, our max phase shift = 4 * PIDControlSignal
+
+			// New algorithm: phase of motor current is always +/- 1 full step relative to current position, but motor current is adjusted according to the PID result
+			// The following assumes that signed arithmetic is 2's complement
+			const float PhaseFeedForwardFactor = 1000.0;
+			const int16_t phaseFeedForward = lrintf(constrain<float>(speedFilter.GetDerivative() * ticksSinceLastCall * PhaseFeedForwardFactor, -256.0, 256.0));
+			const uint32_t measuredStepPhase = encoder->GetCurrentPhasePosition();
+			const uint16_t adjustedStepPhase = (uint16_t)((int16_t)measuredStepPhase + phaseFeedForward) % 4096u;
+			const uint16_t commandedStepPhase = (((PIDControlSignal < 0.0) ? (3 * 1024) : 1024) + adjustedStepPhase) % 4096u;
+			SetMotorPhase(commandedStepPhase, fabsf(PIDControlSignal) * (1.0/256.0));
+		}
+		else
+		{
+			// Driver is in assisted open loop mode
+			// In this mode the I term is not used and the A and V terms are independent of the loop time.
+			constexpr float scalingFactor = 100.0;
+			PIDVTerm = mParams.speed * Kv * scalingFactor;
+			PIDATerm = mParams.acceleration * Ka * fsquare(scalingFactor);
+			PIDControlSignal = min<float>(fabsf(PIDPTerm + PIDDTerm) + fabsf(PIDVTerm) + fabsf(PIDATerm), 256.0);
+
+			const uint16_t stepPhase = (uint16_t)llrintf(mParams.position * 1024.0);
+			const uint16_t commandedStepPhase = (stepPhase + phaseOffset) % 4096u;
+			const float currentFraction = holdCurrentFraction + (1.0 - holdCurrentFraction) * min<float>(PIDControlSignal * (1.0/256.0), 1.0);
+			SetMotorPhase(commandedStepPhase, currentFraction);
+		}
 	}
 }
 
@@ -895,9 +1056,9 @@ const char *_ecv_array ClosedLoop::GetModeText() const noexcept
 				: "open loop";
 }
 
-void ClosedLoop::Diagnostics(const StringRef& reply) noexcept
+void ClosedLoop::InstanceDiagnostics(size_t driver, const StringRef& reply) noexcept
 {
-	reply.printf("Closed loop driver mode: %s", GetModeText());
+	reply.printf("Closed loop driver %u mode: %s", driver, GetModeText());
 	reply.catf(", pre-error threshold: %.2f, error threshold: %.2f", (double) errorThresholds[0], (double) errorThresholds[1]);
 	reply.catf(", encoder type %s", GetEncoderType().ToString());
 	if (encoder != nullptr)
@@ -932,6 +1093,14 @@ void ClosedLoop::Diagnostics(const StringRef& reply) noexcept
 	//reply.catf(", event status 0x%08" PRIx32 ", TCC2 CTRLA 0x%08" PRIx32 ", TCC2 EVCTRL 0x%08" PRIx32, EVSYS->CHSTATUS.reg, QuadratureTcc->CTRLA.reg, QuadratureTcc->EVCTRL.reg);
 }
 
+/*static*/ void ClosedLoop::Diagnostics(const StringRef& reply) noexcept
+{
+	for (size_t i = 0; i < NumDrivers; ++i)
+	{
+		closedLoopInstances[i]->InstanceDiagnostics(i, reply);
+	}
+}
+
 StandardDriverStatus ClosedLoop::ReadLiveStatus() const noexcept
 {
 	StandardDriverStatus result;
@@ -948,12 +1117,15 @@ void ClosedLoop::ResetError() noexcept
 # if SINGLE_DRIVER
 	if (encoder != nullptr)
 	{
+		TaskCriticalSectionLocker lock;
+
 		// Set the target position to the current position
 		const bool err = encoder->TakeReading();
 		(void)err;		//TODO handle error
 		errorDerivativeFilter.Reset();
 		speedFilter.Reset();
 		SetTargetToCurrentPosition();
+		inTorqueMode = false;
 	}
 # else
 #  error Cannot support closed loop with the specified hardware
@@ -1051,6 +1223,16 @@ StandardDriverStatus ClosedLoop::ModifyDriverStatus(StandardDriverStatus origina
 	}
 
 	return originalStatus;
+}
+
+// Call this if (and only if) we are in torque mode and want to resume normal movement mode.
+// When not called from the closed loop/TMC task, task scheduling should be disabled before calling this.
+void ClosedLoop::ExitTorqueMode() noexcept
+{
+	errorDerivativeFilter.Reset();
+	speedFilter.Reset();
+	SetTargetToCurrentPosition();
+	inTorqueMode = false;
 }
 
 #endif

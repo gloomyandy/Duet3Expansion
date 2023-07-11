@@ -80,7 +80,7 @@ constexpr uint32_t BlockReceiveTimeout = 2000;					// bootloader block receive t
 
 constexpr uint8_t memPattern = 0xA5;
 
-constexpr unsigned int MainTaskStackWords = 850;				// this seems very large; but a user had a stack overflow when it was set to 800
+constexpr unsigned int MainTaskStackWords = 830;				// this seems very large; but a user had a stack overflow when it was set to 800
 
 static Task<MainTaskStackWords> mainTask;
 static Mutex mallocMutex;
@@ -299,12 +299,11 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 	InputMonitor::Init();
 
 #if SUPPORT_DRIVERS
+# if SUPPORT_CLOSED_LOOP
+	ClosedLoop::Init();
+# endif
 	moveInstance = new Move();
 	moveInstance->Init();
-#endif
-#if SUPPORT_CLOSED_LOOP
-	closedLoopInstance = new ClosedLoop();
-	closedLoopInstance->Init();
 #endif
 
 	for (;;)

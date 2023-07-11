@@ -14,7 +14,7 @@
 # include <Flash.h>
 constexpr uint32_t RWW_ADDR = FLASH_ADDR + 0x00400000;
 #elif RP2040
-#include <hardware/flash.h>
+# include <hardware/flash.h>
 // We allocate one sector for each type of non-volatile memory page. We store the page within the sector using wear levelling.
 constexpr uint32_t FlashSectorSize = 4096;									// the flash chip has 4K sectors
 constexpr uint32_t FlashSize = 2 * 1024 * 1024;								// the flash chip size in bytes (2Mbytes = 16Mbits)
@@ -318,4 +318,5 @@ void NonVolatileMemory::SetClosedLoopQuadratureDirection(bool backwards) noexcep
 		SetDirty(true);
 	}
 #endif
-// End
+
+	// End

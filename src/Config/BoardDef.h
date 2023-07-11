@@ -17,8 +17,8 @@
 # include "TOOL1LC.h"
 #elif defined(EXP1XD)
 # include "EXP1XD.h"
-#elif defined(EXP1HCLv1_0)
-# include "EXP1HCLv1_0.h"
+#elif defined(EXP1HCL)
+# include "EXP1HCL.h"
 #elif defined(SAMMYC21)
 # include "SAMMYC21.h"
 #elif defined(ATECM)
@@ -89,6 +89,14 @@ constexpr size_t NumDrivers = 0;
 
 #ifndef SUPPORT_PIO_NEOPIXEL
 # define SUPPORT_PIO_NEOPIXEL			(SUPPORT_LED_STRIPS && RP2040)
+#endif
+
+#ifndef SUPPORT_LDC1612
+# define SUPPORT_LDC1612				0
+#endif
+
+#ifndef USE_SPICAN
+# define USE_SPICAN						0
 #endif
 
 #endif /* SRC_CONFIG_BOARDDEF_H_ */

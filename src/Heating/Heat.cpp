@@ -55,7 +55,7 @@ Licence: GPL
 #ifdef DEBUG
 constexpr uint32_t HeaterTaskStackWords = 230;					// task stack size in dwords
 #else
-constexpr uint32_t HeaterTaskStackWords = 200;					// task stack size in dwords
+constexpr uint32_t HeaterTaskStackWords = 180;					// task stack size in dwords
 #endif
 
 static Task<HeaterTaskStackWords> *heaterTask;
@@ -402,6 +402,9 @@ void Heat::Exit()
 #endif
 #if SUPPORT_CLOSED_LOOP
 				boardStatusMsg->hasClosedLoop = true;
+#endif
+#if SUPPORT_LDC1612
+				boardStatusMsg->hasInductiveSensor = true;
 #endif
 				buf.dataLength = boardStatusMsg->GetActualDataLength();
 				CanInterface::Send(&buf);
