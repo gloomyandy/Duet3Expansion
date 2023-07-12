@@ -10,9 +10,11 @@
 #define SRC_HARDWARE_NONVOLATILEMEMORY_H_
 
 #include <Hardware/SoftwareReset.h>
+
 #if RP2040
-#include <CanSettings.h>
+# include <CanSettings.h>
 #endif
+
 // This class manages nonvolatile settings that are specific to the board, and the software reset data that is stored by the crash handler.
 // On most Duets there is a 512-byte User Page that we use for this.
 // The SAMC21 and SAME5x processors already store various data in the user page, however both those processor families support EEPROM emulation so we use 512 bytes of that instead.

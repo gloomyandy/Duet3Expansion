@@ -26,7 +26,7 @@
 #include <Version.h>
 
 #if RP2040
-# include <NonVolatileMemory.h>
+# include <Hardware/NonVolatileMemory.h>
 #else
 # include <hpl_user_area.h>
 #endif
