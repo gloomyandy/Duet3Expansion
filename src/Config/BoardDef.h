@@ -33,6 +33,8 @@
 # include "FlySB2040v1_0.h"
 #elif defined(M23CL)
 # include "M23CL.h"
+#elif defined(SZP)
+# include "SZP.h"
 #else
 # error Board type not defined
 #endif
