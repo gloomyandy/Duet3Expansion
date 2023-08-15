@@ -25,7 +25,7 @@ bool InputMonitor::Activate() noexcept
 	bool ok = true;
 	if (!active)
 	{
-		if (threshold == 0)
+		if (IsDigital())
 		{
 			// Digital input
 			const irqflags_t flags = IrqSave();
@@ -73,7 +73,7 @@ uint32_t InputMonitor::GetAnalogValue() const noexcept
 }
 
 // Set the sensor drive current
-GCodeResult InputMonitor::SetDriveLevel(uint16_t param, const StringRef& reply, uint8_t& extra) noexcept
+GCodeResult InputMonitor::SetDriveLevel(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept
 {
 #if SUPPORT_LDC1612
 	if (port.IsLdc1612())
@@ -102,7 +102,7 @@ void InputMonitor::DigitalInterrupt() noexcept
 
 void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 {
-	const bool newState = reading >= threshold;
+	const bool newState = (uint32_t)reading >= threshold;
 	if (newState != state)
 	{
 		state = newState;
@@ -117,6 +117,23 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 /*static*/ void InputMonitor::Init() noexcept
 {
 	// Nothing needed here yet
+}
+
+/*static*/ void InputMonitor::Spin() noexcept
+{
+#if SUPPORT_LDC1612
+	// Search for any LDC1612 sensors and take readings from them
+	ReadLocker lock(listLock);
+	for (InputMonitor *current = monitorsList; current != nullptr; current = current->next)
+	{
+		if (current->port.IsLdc1612())
+		{
+			TaskCriticalSectionLocker lock;
+			const uint32_t reading = current->port.ReadAnalog();
+			current->AnalogInterrupt(reading);
+		}
+	}
+#endif
 }
 
 /*static*/ void InputMonitor::CommonDigitalPortInterrupt(CallbackParameter cbp) noexcept
@@ -169,7 +186,7 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 	return false;
 }
 
-/*static*/ GCodeResult InputMonitor::Create(const CanMessageCreateInputMonitor& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept
+/*static*/ GCodeResult InputMonitor::Create(const CanMessageCreateInputMonitorNew& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept
 {
 	WriteLocker lock(listLock);
 
@@ -214,9 +231,9 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 	return GCodeResult::error;
 }
 
-/*static*/ GCodeResult InputMonitor::Change(const CanMessageChangeInputMonitor& msg, const StringRef& reply, uint8_t& extra) noexcept
+/*static*/ GCodeResult InputMonitor::Change(const CanMessageChangeInputMonitorNew& msg, const StringRef& reply, uint8_t& extra) noexcept
 {
-	if (msg.action == CanMessageChangeInputMonitor::actionDelete)
+	if (msg.action == CanMessageChangeInputMonitorNew::actionDelete)
 	{
 		WriteLocker lock(listLock);
 
@@ -239,32 +256,32 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 	GCodeResult rslt;
 	switch (msg.action)
 	{
-	case CanMessageChangeInputMonitor::actionDoMonitor:
+	case CanMessageChangeInputMonitorNew::actionDoMonitor:
 		rslt = (m->Activate()) ? GCodeResult::ok : GCodeResult::error;
 		break;
 
-	case CanMessageChangeInputMonitor::actionDontMonitor:
+	case CanMessageChangeInputMonitorNew::actionDontMonitor:
 		m->Deactivate();
 		rslt = GCodeResult::ok;
 		break;
 
-	case CanMessageChangeInputMonitor::actionReturnPinName:
+	case CanMessageChangeInputMonitorNew::actionReturnPinName:
 		m->port.AppendPinName(reply);
 		reply.catf(", min interval %ums", m->minInterval);
 		rslt = GCodeResult::ok;
 		break;
 
-	case CanMessageChangeInputMonitor::actionChangeThreshold:
+	case CanMessageChangeInputMonitorNew::actionChangeThreshold:
 		m->threshold = msg.param;
 		rslt = GCodeResult::ok;
 		break;
 
-	case CanMessageChangeInputMonitor::actionChangeMinInterval:
+	case CanMessageChangeInputMonitorNew::actionChangeMinInterval:
 		m->minInterval = msg.param;
 		rslt = GCodeResult::ok;
 		break;
 
-	case CanMessageChangeInputMonitor::actionSetDriveLevel:
+	case CanMessageChangeInputMonitorNew::actionSetDriveLevel:
 		rslt = m->SetDriveLevel(msg.param, reply, extra);
 		break;
 
@@ -279,7 +296,7 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 }
 
 // Check the input monitors and add any pending ones to the message
-// Return the number of ticks before we should be woken again, or TaskBase::TimeoutUnlimited if we shouldn't be work until an input changes state
+// Return the number of ticks before we should be woken again, or TaskBase::TimeoutUnlimited if we shouldn't be woken until an input changes state
 /*static*/ uint32_t InputMonitor::AddStateChanges(CanMessageInputChanged *msg) noexcept
 {
 	uint32_t timeToWait = TaskBase::TimeoutUnlimited;
@@ -354,6 +371,29 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 	reply->numReported = count;
 	reply->resultCode = (uint32_t)GCodeResult::ok;
 	buf->dataLength = reply->GetActualDataLength();
+}
+
+// Append analog handle data to the supplied buffer
+/*static*/ unsigned int InputMonitor::AddAnalogHandleData(uint8_t *buffer, size_t spaceLeft) noexcept
+{
+	unsigned int count = 0;
+	ReadLocker lock(listLock);
+	InputMonitor *h = monitorsList;
+	while (h != nullptr && spaceLeft >= sizeof(AnalogHandleData))
+	{
+		if (!h->IsDigital())
+		{
+			AnalogHandleData data;
+			data.reading = h->GetAnalogValue();
+			data.handle.u.all = h->handle;
+			memcpy(buffer, &data, sizeof(AnalogHandleData));
+			buffer += sizeof(AnalogHandleData);
+			spaceLeft -= sizeof(AnalogHandleData);
+			++count;
+		}
+		h = h->next;
+	}
+	return count;
 }
 
 // End
