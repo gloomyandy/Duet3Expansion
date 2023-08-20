@@ -42,6 +42,8 @@ static inline const Move& GetMoveInstance() noexcept { return *moveInstance; }
 # define TMC51xx_USES_SERCOM	0
 static inline const Move& GetMoveInstance() noexcept { return reprap.GetMove(); }
 
+#elif RP2040
+#  include <SharedSpiClient.h>
 #endif
 
 //#define TMC_TYPE	5130
@@ -1016,7 +1018,7 @@ inline void TmcDriverState::GetSpiCommand(uint8_t *sendDataBlock) noexcept
 		regIndexBeingUpdated = regNum;
 		sendDataBlock[0] = ((regNum == WriteSpecial) ? specialWriteRegisterNumber : WriteRegNumbers[regNum]) | 0x80;
 #if SAME70 || SAMC21 || RP2040
-		StoreBE32(sendDataBlock + 1, writeRegisters[regNum]);
+		StoreBEU32(sendDataBlock + 1, writeRegisters[regNum]);
 #else
 		*reinterpret_cast<uint32_t*>(sendDataBlock + 1) = __builtin_bswap32(writeRegisters[regNum]);
 #endif
@@ -1033,14 +1035,14 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 	}
 
 	// Get the full step interval, we will need it later
-	const uint32_t interval = GetMoveInstance().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
+	const uint32_t interval = moveInstance->GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
 
 	// If we read a register, update our copy
 	if (previousRegIndexRequested <= NumReadRegisters)
 	{
 		++numReads;
 #if SAME70 || SAMC21 || RP2040
-		uint32_t regVal = LoadBE32(rcvDataBlock + 1);
+		uint32_t regVal = LoadBEU32(rcvDataBlock + 1);
 #else
 		uint32_t regVal = __builtin_bswap32(*reinterpret_cast<const uint32_t*>(rcvDataBlock + 1));
 #endif
@@ -1115,6 +1117,10 @@ static Task<TmcTaskStackWords> tmcTask;
 // On the SAME70 access to these DMA buffers must be correctly aligned because they are in non-cached memory.
 static volatile uint8_t sendData[5 * MaxSmartDrivers];
 static volatile uint8_t rcvData[5 * MaxSmartDrivers];
+
+#if RP2040
+static SharedSpiClient *spiDevice;
+#endif
 
 #if SUPPORT_CLOSED_LOOP
 static volatile uint8_t altRcvData[5 * MaxSmartDrivers];
@@ -1234,6 +1240,7 @@ static void SetupDMA() noexcept
 	DmacManager::SetDestinationAddress(DmacChanTmcRx, (useAltRcvData) ? altRcvData : rcvData);
 	DmacManager::SetDataLength(DmacChanTmcRx, ARRAY_SIZE(rcvData));
 # endif
+#elif RP2040
 #else
 	spiPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);		// disable the PDC
 
@@ -1256,6 +1263,7 @@ static inline void EnableDma() noexcept
 #elif SAME5x || SAMC21
 	DmacManager::EnableChannel(DmacChanTmcRx, DmacPrioTmcRx);
 	DmacManager::EnableChannel(DmacChanTmcTx, DmacPrioTmcTx);
+#elif RP2040
 #else
 	spiPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTEN | PERIPH_PTCR_TXTEN);			// enable the PDC
 #endif
@@ -1269,6 +1277,7 @@ static inline void DisableDma() noexcept
 #elif SAME5x || SAMC21
 	DmacManager::DisableChannel(DmacChanTmcTx);
 	DmacManager::DisableChannel(DmacChanTmcRx);
+#elif RP2040
 #else
 	spiPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);		// disable the PDC
 #endif
@@ -1281,6 +1290,7 @@ static inline void ResetSpi() noexcept
 	while (SERCOM_TMC51xx->SPI.SYNCBUSY.bit.ENABLE) { }
 #elif TMC51xx_USES_USART
 	USART_TMC51xx->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
+#elif RP2040
 #else
 	SPI_TMC51xx->SPI_CR = SPI_CR_SPIDIS;				// disable the SPI
 	(void)SPI_TMC51xx->SPI_RDR;							// clear the receive buffer
@@ -1296,6 +1306,7 @@ static inline void EnableSpi() noexcept
 	while (SERCOM_TMC51xx->SPI.SYNCBUSY.bit.ENABLE) { }
 #elif TMC51xx_USES_USART
 	USART_TMC51xx->US_CR = US_CR_RXEN | US_CR_TXEN;		// enable transmitter and receiver
+#elif RP2040
 #else
 	SPI_TMC51xx->SPI_CR = SPI_CR_SPIEN;					// enable SPI
 #endif
@@ -1309,6 +1320,7 @@ static inline void DisableEndOfTransferInterrupt() noexcept
 	DmacManager::DisableCompletedInterrupt(DmacChanTmcRx);
 #elif TMC51xx_USES_USART
 	USART_TMC51xx->US_IDR = US_IDR_ENDRX;				// enable end-of-transfer interrupt
+#elif RP2040
 #else
 	SPI_TMC51xx->SPI_IDR = SPI_IDR_ENDRX;				// enable end-of-transfer interrupt
 #endif
@@ -1322,6 +1334,7 @@ static inline void EnableEndOfTransferInterrupt() noexcept
 	DmacManager::EnableCompletedInterrupt(DmacChanTmcRx);
 #elif TMC51xx_USES_USART
 	USART_TMC51xx->US_IER = US_IER_ENDRX;				// enable end-of-transfer interrupt
+#elif RP2040
 #else
 	SPI_TMC51xx->SPI_IER = SPI_IER_ENDRX;				// enable end-of-transfer interrupt
 #endif
@@ -1455,6 +1468,22 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 #endif
 
 		// Kick off a transfer.
+#if RP2040
+		if (!spiDevice->Select(TransferTimeout))
+		{
+			debugPrintf("timeout\n");
+			TmcDriverState::TransferTimedOut();
+			timedOut = true;
+			continue;
+		}
+		fastDigitalWriteLow(GlobalTmc51xxCSPin);			// set CS low
+		rcvData[0] = rcvData[1] =rcvData[2] = rcvData[3] = rcvData[4] = 0x1a;
+		spiDevice->TransceivePacket(const_cast<uint8_t*>(sendData), const_cast<uint8_t*>(rcvData), 5);
+		timedOut = false;
+		fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
+//		debugPrintf("SndData %x %x %x %x %x\n", sendData[0], sendData[1], sendData[2], sendData[3], sendData[4]);
+//		debugPrintf("RcvData %x %x %x %x %x\n", rcvData[0], rcvData[1], rcvData[2], rcvData[3], rcvData[4]);
+#else
 		// On the SAME5x the only way I have found to get reliable transfers and no timeouts is to disable SPI, enable DMA, and then enable SPI.
 		// Enabling SPI before DMA sometimes results in timeouts.
 		// Unfortunately, when we disable SPI the SCLK line floats. Therefore we disable SPI for as little time as possible.
@@ -1507,6 +1536,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			// Unfortunately registers that we don't normally write to may have changed too.
 			fastDigitalWriteHigh(GlobalTmc51xxEnablePin);
 			fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
+			fastDigitalWriteHigh(GpioPin(10));
 			driversState = DriversState::notInitialised;
 			for (size_t drive = 0; drive < numTmc51xxDrivers; ++drive)
 			{
@@ -1516,6 +1546,8 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			lastWakeupTime = StepTimer::GetTimerTicks();
 #endif
 		}
+#endif
+		delay(1);
 	}
 }
 
@@ -1528,22 +1560,25 @@ void SmartDrivers::Init() noexcept
 	// Make sure the ENN and CS pins are high
 	pinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
 	pinMode(GlobalTmc51xxCSPin, OUTPUT_HIGH);
+	pinMode(GpioPin(10), OUTPUT_HIGH);
+
 
 #if defined(M23CL)
 	pinMode(DriverSdModePin, OUTPUT_HIGH);									// on M23CL prototype boards high selects step/dir, low selects ramp generator
 #endif
 
+#if RP2040
+	spiDevice = new SharedSpiClient(*Platform::sharedSpi, DriversSpiClockFrequency, SpiMode::mode3, NoPin, false);
+#else
 	SetPinFunction(TMC51xxMosiPin, TMC51xxMosiPinPeriphMode);
 	SetPinFunction(TMC51xxMisoPin, TMC51xxMisoPinPeriphMode);
 	SetPinFunction(TMC51xxSclkPin, TMC51xxSclkPinPeriphMode);
-
 	// Enable the clock to the USART or SPI
 #if SAME5x || SAMC21
 	Serial::EnableSercomClock(SERCOM_TMC51xx_NUMBER);
 #else
 	pmc_enable_periph_clk(ID_TMC51xx_SPI);
 #endif
-
 #if TMC51xx_USES_SERCOM
 	// Set up the SERCOM
 	const uint32_t regCtrlA = SERCOM_SPI_CTRLA_MODE(3) | SERCOM_SPI_CTRLA_DIPO(3) | SERCOM_SPI_CTRLA_DOPO(0) | SERCOM_SPI_CTRLA_FORM(0)
@@ -1628,7 +1663,7 @@ void SmartDrivers::Init() noexcept
 					| SPI_CSR_CPOL;								// clock high between transfers
 	SPI_TMC51xx->SPI_CSR[0] = csr;
 #endif
-
+#endif
 	driversState = DriversState::noPower;
 	for (size_t driver = 0; driver < numTmc51xxDrivers; ++driver)
 	{
@@ -1649,7 +1684,7 @@ void SmartDrivers::Init() noexcept
 void SmartDrivers::Exit() noexcept
 {
 	digitalWrite(GlobalTmc51xxEnablePin, true);					// disable the drivers
-#if !TMC51xx_USES_SERCOM
+#if !TMC51xx_USES_SERCOM && !RP2040
 	NVIC_DisableIRQ(TMC51xx_SPI_IRQn);
 #endif
 	tmcTask.TerminateAndUnlink();

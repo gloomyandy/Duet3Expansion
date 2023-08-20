@@ -571,7 +571,7 @@ namespace Platform
 		return (switches == 0) ? CanId::ExpansionBoardFirmwareUpdateAddress : switches;
 #elif defined(TOOL1LC)
 		return CanId::ToolBoardDefaultAddress;
-#elif defined(SAMMYC21) || defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040v1_0)
+#elif defined(SAMMYC21) || defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040v1_0) || defined(PITBv1_0)
 		return CanId::SammyC21DefaultAddress;
 #elif defined(EXP1XD)
 		return CanId::Exp1XDBoardDefaultAddress;
@@ -744,7 +744,7 @@ void Platform::Init()
 
 #if defined(SAMMYC21) && USE_SERIAL_DEBUG
 	uart0.begin(115200);						// set up the UART with the same baud rate as the bootloader
-#elif defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040v1_0)
+#elif defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040v1_0) || defined(PITBv1_0)
 	serialUSB.Start(NoPin);
 #elif USE_SERIAL_DEBUG
 	// Set up the UART to send to PanelDue for debugging
@@ -825,6 +825,20 @@ void Platform::Init()
 	{
 		IoPort::SetPinMode(pin, PinMode::INPUT_PULLUP);
 	}
+#endif
+
+#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO)
+	// Set the pin functions
+	SetPinFunction(SSPIMosiPin, SSPIMosiPinPeriphMode);
+	SetPinFunction(SSPISclkPin, SSPISclkPinPeriphMode);
+	SetPinFunction(SSPIMisoPin, SSPIMisoPinPeriphMode);
+# if SAME5x || SAMC21
+	sharedSpi = new SharedSpiDevice(SspiSercomNumber, SspiDataInPad);
+# elif RP2040
+	sharedSpi = new SharedSpiDevice(SspiSpiInstanceNumber);
+# else
+# error Unsupported processor
+# endif
 #endif
 
 #if SUPPORT_DRIVERS
@@ -976,19 +990,6 @@ void Platform::Init()
 # endif
 #endif	//SUPPORT_DRIVERS
 
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO)
-	// Set the pin functions
-	SetPinFunction(SSPIMosiPin, SSPIMosiPinPeriphMode);
-	SetPinFunction(SSPISclkPin, SSPISclkPinPeriphMode);
-	SetPinFunction(SSPIMisoPin, SSPIMisoPinPeriphMode);
-# if SAME5x || SAMC21
-	sharedSpi = new SharedSpiDevice(SspiSercomNumber, SspiDataInPad);
-# elif RP2040
-	sharedSpi = new SharedSpiDevice(SspiSpiInstanceNumber);
-# else
-# error Unsupported processor
-# endif
-#endif
 
 #if SUPPORT_I2C_SENSORS
 # ifdef TOOL1LC
@@ -1386,12 +1387,12 @@ void Platform::Spin()
 		}
 	}
 
-#if defined(SAMMYC21) || defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040v1_0)
+#if defined(SAMMYC21) || defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040v1_0) || defined(PITBv1_0)
 	//debugPrintf("IR=%" PRIx32 " ERR=%" PRIx32 " RXF0S=%" PRIx32 " RXF1S=%" PRIx32 " PSR=%" PRIx32 " CCCR=%" PRIx32 "\n",
 	//	CAN0->IR.reg, CAN0->ECR.reg, CAN0->RXF0S.reg, CAN0->RXF1S.reg, CAN0->PSR.reg, CAN0->CCCR.reg);
 
 	// If D is received from the USB port, output some diagnostics
-# if defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040v1_0)
+# if defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040v1_0) || defined(PITBv1_0)
 	while (serialUSB.available() != 0)
 # elif defined(SAMMYC21)
 	while (uart0.available() != 0)
@@ -1399,7 +1400,7 @@ void Platform::Spin()
 	{
 # if defined(SAMMYC21)
 		const char c = uart0.read();
-# elif defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040v1_0)
+# elif defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040v1_0) || defined(PITBv1_0)
 		const char c = serialUSB.read();
 # endif
 		if (c == 'D')
@@ -1530,7 +1531,7 @@ bool Platform::DebugPutc(char c) noexcept
 {
 	if (c != 0)
 	{
-#if defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040v1_0)
+#if defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040v1_0) || defined(PITBv1_0)
 		serialUSB.write(c);
 #else
 		uart0.write(c);
