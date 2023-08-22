@@ -99,6 +99,7 @@ DEPS = $(RTOS_OBJS:.o=.d)
 DEPS += $(IAP_OBJS:.o=.d)
 DEPS += $(RRFLIBC_OBJS:.o=.d)
 DEPS += $(RRFLIBRARIES_OBJS:.o=.d)
+DEPS += $(EXP_OBJS:.o=.d)
 
 default: all
 
