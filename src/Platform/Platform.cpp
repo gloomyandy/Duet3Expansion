@@ -185,7 +185,7 @@ namespace Platform
 	static void InternalDisableDrive(size_t driver);
 #endif
 
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO)
+#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO) || TMC51xx_USES_SHARED_SPI
 	SharedSpiDevice *sharedSpi = nullptr;
 #endif
 
@@ -466,7 +466,7 @@ namespace Platform
 		Heat::SwitchOffAll();
 #if SUPPORT_DRIVERS
 # if SUPPORT_TMC51xx || SUPPORT_TMC2160
-		IoPort::WriteDigital(GlobalTmc51xxEnablePin, true);
+		SmartDrivers::TurnDriversOff();
 # endif
 # if SUPPORT_TMC22xx
 		IoPort::WriteDigital(GlobalTmc22xxEnablePin, true);
@@ -827,7 +827,7 @@ void Platform::Init()
 	}
 #endif
 
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO)
+#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO) || TMC51xx_USES_SHARED_SPI
 	// Set the pin functions
 	SetPinFunction(SSPIMosiPin, SSPIMosiPinPeriphMode);
 	SetPinFunction(SSPISclkPin, SSPISclkPinPeriphMode);

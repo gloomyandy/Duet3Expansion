@@ -29,7 +29,10 @@
 
 #define HAS_SMART_DRIVERS		1
 #define HAS_STALL_DETECT		1
-#define SINGLE_DRIVER			1
+#define SINGLE_DRIVER			0
+#define TMC51xx_USES_SEPARATE_CS		1
+#define TMC51xx_USES_SEPARATE_ENABLE	1
+#define TMC51xx_USES_SHARED_SPI	1
 #define SUPPORT_SLOW_DRIVERS	0
 #define SUPPORT_DELTA_MOVEMENT	0
 
@@ -39,19 +42,25 @@
 #define SUPPORT_TMC22xx			0
 #define SUPPORT_TMC2240			0
 
-constexpr size_t NumDrivers = 1;
-constexpr size_t MaxSmartDrivers = 1;
+constexpr size_t NumDrivers = 2;
+constexpr size_t MaxSmartDrivers = 2;
 constexpr float MaxTmc5160Current = 6300.0;
 constexpr uint32_t DefaultStandstillCurrentPercent = 71;
 constexpr float Tmc5160SenseResistor = 0.075;
 
+#if TMC51xx_USES_SEPARATE_ENABLE
+constexpr Pin Tmc51xxEnablePins[] = {GpioPin(5), GpioPin(9)};
+#else
 constexpr Pin GlobalTmc51xxEnablePin = GpioPin(5);
+#endif
+#if TMC51xx_USES_SEPARATE_CS
+constexpr Pin Tmc51xxCSPins[] = {GpioPin(6), GpioPin(10)};
+#else
 constexpr Pin GlobalTmc51xxCSPin = GpioPin(6);
+#endif
 
-//constexpr Pin StepPins[NumDrivers] = { GpioPin(8), GpioPin(12) };
-//constexpr Pin DirectionPins[NumDrivers] = { GpioPin(7), GpioPin(11) };
-constexpr Pin StepPins[NumDrivers] = { GpioPin(8) };
-constexpr Pin DirectionPins[NumDrivers] = { GpioPin(7) };
+constexpr Pin StepPins[NumDrivers] = { GpioPin(8), GpioPin(12) };
+constexpr Pin DirectionPins[NumDrivers] = { GpioPin(7), GpioPin(11) };
 
 
 #define ACTIVE_HIGH_STEP		1		// 1 = active high, 0 = active low
@@ -60,7 +69,7 @@ constexpr Pin DirectionPins[NumDrivers] = { GpioPin(7) };
 #endif
 
 #define SUPPORT_THERMISTORS		1
-#define SUPPORT_SPI_SENSORS		1		// We need this to get the shared spi device which is used for 5160 drivers
+#define SUPPORT_SPI_SENSORS		0
 #define SUPPORT_I2C_SENSORS		0
 #define SUPPORT_LIS3DH			0
 #define SUPPORT_DHT_SENSOR		0
@@ -72,7 +81,7 @@ constexpr Pin DirectionPins[NumDrivers] = { GpioPin(7) };
 
 constexpr bool UseAlternateCanPins = false;
 
-constexpr size_t MaxPortsPerHeater = 0;
+constexpr size_t MaxPortsPerHeater = 1;
 
 constexpr size_t NumThermistorInputs = 1;
 constexpr float DefaultThermistorSeriesR = 4700.0;		// TEMP0 has 1K or 4K7 pullup, chamber thermistor has 4K7
@@ -97,7 +106,7 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico u
 constexpr Pin LedPins[] = { GpioPin(15) };
 constexpr bool LedActiveHigh = false;
 
-#if SUPPORT_SPI_SENSORS
+#if SUPPORT_SPI_SENSORS || TMC51xx_USES_SHARED_SPI
 
 // Shared SPI pin connections
 constexpr uint8_t SspiSpiInstanceNumber = 0;

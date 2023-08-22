@@ -7,7 +7,7 @@
 
 #include <Hardware/SharedSpiDevice.h>
 
-#if RP2040 && (SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO))
+#if RP2040 && (SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO) || TMC51xx_USES_SHARED_SPI)
 
 SharedSpiDevice::SharedSpiDevice(uint8_t spiInstanceNum) noexcept
 	: hardware((spiInstanceNum == 0) ? spi0 : spi1)
