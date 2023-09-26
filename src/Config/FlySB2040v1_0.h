@@ -10,8 +10,8 @@
 
 #include <Hardware/PinDescription.h>
 
-#define BOARD_TYPE_NAME		"FlySB2040v1_0"
-#define BOOTLOADER_NAME		"FlySB2040v1_0"
+#define BOARD_TYPE_NAME		"FLYSB2040V1_0"
+#define BOOTLOADER_NAME		"FLYSB2040V1_0"
 
 // General features
 #define HAS_VREF_MONITOR		0
@@ -20,9 +20,10 @@
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_ADDRESS_SWITCHES	0
 #define HAS_BUTTONS				0
+#define HAS_USB_SERIAL			1
 #define USE_SERIAL_DEBUG		1
-#define SUPPORT_LED_STRIPS      1
-#define SUPPORT_PIO_NEOPIXEL    1
+#define SUPPORT_LED_STRIPS		1
+#define SUPPORT_PIO_NEOPIXEL	1
 
 // Drivers configuration
 #define SUPPORT_DRIVERS			1

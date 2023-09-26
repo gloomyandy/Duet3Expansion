@@ -10,8 +10,8 @@
 
 #include <Hardware/PinDescription.h>
 
-#define BOARD_TYPE_NAME		"PITBv1_0"
-#define BOOTLOADER_NAME		"PITBv1_0"
+#define BOARD_TYPE_NAME		"PITBV1_0"
+#define BOOTLOADER_NAME		"PITBV1_0"
 
 // General features
 #define HAS_VREF_MONITOR		0
@@ -20,6 +20,7 @@
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_ADDRESS_SWITCHES	0
 #define HAS_BUTTONS				0
+#define HAS_USB_SERIAL			1
 #define USE_SERIAL_DEBUG		1
 
 // Drivers configuration

@@ -29,9 +29,9 @@
 # include "RPi_Pico.h"
 #elif defined(FLY36RRF)
 # include "Fly36_RRF.h"
-#elif defined(FLYSB2040v1_0)
+#elif defined(FLYSB2040V1_0)
 # include "FlySB2040v1_0.h"
-#elif defined(PITBv1_0)
+#elif defined(PITBV1_0)
 # include "PITBv1_0.h"
 #elif defined(M23CL)
 # include "M23CL.h"
@@ -77,6 +77,10 @@ constexpr size_t NumDrivers = 0;
 
 #if !defined(SUPPORT_LIS3DH)
 # define SUPPORT_LIS3DH					0
+#endif
+
+#if !defined(HAS_USB_SERIAL)
+# define HAS_USB_SERIAL					0
 #endif
 
 #if !defined(USE_SERIAL_DEBUG)
