@@ -1,5 +1,5 @@
 /*
- * Fly36_RRF.h
+ * PITBv1_0.h
  *
  *  Created on: 19 June 2023
  *      Author: jay_s_uk
@@ -203,4 +203,4 @@ const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interru
 const NvicPriority NvicPriorityAdc = 3;
 const NvicPriority NvicPriorityUSB = 3;
 
-#endif /* SRC_CONFIG_FLY36_RRF_H_ */
+#endif /* SRC_CONFIG_PITB_V1_0_H_ */
