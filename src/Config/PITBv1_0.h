@@ -12,6 +12,7 @@
 
 #define BOARD_TYPE_NAME		"PITBV1_0"
 #define BOOTLOADER_NAME		"PITBV1_0"
+#define BOARD_USES_UF2_BINARY	1
 
 // General features
 #define HAS_VREF_MONITOR		0

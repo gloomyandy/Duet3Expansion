@@ -99,8 +99,8 @@ GCodeResult PulsedFilamentMonitor::Configure(const CanMessageGenericParser& pars
 		{
 			reply.copy("Pulse-type filament monitor on pin ");
 			GetPort().AppendPinName(reply);
-			reply.catf(", %s, sensitivity %.3fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
-						(GetEnableMode() == 2) ? "enabled always" : (GetEnableMode() == 1) ? "enabled when printing from SD card" : "disabled",
+			reply.catf(", %s, %.3fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
+						(GetEnableMode() == 2) ? "enabled always" : (GetEnableMode() == 1) ? "enabled when SD printing" : "disabled",
 						(double)mmPerPulse,
 						ConvertToPercent(minMovementAllowed),
 						ConvertToPercent(maxMovementAllowed),
@@ -112,7 +112,7 @@ GCodeResult PulsedFilamentMonitor::Configure(const CanMessageGenericParser& pars
 			}
 			else if (HaveCalibrationData())
 			{
-				reply.catf("measured sensitivity %.3fmm/pulse, measured minimum %ld%%, maximum %ld%% over %.1fmm\n",
+				reply.catf("measured %.3fmm/pulse, min %ld%%, max %ld%% over %.1fmm\n",
 					(double)MeasuredSensitivity(),
 					ConvertToPercent(minMovementRatio),
 					ConvertToPercent(maxMovementRatio),
@@ -290,6 +290,12 @@ void PulsedFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
 	Poll();
 	const char* const statusText = (samplesReceived < 2) ? "no data received" : "ok";
 	reply.lcatf("Driver %u: %s", GetDriver(), statusText);
+}
+
+// Store collected data in a CAN message slot
+void PulsedFilamentMonitor::GetLiveData(FilamentMonitorDataNew& data) const noexcept
+{
+	data.hasLiveData = false;
 }
 
 #endif	// SUPPORT_DRIVERS

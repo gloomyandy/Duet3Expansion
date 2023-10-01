@@ -46,6 +46,7 @@ void LaserFilamentMonitor::Init() noexcept
 void LaserFilamentMonitor::Reset() noexcept
 {
 	extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
+	lastMovementRatio = 0.0;
 	laserMonitorState = LaserMonitorState::idle;
 	haveStartBitData = false;
 	synced = false;							// force a resync
@@ -109,7 +110,7 @@ GCodeResult LaserFilamentMonitor::Configure(const CanMessageGenericParser& parse
 			reply.printf("Duet3D laser filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
 			GetPort().AppendPinName(reply);
 			reply.catf(", %s, allow %ld%% to %ld%%, check %s moves every %.1fmm, calibration factor %.3f, ",
-						(GetEnableMode() == 2) ? "enabled always" : (GetEnableMode() == 1) ? "enabled when printing from SD card" : "disabled",
+						(GetEnableMode() == 2) ? "enabled always" : (GetEnableMode() == 1) ? "enabled when SD printing" : "disabled",
 						ConvertToPercent(minMovementAllowed),
 						ConvertToPercent(maxMovementAllowed),
 						(checkNonPrintingMoves) ? "all extruding" : "printing",
@@ -122,7 +123,6 @@ GCodeResult LaserFilamentMonitor::Configure(const CanMessageGenericParser& parse
 			}
 			else
 			{
-				reply.catf("version %u, ", version);
 				if (switchOpenMask != 0)
 				{
 					reply.cat(((sensorValue & switchOpenMask) != 0) ? "no filament, " : "filament present, ");
@@ -352,52 +352,43 @@ FilamentSensorStatus LaserFilamentMonitor::CheckFilament(float amountCommanded, 
 			{
 				totalMovementMeasured = -totalMovementMeasured;
 			}
-			minMovementRatio = maxMovementRatio = totalMovementMeasured/totalExtrusionCommanded;
-			if (GetEnableMode() != 0)
-			{
-				if (minMovementRatio < minMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooLittleMovement;
-				}
-				else if (maxMovementRatio > maxMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooMuchMovement;
-				}
-			}
+			minMovementRatio = maxMovementRatio = lastMovementRatio = totalMovementMeasured/totalExtrusionCommanded;
 			laserMonitorState = LaserMonitorState::comparing;
 		}
 		break;
 
 	case LaserMonitorState::comparing:
+		totalExtrusionCommanded += amountCommanded;
+		if (backwards)
 		{
-			totalExtrusionCommanded += amountCommanded;
-			if (backwards)
-			{
-				extrusionMeasured = -extrusionMeasured;
-			}
-			totalMovementMeasured += extrusionMeasured;
-			const float ratio = extrusionMeasured/amountCommanded;
-			if (ratio > maxMovementRatio)
-			{
-				maxMovementRatio = ratio;
-			}
-			else if (ratio < minMovementRatio)
-			{
-				minMovementRatio = ratio;
-			}
-			if (GetEnableMode() != 0)
-			{
-				if (ratio < minMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooLittleMovement;
-				}
-				else if (ratio > maxMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooMuchMovement;
-				}
-			}
+			extrusionMeasured = -extrusionMeasured;
+		}
+		totalMovementMeasured += extrusionMeasured;
+		lastMovementRatio = extrusionMeasured/amountCommanded;
+		if (lastMovementRatio > maxMovementRatio)
+		{
+			maxMovementRatio = lastMovementRatio;
+		}
+		else if (lastMovementRatio < minMovementRatio)
+		{
+			minMovementRatio = lastMovementRatio;
 		}
 		break;
+	}
+
+	if (laserMonitorState == LaserMonitorState::comparing)
+	{
+		if (GetEnableMode() != 0)
+		{
+			if (lastMovementRatio < minMovementAllowed)
+			{
+				ret = FilamentSensorStatus::tooLittleMovement;
+			}
+			else if (lastMovementRatio > maxMovementAllowed)
+			{
+				ret = FilamentSensorStatus::tooMuchMovement;
+			}
+		}
 	}
 
 	return ret;
@@ -430,6 +421,24 @@ void LaserFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
 	}
 	reply.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32,
 				framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
+}
+
+// Store collected data in a CAN message slot
+void LaserFilamentMonitor::GetLiveData(FilamentMonitorDataNew& data) const noexcept
+{
+	if (laserMonitorState == LaserMonitorState::comparing)
+	{
+		data.calibrationLength = (uint32_t)lrintf(totalExtrusionCommanded);
+		data.avgPercentage = ConvertToPercent(totalMovementMeasured/totalExtrusionCommanded);
+		data.minPercentage = ConvertToPercent(minMovementRatio);
+		data.maxPercentage = ConvertToPercent(maxMovementRatio);
+		data.lastPercentage = ConvertToPercent(lastMovementRatio);
+		data.hasLiveData = true;
+	}
+	else
+	{
+		data.hasLiveData = false;
+	}
 }
 
 #endif	// SUPPORT_DRIVERS

@@ -79,6 +79,12 @@ void SimpleFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
 	reply.lcatf("Driver %u: %s", GetDriver(), (filamentPresent) ? "ok" : "no filament");
 }
 
+// Store collected data in a CAN message slot
+void SimpleFilamentMonitor::GetLiveData(FilamentMonitorDataNew& data) const noexcept
+{
+	data.hasLiveData = false;
+}
+
 #endif	// SUPPORT_DRIVERS
 
 // End

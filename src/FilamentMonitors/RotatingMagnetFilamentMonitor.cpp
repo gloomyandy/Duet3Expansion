@@ -48,6 +48,7 @@ void RotatingMagnetFilamentMonitor::Init() noexcept
 void RotatingMagnetFilamentMonitor::Reset() noexcept
 {
 	extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
+	lastMovementRatio = 0.0;
 	magneticMonitorState = MagneticMonitorState::idle;
 	haveStartBitData = false;
 	synced = false;							// force a resync
@@ -108,10 +109,10 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 
 		if (!seen)
 		{
-			reply.printf("Duet3D rotating magnet filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
+			reply.printf("Duet3D magnetic filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
 			GetPort().AppendPinName(reply);
-			reply.catf(", %s, sensitivity %.2fmm/rev, allow %ld%% to %ld%%, check %s moves every %.1fmm, ",
-						(GetEnableMode() == 2) ? "enabled always" : (GetEnableMode() == 1) ? "enabled when printing from SD card" : "disabled",
+			reply.catf(", %s, %.2fmm/rev, allow %ld%% to %ld%%, check %s moves every %.1fmm, ",
+						(GetEnableMode() == 2) ? "enabled always" : (GetEnableMode() == 1) ? "enabled when SD printing" : "disabled",
 						(double)mmPerRev,
 						ConvertToPercent(minMovementAllowed),
 						ConvertToPercent(maxMovementAllowed),
@@ -124,7 +125,6 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 			}
 			else
 			{
-				reply.catf("version %u, ", version);
 				if (switchOpenMask != 0)
 				{
 					reply.cat(((sensorValue & switchOpenMask) != 0) ? "no filament, " : "filament present, ");
@@ -156,7 +156,7 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 				else if (HaveCalibrationData())
 				{
 					const float measuredMmPerRev = MeasuredSensitivity();
-					reply.catf("measured sensitivity %.2fmm/rev, min %ld%% max %ld%% over %.1fmm\n",
+					reply.catf("measured %.2fmm/rev, min %ld%% max %ld%% over %.1fmm\n",
 						(double)measuredMmPerRev,
 						ConvertToPercent(minMovementRatio * measuredMmPerRev),
 						ConvertToPercent(maxMovementRatio * measuredMmPerRev),
@@ -314,7 +314,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 
 // Call the following at intervals to check the status. This is only called when printing is in progress.
 // 'filamentConsumed' is the net amount of extrusion commanded since the last call to this function.
-// 'hadNonPrintingMove' is true if filamentConsumed includes extruder movement from non-printing moves.
+// 'isPrinting' is true if the current movement is not a non-printing extruder move.
 // 'fromIsr' is true if this measurement was taken at the end of the ISR because a potential start bit was seen
 FilamentSensorStatus RotatingMagnetFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) noexcept
 {
@@ -391,19 +391,7 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCo
 			}
 			float ratio = totalMovementMeasured/totalExtrusionCommanded;
 			minMovementRatio = maxMovementRatio = ratio;
-
-			if (GetEnableMode() != 0)
-			{
-				ratio *= mmPerRev;
-				if (ratio < minMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooLittleMovement;
-				}
-				else if (ratio > maxMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooMuchMovement;
-				}
-			}
+			lastMovementRatio = ratio * mmPerRev;
 			magneticMonitorState = MagneticMonitorState::comparing;
 		}
 		break;
@@ -416,7 +404,7 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCo
 				amountMeasured = -amountMeasured;
 			}
 			totalMovementMeasured += amountMeasured;
-			float ratio = amountMeasured/amountCommanded;
+			const float ratio = amountMeasured/amountCommanded;
 			if (ratio > maxMovementRatio)
 			{
 				maxMovementRatio = ratio;
@@ -426,20 +414,24 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCo
 				minMovementRatio = ratio;
 			}
 
-			if (GetEnableMode() != 0)
-			{
-				ratio *= mmPerRev;
-				if (ratio < minMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooLittleMovement;
-				}
-				else if (ratio > maxMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooMuchMovement;
-				}
-			}
+			lastMovementRatio = ratio * mmPerRev;
 		}
 		break;
+	}
+
+	if (magneticMonitorState == MagneticMonitorState::comparing)
+	{
+		if (GetEnableMode() != 0)
+		{
+			if (lastMovementRatio < minMovementAllowed)
+			{
+				ret = FilamentSensorStatus::tooLittleMovement;
+			}
+			else if (lastMovementRatio > maxMovementAllowed)
+			{
+				ret = FilamentSensorStatus::tooMuchMovement;
+			}
+		}
 	}
 
 	return ret;
@@ -456,6 +448,24 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear() noexcept
 				: (sensorError) ? FilamentSensorStatus::sensorError
 					: ((sensorValue & switchOpenMask) != 0) ? FilamentSensorStatus::noFilament
 						: FilamentSensorStatus::ok;
+}
+
+// Store collected data in a CAN message slot
+void RotatingMagnetFilamentMonitor::GetLiveData(FilamentMonitorDataNew& data) const noexcept
+{
+	if (magneticMonitorState == MagneticMonitorState::comparing)
+	{
+		data.calibrationLength = (uint32_t)lrintf(totalExtrusionCommanded);
+		data.avgPercentage = ConvertToPercent(totalMovementMeasured * mmPerRev/totalExtrusionCommanded);
+		data.minPercentage = ConvertToPercent(minMovementRatio * mmPerRev);
+		data.maxPercentage = ConvertToPercent(maxMovementRatio * mmPerRev);
+		data.lastPercentage = ConvertToPercent(lastMovementRatio);
+		data.hasLiveData = true;
+	}
+	else
+	{
+		data.hasLiveData = false;
+	}
 }
 
 // Print diagnostic info for this sensor

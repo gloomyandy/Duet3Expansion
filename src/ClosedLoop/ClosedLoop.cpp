@@ -127,12 +127,13 @@ void ClosedLoop::SetTargetToCurrentPosition() noexcept
 	moveInstance->SetCurrentMotorSteps(0, mParams.position);
 }
 
-// Helper function to set the motor to a given phase and magnitude
+// Set the motor currents and update desiredStepPhase
 // The phase is normally in the range 0 to 4095 but when tuning it can be 0 to somewhat over 8192.
 // We must take it modulo 4096 when computing the currents. Function Trigonometry::FastSinCos does that.
 // 'magnitude' must be in range 0.0..1.0
-void ClosedLoop::SetSpecialMotorPhase(uint16_t phase, float magnitude) noexcept
+void ClosedLoop::SetMotorPhase(uint16_t phase, float magnitude) noexcept
 {
+	desiredStepPhase = phase;
 	float sine, cosine;
 	Trigonometry::FastSinCos(phase, sine, cosine);
 	coilA = (int16_t)lrintf(cosine * magnitude);
@@ -143,13 +144,6 @@ void ClosedLoop::SetSpecialMotorPhase(uint16_t phase, float magnitude) noexcept
 # else
 #  error Multi driver code not implemented
 # endif
-}
-
-// Set the motor currents and update desiredStepPhase
-void ClosedLoop::SetMotorPhase(uint16_t phase, float magnitude) noexcept
-{
-	desiredStepPhase = phase;
-	SetSpecialMotorPhase(phase, magnitude);
 }
 
 static_assert(ClockGenGclkNumber == GclkClosedLoop);							// check that this GCLK number has been reserved
@@ -388,11 +382,15 @@ GCodeResult ClosedLoop::InstanceProcessM569Point4(CanMessageGenericParser& parse
 	float requestedTorque;
 	if (!parser.GetFloatParam('T', requestedTorque))
 	{
-		reply.copy("missing T parameter in CAN message");
+		reply.copy("missing T parameter");
 		return GCodeResult::error;
 	}
 	float maxSpeed = torqueModeMaxSpeed;
-	(void)parser.GetFloatParam('V', maxSpeed);
+	float rawMaxSpeed;
+	if (parser.GetFloatParam('V', rawMaxSpeed))
+	{
+		maxSpeed = rawMaxSpeed/StepTimer::StepClockRate;		// convert to full steps per step clock
+	}
 
 	if (currentMode == ClosedLoopMode::open || tuning != 0 || tuningError != 0)
 	{
@@ -415,7 +413,7 @@ GCodeResult ClosedLoop::InstanceProcessM569Point4(CanMessageGenericParser& parse
 		if (!hasMovementCommand)
 		{
 			torqueModeDirection = (Platform::GetDirectionValueNoCheck(0) == (requestedTorque > 0.0));
-			torqueModeCurrentFraction = min<float>(fabsf(requestedTorque)/(torquePerAmp * SmartDrivers::GetCurrent(0) * 0.001), 1.0);
+			torqueModeCommandedCurrentFraction = min<float>(fabsf(requestedTorque)/(torquePerAmp * SmartDrivers::GetCurrent(0) * 0.001), 1.0);
 			torqueModeMaxSpeed = maxSpeed;
 			inTorqueMode = true;
 			return GCodeResult::ok;
@@ -825,15 +823,16 @@ void ClosedLoop::InstanceControlLoop() noexcept
 		}
 
 		const float targetEncoderReading = rintf(mParams.position * encoder->GetCountsPerStep());
-		currentError = (float)(targetEncoderReading - encoder->GetCurrentCount()) * encoder->GetStepsPerCount();
-		errorDerivativeFilter.ProcessReading(currentError, loopCallTime);
+		currentPositionError = (float)(targetEncoderReading - encoder->GetCurrentCount()) * encoder->GetStepsPerCount();
+		errorDerivativeFilter.ProcessReading(currentPositionError, loopCallTime);
 		speedFilter.ProcessReading(encoder->GetCurrentCount() * encoder->GetStepsPerCount(), loopCallTime);
 
+		float currentFraction = 0.0;
 		if (currentMode != ClosedLoopMode::open)
 		{
-			if (tuning != 0)											// if we need to tune, do it
+			if (tuning != 0)														// if we need to tune, do it
 			{
-				// Limit the rate at which we command tuning steps Need to do signed comparison because initially, whenLastTuningStepTaken is in the future.
+				// Limit the rate at which we command tuning steps. We need to do signed comparison because initially, whenLastTuningStepTaken is in the future.
 				const int32_t timeSinceLastTuningStep = (int32_t)(loopCallTime - whenLastTuningStepTaken);
 				if (timeSinceLastTuningStep >= (int32_t)stepTicksPerTuningStep)
 				{
@@ -848,8 +847,7 @@ void ClosedLoop::InstanceControlLoop() noexcept
 			}
 			else if (tuningError == 0)
 			{
-				ControlMotorCurrents(timeElapsed);						// otherwise control those motor currents!
-
+				currentFraction = ControlMotorCurrents(timeElapsed);				// otherwise control those motor currents!
 				if (inTorqueMode)
 				{
 					stall = preStall = false;
@@ -857,7 +855,7 @@ void ClosedLoop::InstanceControlLoop() noexcept
 				else
 				{
 					// Look for a stall or pre-stall
-					const float positionErr = fabsf(currentError);
+					const float positionErr = fabsf(currentPositionError);
 					if (stall)
 					{
 						// Reset the stall flag when the position error falls to below half the tolerance, to avoid generating too many stall events
@@ -890,6 +888,23 @@ void ClosedLoop::InstanceControlLoop() noexcept
 			CollectSample();
 			whenNextSampleDue += dataCollectionIntervalTicks;
 		}
+
+		// Update the statistics
+		TaskCriticalSectionLocker lock;						// prevent a race with the Heat task that sends the statistics
+
+		const float absPositionError = fabsf(currentPositionError);
+		if (absPositionError > periodMaxAbsPositionError)
+		{
+			periodMaxAbsPositionError = absPositionError;
+		}
+		periodSumOfPositionErrorSquares += fsquare(currentPositionError);
+		if (currentFraction > periodMaxCurrentFraction)
+		{
+			periodMaxCurrentFraction = currentFraction;
+		}
+		periodSumOfCurrentFractions += currentFraction;
+		++periodNumSamples;
+
 	}
 
 	// Record how long this has taken to run
@@ -974,7 +989,7 @@ void ClosedLoop::CollectSample() noexcept
 		if (filterRequested & CL_RECORD_RAW_ENCODER_READING) 	{ sampleBuffer.PutI32(encoder->GetCurrentCount()); }
 		if (filterRequested & CL_RECORD_CURRENT_MOTOR_STEPS) 	{ sampleBuffer.PutF32((float)encoder->GetCurrentCount() * encoder->GetStepsPerCount()); }
 		if (filterRequested & CL_RECORD_TARGET_MOTOR_STEPS)  	{ sampleBuffer.PutF32(mParams.position); }
-		if (filterRequested & CL_RECORD_CURRENT_ERROR) 			{ sampleBuffer.PutF32(currentError); }
+		if (filterRequested & CL_RECORD_CURRENT_ERROR) 			{ sampleBuffer.PutF32(currentPositionError); }
 		if (filterRequested & CL_RECORD_PID_CONTROL_SIGNAL)  	{ sampleBuffer.PutF16(PIDControlSignal); }
 		if (filterRequested & CL_RECORD_PID_P_TERM)  			{ sampleBuffer.PutF16(PIDPTerm); }
 		if (filterRequested & CL_RECORD_PID_I_TERM)  			{ sampleBuffer.PutF16(PIDITerm); }
@@ -998,27 +1013,46 @@ void ClosedLoop::CollectSample() noexcept
 	dataTransmissionTask->Give();
 }
 
-inline void ClosedLoop::ControlMotorCurrents(StepTimer::Ticks ticksSinceLastCall) noexcept
+// Control the motor phase currents, returning the fraction of maximum current that we commanded
+inline float ClosedLoop::ControlMotorCurrents(StepTimer::Ticks ticksSinceLastCall) noexcept
 {
 	// Get the time delta in seconds
 	const float timeDelta = (float)ticksSinceLastCall * (1.0/(float)StepTimer::StepClockRate);
+	uint16_t commandedStepPhase;
+	float currentFraction;
 
 	if (inTorqueMode)
 	{
 		const uint32_t measuredStepPhase = encoder->GetCurrentPhasePosition();
-		const uint16_t commandedStepPhase = (uint16_t)((((torqueModeDirection) ? (3 * 1024) : 1024) + measuredStepPhase) % 4096u);
-		SetMotorPhase(commandedStepPhase, torqueModeCurrentFraction);
+		commandedStepPhase = (uint16_t)((((torqueModeDirection) ? (3 * 1024) : 1024) + measuredStepPhase) % 4096u);
+		const float rawVelocity = speedFilter.GetDerivative();
+		const float speed = (torqueModeDirection) ? -rawVelocity : rawVelocity;
+
+		// For now we use a crude form of proportional control; we may need to improve it later.
+		// If the speed is lower than the limit, increase the torque unless it is already at the requested torque.
+		// If the speed is too high then reduce the torque.
+		// It's likely that we will need to add a derivative term to prevent the speed oscillating.
+		if (torqueModeMaxSpeed > 0.0)
+		{
+			const float speedErrorFraction = (speed - torqueModeMaxSpeed)/torqueModeMaxSpeed;
+			const float torqueFactor = constrain<float>(VelocityLimitGainFactor * (1.0 - speedErrorFraction), 0.0, 1.0);
+			currentFraction = torqueModeCommandedCurrentFraction * torqueFactor;
+		}
+		else
+		{
+			currentFraction = torqueModeCommandedCurrentFraction;
+		}
 	}
 	else
 	{
 		// Use a PID controller to calculate the required 'torque' - the control signal
 		// We choose to use a PID control signal in the range -256 to +256. This is arbitrary.
-		PIDPTerm = constrain<float>(Kp * currentError, -256.0, 256.0);
+		PIDPTerm = constrain<float>(Kp * currentPositionError, -256.0, 256.0);
 		PIDDTerm = constrain<float>(Kd * errorDerivativeFilter.GetDerivative() * StepTimer::StepClockRate, -256.0, 256.0);	// constrain D so that we can graph it more sensibly after a sudden step input
 
 		if (currentMode == ClosedLoopMode::closed)
 		{
-			PIDITerm = constrain<float>(PIDITerm + Ki * currentError * timeDelta, -PIDIlimit, PIDIlimit);	// constrain I to prevent it running away
+			PIDITerm = constrain<float>(PIDITerm + Ki * currentPositionError * timeDelta, -PIDIlimit, PIDIlimit);	// constrain I to prevent it running away
 			PIDVTerm = mParams.speed * Kv * ticksSinceLastCall;
 			PIDATerm = mParams.acceleration * Ka * fsquare(ticksSinceLastCall);
 			PIDControlSignal = constrain<float>(PIDPTerm + PIDITerm + PIDDTerm + PIDVTerm + PIDATerm, -256.0, 256.0);	// clamp the sum between +/- 256
@@ -1035,8 +1069,8 @@ inline void ClosedLoop::ControlMotorCurrents(StepTimer::Ticks ticksSinceLastCall
 			const int16_t phaseFeedForward = lrintf(constrain<float>(speedFilter.GetDerivative() * ticksSinceLastCall * PhaseFeedForwardFactor, -256.0, 256.0));
 			const uint32_t measuredStepPhase = encoder->GetCurrentPhasePosition();
 			const uint16_t adjustedStepPhase = (uint16_t)((int16_t)measuredStepPhase + phaseFeedForward) % 4096u;
-			const uint16_t commandedStepPhase = (((PIDControlSignal < 0.0) ? (3 * 1024) : 1024) + adjustedStepPhase) % 4096u;
-			SetMotorPhase(commandedStepPhase, fabsf(PIDControlSignal) * (1.0/256.0));
+			commandedStepPhase = (((PIDControlSignal < 0.0) ? (3 * 1024) : 1024) + adjustedStepPhase) % 4096u;
+			currentFraction = fabsf(PIDControlSignal) * (1.0/256.0);
 		}
 		else
 		{
@@ -1048,11 +1082,12 @@ inline void ClosedLoop::ControlMotorCurrents(StepTimer::Ticks ticksSinceLastCall
 			PIDControlSignal = min<float>(fabsf(PIDPTerm + PIDDTerm) + fabsf(PIDVTerm) + fabsf(PIDATerm), 256.0);
 
 			const uint16_t stepPhase = (uint16_t)llrintf(mParams.position * 1024.0);
-			const uint16_t commandedStepPhase = (stepPhase + phaseOffset) % 4096u;
-			const float currentFraction = holdCurrentFraction + (1.0 - holdCurrentFraction) * min<float>(PIDControlSignal * (1.0/256.0), 1.0);
-			SetMotorPhase(commandedStepPhase, currentFraction);
+			commandedStepPhase = (stepPhase + phaseOffset) % 4096u;
+			currentFraction = holdCurrentFraction + (1.0 - holdCurrentFraction) * min<float>(PIDControlSignal * (1.0/256.0), 1.0);
 		}
 	}
+	SetMotorPhase(commandedStepPhase, currentFraction);
+	return currentFraction;
 }
 
 const char *_ecv_array ClosedLoop::GetModeText() const noexcept
@@ -1229,6 +1264,28 @@ StandardDriverStatus ClosedLoop::ModifyDriverStatus(StandardDriverStatus origina
 	}
 
 	return originalStatus;
+}
+
+// Get the current fraction and position error statistics
+void ClosedLoop::GetStatistics(CanMessageDriversStatus::ClosedLoopStatus& stat) noexcept
+{
+	TaskCriticalSectionLocker lock;
+
+	if (periodNumSamples == 0)
+	{
+		stat.averageCurrentFraction = stat.maxCurrentFraction = stat.rmsPositionError = stat.maxAbsPositionError = 0.0;
+	}
+	else
+	{
+		stat.averageCurrentFraction = (float16_t)(periodSumOfCurrentFractions/periodNumSamples);
+		stat.maxCurrentFraction = (float16_t)periodMaxCurrentFraction;
+		stat.rmsPositionError = (float16_t)fastSqrtf(periodSumOfPositionErrorSquares/periodNumSamples);
+		stat.maxAbsPositionError = (float16_t)periodMaxAbsPositionError;
+
+		// Clear them out ready for the next period
+		periodNumSamples = 0;
+		periodSumOfCurrentFractions = periodMaxCurrentFraction = periodSumOfPositionErrorSquares = periodMaxAbsPositionError = 0.0;
+	}
 }
 
 // Call this if (and only if) we are in torque mode and want to resume normal movement mode.

@@ -12,6 +12,7 @@
 
 #define BOARD_TYPE_NAME		"RPi_Pico"
 #define BOOTLOADER_NAME		"RPi_Pico"
+#define BOARD_USES_UF2_BINARY	1
 
 // General features
 #define HAS_VREF_MONITOR		0
