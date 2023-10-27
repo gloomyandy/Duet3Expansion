@@ -9,7 +9,7 @@
 #define SRC_PLATFORM_H_
 
 #include <RepRapFirmware.h>
-#include "AdcAveragingFilter.h"
+#include "AveragingFilter.h"
 #include <Movement/StepTimer.h>
 #include <Heating/Heat.h>
 #include <UniqueIdBase.h>
@@ -48,8 +48,8 @@ constexpr size_t ThermistorReadingsAveraged = 64;
 constexpr size_t ZProbeReadingsAveraged = 8;		// We average this number of readings with IR on, and the same number with IR off
 constexpr size_t VinReadingsAveraged = 8;
 
-typedef AdcAveragingFilter<ThermistorReadingsAveraged> ThermistorAveragingFilter;
-typedef AdcAveragingFilter<ZProbeReadingsAveraged> ZProbeAveragingFilter;
+typedef AveragingFilter<ThermistorReadingsAveraged> ThermistorAveragingFilter;
+typedef AveragingFilter<ZProbeReadingsAveraged> ZProbeAveragingFilter;
 
 # if HAS_VREF_MONITOR
 
@@ -327,6 +327,30 @@ namespace Platform
 #ifdef TOOL1LC
 	uint8_t GetBoardVariant() noexcept;
 #endif
+
+	// Return true if there should be an accelerometer on board. Used by the test report.
+	inline bool AlwaysHasAccelerometer() noexcept
+	{
+#if SUPPORT_LIS3DH && !ACCELEROMETER_USES_SPI
+# ifdef TOOL1LC
+		return GetBoardVariant() != 0;
+# else
+		return true;
+# endif
+#else
+		return false;
+#endif
+	}
+
+	// Return true if there is an inductive sensor chip on board. Used by the test report.
+	inline bool AlwaysHasLDC1612() noexcept
+	{
+#if SUPPORT_LDC1612 && !defined(TOOL1LC)
+		return true;
+#else
+		return false;
+#endif
+	}
 }
 
 #endif /* SRC_PLATFORM_H_ */

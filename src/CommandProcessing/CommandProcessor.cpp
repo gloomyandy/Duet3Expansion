@@ -48,86 +48,57 @@
 # include "ScanningSensorHandler.h"
 #endif
 
-#if HAS_VOLTAGE_MONITOR
-constexpr float MinVin = 11.0;
-constexpr float MaxVin = 32.0;
-#endif
-
-#if HAS_12V_MONITOR
-constexpr float MinV12 = 10.0;
-constexpr float MaxV12 = 13.5;
-#endif
-
-#if HAS_CPU_TEMP_SENSOR
-constexpr float MinTemp = -20.0;
-constexpr float MaxTemp = 55.0;
-#endif
-
-static void GenerateTestReport(const StringRef& reply)
+// Check a value against the specified min and max parameters returning true if the value was outside limits
+static bool CheckMinMax(CanMessageGenericParser& parser, const StringRef& reply, char c, float val, const char *text) noexcept
 {
+	float minMaxValues[2];
+	size_t numValues = 2;
+	if (parser.GetFloatArrayParam(c, numValues, minMaxValues) && numValues == 2)
+	{
+		reply.lcatf("%s is %.1f, ", text, (double)val);
+		if (val < minMaxValues[0])
+		{
+			reply.cat("too low");
+			return true;
+		}
+		else if (val > minMaxValues[1])
+		{
+			reply.cat("too high");
+			return true;
+		}
+		else
+		{
+			reply.cat("OK");
+		}
+	}
+	else
+	{
+		reply.lcatf("Missing %c parameter", c);
+		return true;
+	}
+	return false;
+}
+
+// Generate a test report
+static GCodeResult GenerateTestReport(const CanMessageGeneric &msg, const StringRef& reply) noexcept
+{
+	CanMessageGenericParser parser(msg, M122P1Params);
 	bool testFailed = false;
 
 #if HAS_CPU_TEMP_SENSOR
 	// Check the MCU temperature
-	{
-		const MinCurMax& mcuTemperature = Platform::GetMcuTemperatures();
-		if (mcuTemperature.current < MinTemp)
-		{
-			reply.lcatf("MCU temperature %.1fC is lower than expected", (double)mcuTemperature.current);
-			testFailed = true;
-		}
-		else if (mcuTemperature.current > MaxTemp)
-		{
-			reply.lcatf("MCU temperature %.1fC is higher than expected", (double)mcuTemperature.current);
-			testFailed = true;
-		}
-		else
-		{
-			reply.lcatf("MCU temperature reading OK (%.1fC)", (double)mcuTemperature.current);
-		}
-	}
+	const MinCurMax& mcuTemperature = Platform::GetMcuTemperatures();
+	testFailed |= CheckMinMax(parser, reply, 'T', mcuTemperature.current, "MCU temp");
 #endif
 
 #if HAS_VOLTAGE_MONITOR
 	// Check the supply voltage
-	{
-		const float voltage = Platform::GetCurrentVinVoltage();
-		if (voltage < MinVin)
-		{
-			reply.lcatf("VIN voltage reading %.1f is lower than expected", (double)voltage);
-			testFailed = true;
-		}
-		else if (voltage > MaxVin)
-		{
-			reply.lcatf("VIN voltage reading %.1f is higher than expected", (double)voltage);
-			testFailed = true;
-		}
-		else
-		{
-			reply.lcatf("VIN voltage reading OK (%.1fV)", (double)voltage);
-		}
-	}
+	testFailed |= CheckMinMax(parser, reply, 'V', Platform::GetCurrentVinVoltage(), "VIN voltage");
 #endif
 
 #if HAS_12V_MONITOR
 	// Check the 12V rail voltage
-	{
-		const float voltage = Platform::GetCurrentV12Voltage();
-		if (voltage < MinV12)
-		{
-			reply.lcatf("12V voltage reading %.1f is lower than expected", (double)voltage);
-			testFailed = true;
-		}
-		else if (voltage > MaxV12)
-		{
-			reply.lcatf("12V voltage reading %.1f is higher than expected", (double)voltage);
-			testFailed = true;
-		}
-		else
-		{
-			reply.lcatf("12V voltage reading OK (%.1fV)", (double)voltage);
-		}
-	}
+	testFailed |= CheckMinMax(parser, reply, 'W', Platform::GetCurrentV12Voltage(), "12V voltage");
 #endif
 
 #if HAS_SMART_DRIVERS
@@ -157,13 +128,37 @@ static void GenerateTestReport(const StringRef& reply)
 	}
 #endif
 
-	reply.lcatf((testFailed) ? "***** ONE OR MORE CHECKS FAILED *****" : "All checks passed");
+#if SUPPORT_LIS3DH
+	if (Platform::AlwaysHasAccelerometer())
+	{
+		if (AccelerometerHandler::IsPresent())
+		{
+			reply.lcat("Accelerometer detected");
+		}
+		else
+		{
+			reply.lcat("Accelerometer NOT detected");
+			testFailed = true;
+		}
+	}
+#endif
+
+#if SUPPORT_LDC1612
+	if (Platform::AlwaysHasLDC1612())
+	{
+		testFailed |= CheckMinMax(parser, reply, 'F', ScanningSensorHandler::GetFrequency() * 1000.0, "Inductive sensor frequency");
+	}
+#endif
+
+	reply.lcat((testFailed) ? "***** ONE OR MORE CHECKS FAILED *****" : "All checks passed");
 
 	if (!testFailed)
 	{
 		reply.lcat("Board ID: ");
 		Platform::GetUniqueId().AppendCharsToString(reply);
 	}
+
+	return (testFailed) ? GCodeResult::warning : GCodeResult::ok;
 }
 
 #if SUPPORT_DRIVERS
@@ -778,13 +773,8 @@ static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& rep
 		break;
 
 	case CanMessageReturnInfo::typeDiagnosticsPart0:
-		if (msg.param == 1)
+		extra = LastDiagnosticsPart;
 		{
-			GenerateTestReport(reply);
-		}
-		else
-		{
-			extra = LastDiagnosticsPart;
 			Platform::AppendBoardAndFirmwareDetails(reply);
 			// GCC 12.2 produces a spurious diagnostic for the following line of code, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105523
 #pragma GCC diagnostic push
@@ -1014,6 +1004,11 @@ void CommandProcessor::Spin()
 		case CanMessageType::writeLedStrip:
 			requestId = buf->msg.generic.requestId;
 			rslt = LedStripManager::HandleLedSetColours(buf->msg.generic, replyRef);
+			break;
+
+		case CanMessageType::testReport:
+			requestId = buf->msg.generic.requestId;
+			rslt = GenerateTestReport(buf->msg.generic, replyRef);
 			break;
 
 #if SUPPORT_DRIVERS

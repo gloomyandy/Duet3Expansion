@@ -52,18 +52,11 @@ constexpr uint16_t MUX_DEGLITCH_10MHZ = 5u << 0;
 constexpr uint16_t MUX_DEGLITCH_33MHZ = 7u << 0;
 constexpr uint16_t MUX_RESERVED_BITS = 0x41 << 3;
 
-// Conversion result error bits (shifted left by 28 bits)
-constexpr uint32_t ERR_UR0 = 1u << 3;
-constexpr uint32_t ERR_OR0 = 1u << 2;
-constexpr uint32_t ERR_WD0 = 1u << 1;
-constexpr uint32_t ERR_AE0 = 1u << 0;
-
 LDC1612::LDC1612(SharedI2CMaster& dev, uint16_t i2cAddress) noexcept
 	: SharedI2CClient(dev, i2cAddress)
 {
 	for (size_t channel = 0; channel < NumChannels; ++channel)
 	{
-		SetLC(channel, DefaultInductance, DefaultCapacitance);
 		currentSetting[channel] = DefaultDriveCurrentVal;
 	}
 }
@@ -79,20 +72,20 @@ bool LDC1612::CheckPresent() noexcept
 // Set the default configuration for a channel and enable it
 bool LDC1612::SetDefaultConfiguration(uint8_t channel, bool calibrationMode) noexcept
 {
-	uint16_t configRegVal = CFG_REF_CLK_SRC | CFG_AUTO_AMP_DIS | CFG_RESERVED_BITS;
+	uint16_t configRegVal = CFG_REF_CLK_SRC | CFG_RESERVED_BITS;
 	if (!calibrationMode)
 	{
-		configRegVal |= CFG_RP_OVERRIDE_EN;
+		configRegVal |= (CFG_RP_OVERRIDE_EN | CFG_AUTO_AMP_DIS);
 	}
 	return UpdateConfiguration(configRegVal | CFG_SLEEP_MODE_EN)				// put the device in sleep mode
 		&& SetDivisors(channel)
 		&& SetLCStabilizeTime(channel, DefaultLCStabilizeTime)
 		&& SetConversionTime(channel, DefaultConversionTime)
 		&& SetDriveCurrent(channel, currentSetting[channel])
-		&& SetMuxConfiguration(MUX_RESERVED_BITS | MUX_DEGLITCH_10MHZ)			// single conversion
-		&& SetErrorConfiguration(UR_ERR2OUT | OR_ERR2OUT | WD_ERR2OUT | AH_ERR2OUT | AL_ERR2OUT)
+		&& SetMuxConfiguration(MUX_RESERVED_BITS | MUX_DEGLITCH_10MHZ)			// convert a single channel
+		&& SetErrorConfiguration(UR_ERR2OUT | OR_ERR2OUT | WD_ERR2OUT | AH_ERR2OUT | AL_ERR2OUT | DRDY_2INT)
 		&& SetConversionOffset(channel, 0)
-		&& UpdateConfiguration(configRegVal | (channel << 14));					// this also takes the device out of sleep mode
+		&& UpdateConfiguration(configRegVal | ((uint16_t)channel << 14));		// this also takes the device out of sleep mode
 }
 
 // Use the auto calibration function to establish the correct drive current
@@ -101,8 +94,9 @@ bool LDC1612::CalibrateDriveCurrent(uint8_t channel) noexcept
 	bool ok = SetDefaultConfiguration(channel, true);
 	if (ok)
 	{
-		delay(4);					// this assumes that the conversion time is set to less than 4ms
-		ok = ReadInitCurrent(channel, currentSetting[channel]) && SetDefaultConfiguration(channel, false);
+		delay(4);																// this assumes that the conversion time is set to 3ms or less
+		ok = ReadInitCurrent(channel, currentSetting[channel])
+				&& SetDefaultConfiguration(channel, false);
 	}
 	return ok;
 }
@@ -119,22 +113,15 @@ bool LDC1612::GetChannelResult(uint8_t channel, uint32_t& result) noexcept
 		if (ok)
 		{
 			result = msw | (uint32_t)value;
-			result = (result & 0xF0000000) | ((result & 0x0FFFFFFF) >> resultBitsDropped);
 		}
 	}
 	return ok;
 }
 
-// Return the resonant frequency in MHz
-float LDC1612::GetResonantFrequency(uint8_t channel) const noexcept
-{
-	return 1.0e3/(TwoPi * sqrtf(inductance[channel] * capacitance[channel]));
-}
-
 // Set the conversion time in units of 16 divided reference clocks. Minimum is 5.
-bool LDC1612::SetConversionTime(uint8_t channel, uint16_t microseconds) noexcept
+bool LDC1612::SetConversionTime(uint8_t channel, float microseconds) noexcept
 {
-	const uint16_t value = max<uint16_t>((uint16_t)((microseconds * FRef) * (1.0/16.0)), 9);
+	const uint16_t value = max<uint16_t>((uint16_t)(microseconds * (FRef/16.0)), 5);
     return Write16bits((LDCRegister)((uint8_t)LDCRegister::SET_CONVERSION_TIME_REG_START + channel), value);
 }
 
@@ -151,15 +138,15 @@ bool LDC1612::SetConversionOffset(uint8_t channel, uint16_t value) noexcept
     @param channel LDC1612 has total two channels.
     @param result The value to be set.
  * */
-bool LDC1612::SetLCStabilizeTime(uint8_t channel, uint16_t microseconds) noexcept
+bool LDC1612::SetLCStabilizeTime(uint8_t channel, float microseconds) noexcept
 {
-	const uint16_t value = max<uint16_t>((uint16_t)((microseconds * FRef) * (1.0/16.0)), 4);
+	const uint16_t value = max<uint16_t>((uint16_t)(microseconds * (FRef/16.0)), 4);
     return Write16bits((LDCRegister)((uint8_t)LDCRegister::SET_LC_STABILIZE_REG_START + channel), value);
 }
 
 bool LDC1612::SetDivisors(uint8_t channel) noexcept
 {
-	const uint16_t FIN_DIV = (uint16_t)(GetResonantFrequency(channel) / 8.75 + 1);	// input frequency after division must be less than 8.75MHz
+	const uint16_t FIN_DIV = 1;														// input frequency after division must be less than 8.75MHz - assume this is always the case
 	const uint16_t FREF_DIV = ClockDivisor;											// higher divisors are only needed for very low resonant frequencies
 	const uint16_t value = (FIN_DIV << 12) | FREF_DIV;
 	return Write16bits((LDCRegister)((uint8_t)LDCRegister::SET_FREQ_REG_START + channel), value);
@@ -178,7 +165,7 @@ bool LDC1612::SetErrorConfiguration(uint16_t value) noexcept
  * */
 bool LDC1612::SetMuxConfiguration(uint16_t value) noexcept
 {
-	return Write16bits(LDCRegister::MUL_CONFIG_REG, value);
+	return Write16bits(LDCRegister::MUX_CONFIG_REG, value);
 }
 
 // Reset the sensor
@@ -190,7 +177,7 @@ bool LDC1612::Reset() noexcept
 /** @brief set drive current of sensor.
     @param result The value to be set.
  * */
-bool LDC1612::SetDriveCurrent(uint8_t channel, uint32_t value) noexcept
+bool LDC1612::SetDriveCurrent(uint8_t channel, uint16_t value) noexcept
 {
 	value &= 0x1F;
 	const bool ok = Write16bits((LDCRegister)((uint8_t)LDCRegister::SET_DRIVER_CURRENT_REG + channel), (uint16_t)(value << 11));
@@ -213,9 +200,9 @@ bool LDC1612::ReadInitCurrent(uint8_t channel, uint16_t& value) noexcept
 }
 
 // Return true if there is an unread conversion for the specified channel. Returns false if there was an error getting the status.
-bool LDC1612::IsChannelReady(uint8_t chan) noexcept
+bool LDC1612::IsChannelReady(uint8_t channel) noexcept
 {
-	return GetStatus() & (1u << (3 - chan));
+	return GetStatus() & (1u << (3 - channel));
 }
 
 /** @brief Main config part of sensor.Contains select channel、start conversion、sleep mode、sensor activation mode、INT pin disable ..
@@ -226,12 +213,6 @@ bool LDC1612::UpdateConfiguration(uint16_t value) noexcept
 	return Write16bits(LDCRegister::SENSOR_CONFIG_REG, value);
 }
 
-void LDC1612::SetLC(uint8_t channel, float uh, float pf) noexcept
-{
-	inductance[channel] = uh;
-	capacitance[channel] = pf;
-}
-
 // Get sensor status, returning 0 if an I2C error occurred
 uint16_t LDC1612::GetStatus() noexcept
 {
@@ -240,76 +221,23 @@ uint16_t LDC1612::GetStatus() noexcept
     return value;
 }
 
-// Append diagnostic data to string
-void LDC1612::AppendDiagnostics(const StringRef& reply) noexcept
-{
-	uint32_t val;
-	if (GetChannelResult(0, val))
-	{
-		reply.catf("value %" PRIu32 ", current setting %u", val & 0x0FFFFFFF, currentSetting[0]);
-		if ((val >> 28) == 0)
-		{
-			reply.cat(", ok");
-		}
-		else
-		{
-			if ((val >> 28) & ERR_UR0)
-			{
-				reply.cat(", under-range error");
-			}
-			if ((val >> 28) & ERR_OR0)
-			{
-				reply.cat(", over-range error");
-			}
-			if ((val >> 28) & ERR_WD0)
-			{
-				reply.cat(", watchdog error");
-			}
-			if ((val >> 28) & ERR_AE0)
-			{
-				reply.cat(", amplitude error");
-			}
-		}
-	}
-	else
-	{
-		reply.cat("error retrieving data from LDC1612");
-	}
-}
-
-// Read a single 8-bit register
-bool LDC1612::ReadRegister(LDCRegister reg, uint8_t& val) noexcept
-{
-	return DoTransfer(reg, &val, 1, 1);
-}
-
-// Write a single 8-bit register
-bool LDC1612::WriteRegister(LDCRegister reg, uint8_t val) noexcept
-{
-	return DoTransfer(reg, &val, 2, 0);
-}
-
 // Read a pair of registers to give a 16-bit result, where the lower register is the MSB
 bool LDC1612::Read16bits(LDCRegister reg, uint16_t& val) noexcept
 {
-	uint8_t data[2];
-	const bool ok = DoTransfer(reg, data, 1, 2);
+	uint8_t data[3];
+	data[0] = (uint8_t)reg;
+	const bool ok = Transfer(data, data + 1, 1, 2, LDCI2CTimeout);
 	if (ok)
 	{
-		val = ((uint16_t)data[0] << 8) | (uint16_t)data[1];
+		val = ((uint16_t)data[1] << 8) | (uint16_t)data[2];
 	}
 	return ok;
 }
 
 bool LDC1612::Write16bits(LDCRegister reg, uint16_t val) noexcept
 {
-	uint8_t data[2] = { (uint8_t)((val >> 8) & 0xff), (uint8_t)(val & 0xff) };
-	return DoTransfer(reg, data, 3, 0);
-}
-
-bool LDC1612::DoTransfer(LDCRegister reg, uint8_t *data, size_t numToWrite, size_t numToRead) noexcept
-{
-	return Transfer((uint8_t)reg, data, numToWrite, numToRead, LDCI2CTimeout);
+	uint8_t data[3] = { (uint8_t)reg, (uint8_t)((val >> 8) & 0xff), (uint8_t)(val & 0xff) };
+	return Transfer(data, nullptr, 3, 0, LDCI2CTimeout);
 }
 
 #endif	// SUPPORT_LDC1612

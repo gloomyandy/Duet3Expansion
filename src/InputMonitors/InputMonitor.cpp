@@ -45,8 +45,9 @@ bool InputMonitor::Activate() noexcept
 			}
 			else
 #endif
-			ok = !port.IsRealPort()					// don't try to set a callback on a virtual pin
-				|| port.SetAnalogCallback(CommonAnalogPortInterrupt, CallbackParameter(this), 1);
+			{
+				ok = port.SetAnalogCallback(CommonAnalogPortInterrupt, CallbackParameter(this), 1);
+			}
 		}
 		active = true;
 
@@ -60,7 +61,17 @@ bool InputMonitor::Activate() noexcept
 
 void InputMonitor::Deactivate() noexcept
 {
-	//TODO
+	if (active)
+	{
+		if (IsDigital())
+		{
+			port.DetachInterrupt();
+		}
+		else
+		{
+			port.ClearAnalogCallback();
+		}
+	}
 	active = false;
 }
 
@@ -100,9 +111,9 @@ void InputMonitor::DigitalInterrupt() noexcept
 	}
 }
 
-void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
+void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 {
-	const bool newState = (uint32_t)reading >= threshold;
+	const bool newState = reading >= threshold;
 	if (newState != state)
 	{
 		state = newState;
@@ -121,19 +132,7 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 
 /*static*/ void InputMonitor::Spin() noexcept
 {
-#if SUPPORT_LDC1612
-	// Search for any LDC1612 sensors and take readings from them
-	ReadLocker lock(listLock);
-	for (InputMonitor *current = monitorsList; current != nullptr; current = current->next)
-	{
-		if (current->port.IsLdc1612())
-		{
-			TaskCriticalSectionLocker lock;
-			const uint32_t reading = current->port.ReadAnalog();
-			current->AnalogInterrupt(reading);
-		}
-	}
-#endif
+	// Nothing needed here yet
 }
 
 /*static*/ void InputMonitor::CommonDigitalPortInterrupt(CallbackParameter cbp) noexcept
@@ -141,7 +140,7 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 	static_cast<InputMonitor*>(cbp.vp)->DigitalInterrupt();
 }
 
-/*static*/ void InputMonitor::CommonAnalogPortInterrupt(CallbackParameter cbp, uint16_t reading) noexcept
+/*static*/ void InputMonitor::CommonAnalogPortInterrupt(CallbackParameter cbp, uint32_t reading) noexcept
 {
 	static_cast<InputMonitor*>(cbp.vp)->AnalogInterrupt(reading);
 }
@@ -342,6 +341,7 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 }
 
 // Read the specified inputs. The incoming message is a CanMessageReadInputsRequest. We return a CanMessageReadInputsReply in the same buffer.
+// Return error if we didn't have any of the requested inputs.
 /*static*/ void InputMonitor::ReadInputs(CanMessageBuffer *buf) noexcept
 {
 	// Extract data before we overwrite the message
@@ -369,7 +369,7 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 	}
 
 	reply->numReported = count;
-	reply->resultCode = (uint32_t)GCodeResult::ok;
+	reply->resultCode = (uint32_t)((count == 0) ? GCodeResult::error : GCodeResult::ok);
 	buf->dataLength = reply->GetActualDataLength();
 }
 

@@ -13,7 +13,6 @@
 #include <Movement/Move.h>
 #include "Movement/StepperDrivers/TMC51xx.h"
 #include "Movement/StepperDrivers/TMC22xx.h"
-#include "AdcAveragingFilter.h"
 #include "Movement/StepTimer.h"
 #include <CAN/CanInterface.h>
 #include <CanMessageBuffer.h>
@@ -218,17 +217,17 @@ namespace Platform
 #endif
 
 #if HAS_VOLTAGE_MONITOR
-	static AdcAveragingFilter<VinReadingsAveraged> vinFilter;
+	static AveragingFilter<VinReadingsAveraged> vinFilter;
 #endif
 #if HAS_12V_MONITOR
-	static AdcAveragingFilter<VinReadingsAveraged> v12Filter;
+	static AveragingFilter<VinReadingsAveraged> v12Filter;
 #endif
 
 #if SAME5x
-	static AdcAveragingFilter<McuTempReadingsAveraged> tpFilter;
-	static AdcAveragingFilter<McuTempReadingsAveraged> tcFilter;
+	static AveragingFilter<McuTempReadingsAveraged> tpFilter;
+	static AveragingFilter<McuTempReadingsAveraged> tcFilter;
 #elif SAMC21 || RP2040
-	static AdcAveragingFilter<McuTempReadingsAveraged> tsensFilter;
+	static AveragingFilter<McuTempReadingsAveraged> tsensFilter;
 #endif
 
 #if SUPPORT_DRIVERS
@@ -391,8 +390,10 @@ namespace Platform
 		NVIC_SetPriority(StepTcIRQn, NvicPriorityStep);
 # if defined(EXP3HC)
 		NVIC_SetPriority(CAN1_IRQn, NvicPriorityCan);
-# elif defined(EXP1HCL) || defined(M23CL)
+# elif defined(EXP1HCL) || defined(M23CL) || defined(TOOL1RR)
 		NVIC_SetPriority(CAN0_IRQn, NvicPriorityCan);
+# else
+#  error CAN interrupt not specified
 # endif
 		// Set UART interrupt priority. Each SERCOM has up to 4 interrupts, numbered sequentially.
 # if NUM_SERIAL_PORTS >= 1
@@ -568,15 +569,15 @@ namespace Platform
 	{
 #if defined(EXP3HC)
 		const CanAddress switches = ReadBoardAddress();
-		return (switches == 0) ? CanId::ExpansionBoardFirmwareUpdateAddress : switches;
-#elif defined(TOOL1LC)
+		return (switches == 0) ? CanId::Exp3HCFirmwareUpdateAddress : switches;
+#elif defined(TOOL1LC) || defined(TOOL1RR)
 		return CanId::ToolBoardDefaultAddress;
 #elif defined(SAMMYC21) || defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040V1_0) || defined(PITBV1_0) || defined(STRIDEMAXV1_0)
 		return CanId::SammyC21DefaultAddress;
 #elif defined(EXP1XD)
 		return CanId::Exp1XDBoardDefaultAddress;
 #elif defined(EXP1HCL) || defined(M23CL)
-		return CanId::Exp1HCEBoardDefaultAddress;
+		return CanId::Exp1HCLBoardDefaultAddress;
 #elif defined(ATECM)
 		return CanId::ATECMBoardDefaultAddress;
 #elif defined(ATEIO)
@@ -629,7 +630,7 @@ static void Platform::InitLeds()
 			IoPort::SetPinMode(pin, (LedActiveHighV10) ? OUTPUT_LOW : OUTPUT_HIGH);
 		}
 	}
-#elif !((defined(EXP1HCL) || defined(M23CL) || defined(SZP)) && defined(DEBUG))		// EXP1HCL has the LEDs connected to the SWD pins
+#elif !((defined(EXP1HCL) || defined(M23CL) || defined(SZP) || defined(TOOL1RR)) && defined(DEBUG))		// EXP1HCL has the LEDs connected to the SWD pins
 	for (Pin pin : LedPins)
 	{
 		IoPort::SetPinMode(pin, (LedActiveHigh) ? OUTPUT_LOW : OUTPUT_HIGH);
