@@ -201,8 +201,8 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm7b,	AdcInput::none,		nullptr		},	// GPIO15 TMC UART
 	{ PwmOutput::pwm0a,	AdcInput::none,		"io2.in"	},	// GPIO16 ENDSTOP2
 	{ PwmOutput::pwm0b,	AdcInput::none,		"max31865cs,rtdcs"		},	// GPIO17 SPI MAX31856 CS
-	{ PwmOutput::pwm1a,	AdcInput::none,		nullptr 	},	// GPIO18 I2C SDA
-	{ PwmOutput::pwm1b,	AdcInput::none,		nullptr		},	// GPIO19 I2C SCL
+	{ PwmOutput::pwm1a,	AdcInput::none,		"i2c.sda" 	},	// GPIO18 I2C SDA
+	{ PwmOutput::pwm1b,	AdcInput::none,		"i2c.sdl"	},	// GPIO19 I2C SCL
 	{ PwmOutput::pwm2a,	AdcInput::none,		"io1.in"	},	// GPIO20 ENDSTOP1
 	{ PwmOutput::pwm2b,	AdcInput::none,		"out2"		},	// GPIO21 Fan1
 	{ PwmOutput::pwm3a,	AdcInput::none,		"io0.in"	},	// GPIO22 Probe
