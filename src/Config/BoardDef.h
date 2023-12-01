@@ -39,6 +39,8 @@
 # include "MKSTHR3642v1_0.h"
 #elif defined(PITBV1_0)
 # include "PITBv1_0.h"
+#elif defined(PITBV2_0)
+# include "PITBv2_0.h"
 #elif defined(STRIDEMAXV1_0)
 # include "StrideMaxv1_0.h"
 #elif defined(M23CL)

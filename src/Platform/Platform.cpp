@@ -572,7 +572,7 @@ namespace Platform
 		return (switches == 0) ? CanId::Exp3HCFirmwareUpdateAddress : switches;
 #elif defined(TOOL1LC) || defined(TOOL1RR)
 		return CanId::ToolBoardDefaultAddress;
-#elif defined(SAMMYC21) || defined(RPI_PICO) || defined(FLY36RRF) || defined(FLYSB2040V1_0) || defined(PITBV1_0) || defined(STRIDEMAXV1_0) || defined(SHT36) || defined(MKSTHR3642)
+#elif defined(SAMMYC21) || defined(RP2040)
 		return CanId::SammyC21DefaultAddress;
 #elif defined(EXP1XD)
 		return CanId::Exp1XDBoardDefaultAddress;
