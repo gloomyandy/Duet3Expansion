@@ -1,17 +1,17 @@
 /*
- * StrideMaxv1_0.h
+ * StrideMaxv2_0.h
  *
  *  Created on: 26 Sept 2023
  *      Author: Andy
  */
 
-#ifndef SRC_CONFIG_STRIDEMAX_V1_0_H_
-#define SRC_CONFIG_STRIDEMAX_V1_0_H_
+#ifndef SRC_CONFIG_STRIDEMAX_V2_0_H_
+#define SRC_CONFIG_STRIDEMAX_V2_0_H_
 
 #include <Hardware/PinDescription.h>
 
-#define BOARD_TYPE_NAME		"STRIDEMAXV1_0"
-#define BOOTLOADER_NAME		"STRIDEMAXV1_0"
+#define BOARD_TYPE_NAME		"STRIDEMAXV2_0"
+#define BOOTLOADER_NAME		"STRIDEMAXV2_0"
 #define BOARD_USES_UF2_BINARY	1
 
 // General features
