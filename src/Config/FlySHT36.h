@@ -89,9 +89,10 @@ constexpr Pin DirectionPins[NumDrivers] = { GpioPin(6) };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
-#define SUPPORT_I2C_SENSORS		0
+#define SUPPORT_I2C_SENSORS		1
 #define SUPPORT_LIS3DH			1
 #define SUPPORT_DHT_SENSOR		0
+#define SUPPORT_LDC1612			1
 
 #define USE_MPU					0
 #define USE_CACHE				0
@@ -133,12 +134,27 @@ constexpr Pin SSPIMisoPin = GpioPin(4);
 constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::Spi;
 #endif
 
+#if SUPPORT_I2C_SENSORS
+
+// I2C using pins 18,19
+constexpr uint8_t I2CInstanceNumber = 1;
+constexpr Pin I2CSDAPin = GpioPin(18);
+constexpr GpioPinFunction I2CSDAPinPeriphMode = GpioPinFunction::I2c;
+constexpr Pin I2CSCLPin = GpioPin(19);
+constexpr GpioPinFunction I2CSCLPinPeriphMode = GpioPinFunction::I2c;
+#endif
+
 #if SUPPORT_LIS3DH
 
 #define ACCELEROMETER_USES_SPI			(1)					// 0 if the accelerometer is connected via I2C, 1 if via SPI
 constexpr Pin Lis3dhCsPin = GpioPin(12);
 constexpr Pin Lis3dhInt1Pin = GpioPin(25);
 
+#endif
+
+#if SUPPORT_LDC1612
+constexpr uint16_t LDC1612_I2cAddress = 0x2B;				// pin 4 is tied high on the Grove board
+constexpr Pin LDC1612InterruptPin = GpioPin(29);			// this is brought out to a test pad
 #endif
 
 // Table of pin functions that we are allowed to use
@@ -178,11 +194,17 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm5b,	AdcInput::adc0_1,	"temp0"		},	// GPIO27 TEMP0
 	{ PwmOutput::pwm6a,	AdcInput::adc0_2,	"temp1"		},	// GPIO28 CHAMBER_TEMP
 	{ PwmOutput::none,	AdcInput::adc0_3,	nullptr		},	// GPIO29 VIN ADC
+	// Virtual pins
+#if SUPPORT_LDC1612
+	{ PwmOutput::none,	AdcInput::ldc1612,	"i2c.ldc1612"},	// LDC1612 sensor connected via I2C
+#endif
 };
 
-static constexpr size_t NumPins = ARRAY_SIZE(PinTable);
+constexpr size_t NumPins = ARRAY_SIZE(PinTable);
 static constexpr size_t NumRealPins = 30;				// 30 GPIO pins on RP2040
-static_assert(NumPins == NumRealPins);					// no virtual pins
+constexpr size_t NumVirtualPins = SUPPORT_LDC1612;
+
+static_assert(NumPins == NumRealPins + NumVirtualPins);
 
 // Timer/counter used to generate step pulses and other sub-millisecond timings
 constexpr unsigned int StepTimerAlarmNumber = 0;

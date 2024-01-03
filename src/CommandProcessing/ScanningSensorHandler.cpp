@@ -28,7 +28,11 @@ static CallbackParameter callbackParameter;
 static void LDC1612TaskHook() noexcept
 {
 	// The LDC1612 generates lots of bus errors if we try to read the data when no new data is available
+#if !defined(SHT36)
 	if (!isCalibrating && !digitalRead(LDC1612InterruptPin))
+#else
+	if (!isCalibrating && millis() - lastReadingTakenAt > 1)
+#endif
 	{
 		uint32_t val;
 		if (sensor->GetChannelResult(0, val))		// if no error
@@ -58,7 +62,7 @@ void ScanningSensorHandler::Init() noexcept
 {
 	// Set up the external clock to the LDC1612.
 	// The higher the better, but the maximum is 40MHz
-#if defined(SAMMYC21) || defined(TOOL1LC)
+#if defined(SAMMYC21) || defined(TOOL1LC) || defined(SHT36)
 	// Assume we are using a LDC1612 breakout board with its own crystal, so we don't need to generate a clock
 #elif defined(SZP)
 	// We can use the 96MHz DPLL output divided by 3 to get 32MHz but it is probably better to use 25MHz from the crystal directly for better stability.
@@ -92,7 +96,11 @@ void ScanningSensorHandler::Init() noexcept
 	if (sensor->CheckPresent())
 	{
 		sensor->SetDefaultConfiguration(0, false);
+#if !defined(SHT36)
 		pinMode(LDC1612InterruptPin, PinMode::INPUT);
+#else
+		lastReadingTakenAt = millis();
+#endif
 		oldHookFunction = AnalogIn::SetTaskHook(LDC1612TaskHook);
 	}
 	else

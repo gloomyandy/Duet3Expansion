@@ -986,7 +986,13 @@ void Platform::Init()
 	{
 		SetPinFunction(I2CSDAPin, I2CSDAPinPeriphMode);
 		SetPinFunction(I2CSCLPin, I2CSCLPinPeriphMode);
+# if SAME5x || SAMC21
 		sharedI2C = new SharedI2CMaster(I2CSercomNumber);
+# elif RP2040
+		sharedI2C = new SharedI2CMaster(I2CInstanceNumber);
+# else
+# error Unsupported processor
+# endif
 	}
 #endif
 
