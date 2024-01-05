@@ -35,9 +35,7 @@ void SharedI2CMaster::SetClockFrequency(uint32_t freq) noexcept
 
 void SharedI2CMaster::Enable() const noexcept
 {
-	int ret = i2c_init(hardware, currentClockRate);
-	debugPrintf("Enable i3c freq %d ret %d\n", currentClockRate, ret);
-
+	i2c_init(hardware, currentClockRate);
 }
 
 void SharedI2CMaster::Disable() const noexcept
