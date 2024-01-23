@@ -39,6 +39,10 @@
 # include <CommandProcessing/ScanningSensorHandler.h>
 #endif
 
+#if SUPPORT_AS5601
+# include <CommandProcessing/MFMHandler.h>
+#endif
+
 #if SUPPORT_CLOSED_LOOP
 # include <ClosedLoop/ClosedLoop.h>
 #endif
@@ -1009,7 +1013,11 @@ void Platform::Init()
 	if (boardVariant != 0)
 # endif
 	{
-		AccelerometerHandler::Init();
+# if ACCELEROMETER_USES_SPI
+		AccelerometerHandler::Init(*sharedSpi);
+# else
+		AccelerometerHandler::Init(*sharedI2C);
+# endif
 	}
 #endif
 
@@ -1018,8 +1026,12 @@ void Platform::Init()
 	if (boardVariant != 0)
 # endif
 	{
-		ScanningSensorHandler::Init();
+		ScanningSensorHandler::Init(*sharedI2C);
 	}
+#endif
+
+#if SUPPORT_AS5601
+	MFMHandler::Init(*sharedI2C);
 #endif
 
 	CanInterface::Init(GetCanAddress(), UseAlternateCanPins, true);
@@ -1771,10 +1783,14 @@ bool Platform::GetDirectionValue(size_t driver) noexcept
 	return (driver >= NumDrivers) || directions[driver];
 }
 
+#if SUPPORT_CLOSED_LOOP
+
 bool Platform::GetDirectionValueNoCheck(size_t driver) noexcept
 {
 	return directions[driver];
 }
+
+#endif
 
 #if SINGLE_DRIVER
 
@@ -2360,11 +2376,18 @@ GCodeResult Platform::DoDiagnosticTest(const CanMessageDiagnosticTest& msg, cons
 		deliberateError = true;		// in case this causes a crash
 		if (msg.param16 == 1)		// if writing
 		{
-			*reinterpret_cast<uint32_t*>(msg.param32[0]) = msg.param32[1];
+			for (uint32_t i = 0; i < msg.param32[2]; ++i)
+			{
+				reinterpret_cast<uint32_t*>(msg.param32[0])[i] = msg.param32[1];
+			}
 		}
 		else						// reading
 		{
-			reply.printf("Address 0x%08" PRIx32 " value 0x%08" PRIx32, msg.param32[0], *reinterpret_cast<const uint32_t*>(msg.param32[0]));
+			reply.printf("Address 0x%08" PRIx32 ":", msg.param32[0]);
+			for (uint32_t i = 0; i < msg.param32[2]; ++i)
+			{
+				reply.catf(" %08" PRIx32, reinterpret_cast<const uint32_t*>(msg.param32[0])[i]);
+			}
 		}
 		deliberateError = false;
 		return GCodeResult::ok;
