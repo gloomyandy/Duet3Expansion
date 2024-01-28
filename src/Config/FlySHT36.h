@@ -153,7 +153,7 @@ constexpr Pin Lis3dhInt1Pin = GpioPin(25);
 #endif
 
 #if SUPPORT_LDC1612
-constexpr uint16_t LDC1612_I2cAddress = 0x2B;				// pin 4 is tied high on the Grove board
+constexpr uint16_t LDC1612_I2CAddress = 0x2B;				// pin 4 is tied high on the Grove board
 constexpr Pin LDC1612InterruptPin = GpioPin(29);			// this is brought out to a test pad
 #endif
 
