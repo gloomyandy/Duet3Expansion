@@ -42,11 +42,23 @@ FilamentMonitor::FilamentMonitor(uint8_t p_driver, unsigned int t) noexcept
 // Default destructor
 FilamentMonitor::~FilamentMonitor() noexcept
 {
+#if SUPPORT_AS5601
+	if (IsDirectMagneticEncoder())
+	{
+		MFMHandler::DetachEncoderVirtualInterrupt(this);
+	}
+#endif
 }
 
 // Call this to disable the interrupt before deleting or re-configuring a local filament monitor
 void FilamentMonitor::Disable() noexcept
 {
+#if SUPPORT_AS5601
+	if (IsDirectMagneticEncoder())
+	{
+		MFMHandler::DetachEncoderVirtualInterrupt(this);
+	}
+#endif
 	port.Release();				// this also detaches the ISR
 }
 
@@ -84,9 +96,9 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 				reply.copy("wrong filament monitor type for this port");
 				return GCodeResult::error;
 			}
-			if (!MFMHandler::EncoderPresent())
+			if (!MFMHandler::AttachEncoderVirtualInterrupt(AS5601VirtualInterruptEntry, this))
 			{
-				reply.copy("no AS5601 device found");
+				reply.copy("encoder not found or already in use");
 				return GCodeResult::error;
 			}
 		}
@@ -241,6 +253,19 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 		minInterruptTime = elapsedTime;
 	}
 }
+
+#if SUPPORT_AS5601
+
+// Virtual ISR from AS5601 task
+/*static*/ void FilamentMonitor::AS5601VirtualInterruptEntry(CallbackParameter param) noexcept
+{
+	FilamentMonitor * const fm = static_cast<FilamentMonitor*>(param.vp);
+	fm->isrExtruderStepsCommanded = moveInstance->GetAccumulatedExtrusion(fm->driver, fm->isrWasPrinting);
+	fm->haveIsrStepsCommanded = true;
+	fm->lastIsrMillis = millis();
+}
+
+#endif
 
 // Check the status of all the filament monitors.
 // Currently, the status for all filament monitors (on expansion boards as well as on the main board) is checked by the main board, which generates any necessary events.
