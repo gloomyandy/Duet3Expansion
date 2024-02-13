@@ -45,7 +45,7 @@ include $(MAKE_DIR)/EXP.mk
 FLAGS=
 ifeq ($(PROCESSOR),RP2040)
 	FLAGS  += -D__RP2040__ -D$(BOARD) $(CANFLAGS) -DBOARD_REV=$(BOARD_REV)
-	PROCFLAGS = -mfp16-format=ieee -mcpu=cortex-m0plus -mthumb
+	PROCFLAGS = -mfp16-format=ieee -mcpu=cortex-m0plus -mthumb -fno-math-errno
     $(info - Processor: $(PROCESSOR))
     $(info - Board: $(BOARD)  Rev: $(BOARD_REV))
     $(info - Can options: $(CANFLAGS))
