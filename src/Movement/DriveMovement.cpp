@@ -73,6 +73,7 @@ bool DriveMovement::NewCartesianSegment() noexcept
 		if (currentSegment->IsLinear())
 		{
 			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
+			pA = 0.0;																							// clear this to make debugging easier
 			pB = currentSegment->CalcLinearB(distanceSoFar, timeSoFar);
 			state = DMState::cartLinear;
 		}
@@ -98,6 +99,7 @@ bool DriveMovement::NewCartesianSegment() noexcept
 #endif
 		if (nextStep < segmentStepLimit)
 		{
+			reverseStartStep = segmentStepLimit;						// need to set this so that CalcNextStepTime works properly
 			return true;
 		}
 
@@ -127,6 +129,7 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 		if (currentSegment->IsLinear())
 		{
 			// Set up pB, pC such that for forward motion, time = pB + pC * (distanceMoved * steps/mm)
+			pA = 0.0;													// clear this to make debugging easier
 			pB = currentSegment->CalcLinearB(distanceSoFar, timeSoFar);
 		}
 		else
@@ -226,6 +229,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 		if (currentSegment->IsLinear())
 		{
 			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
+			pA = 0.0;																							// clear this to make debugging easier
 			pB = currentSegment->CalcLinearB(startDistance, startTime);
 			state = DMState::cartLinear;
 			reverseStartStep = segmentStepLimit = (int32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
@@ -235,8 +239,8 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * stepNumber)
 			pA = currentSegment->CalcNonlinearA(startDistance, mp.cart.pressureAdvanceK);
 			pB = currentSegment->CalcNonlinearB(startTime, mp.cart.pressureAdvanceK);
-			distanceSoFar += currentSegment->GetNonlinearSpeedChange() * mp.cart.pressureAdvanceK;		// add the extra extrusion due to pressure advance to the extrusion done at the end of this move
-			const int32_t netStepsAtSegmentEnd = (int32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm);
+			distanceSoFar += currentSegment->GetNonlinearSpeedChange() * mp.cart.pressureAdvanceK;				// add the extra extrusion due to pressure advance to the extrusion done at the end of this move
+			const int32_t netStepsAtSegmentEnd = (int32_t)floorf(distanceSoFar * mp.cart.effectiveStepsPerMm);	// we must round towards minus infinity because distanceSoFar may be negative
 			const float endSpeed = currentSegment->GetNonlinearEndSpeed(mp.cart.pressureAdvanceK);
 			if (currentSegment->IsAccelerating())
 			{
@@ -325,7 +329,7 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	// Prepare for the first step
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
-	reverseStartStep = totalSteps + 1;				// no reverse phase
+	stepInterval = 0;								// to keep the debug output deterministic
 	return CalcNextStepTimeFull(dda);				// calculate the scheduled time of the first step
 }
 
@@ -440,6 +444,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	// Prepare for the first step
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
+	stepInterval = 0;								// to keep the debug output deterministic
 	return CalcNextStepTimeFull(dda);				// calculate the scheduled time of the first step
 }
 
@@ -514,6 +519,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	// Prepare for the first step
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
+	stepInterval = 0;								// to keep the debug output deterministic
 	return CalcNextStepTimeFull(dda);				// calculate the scheduled time of the first step
 }
 
@@ -645,7 +651,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// no break
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion. Convert the steps to int32_t because the net steps may be negative.
 		{
-			const int32_t netSteps = (2 * (reverseStartStep - 1)) - nextStep;
+			const int32_t netSteps = 2 * reverseStartStep - nextStep - 1;
 			nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)(netSteps - (int32_t)stepsTillRecalc));
 		}
 		break;
