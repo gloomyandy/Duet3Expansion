@@ -17,9 +17,9 @@ void FanInterrupt(CallbackParameter cb) noexcept
 	static_cast<LocalFan *>(cb.vp)->Interrupt();
 }
 
-LocalFan::LocalFan(unsigned int fanNum)
+LocalFan::LocalFan(unsigned int fanNum) noexcept
 	: Fan(fanNum),
-	  fanInterruptCount(0), fanLastResetTime(0), fanInterval(0),
+	  tachoInterruptCount(0), tachoLastResetTime(0), tachoInterval(0),
 	  blipping(false)
 {
 }
@@ -31,27 +31,37 @@ LocalFan::~LocalFan()
 	tachoPort.Release();
 }
 
-void LocalFan::ReportPortDetails(const StringRef& str) const
+void LocalFan::ReportPortDetails(const StringRef& str) const noexcept
 {
 	str.printf("Fan %u", fanNumber);
 	port.AppendFullDetails(str);
 	if (tachoPort.IsValid())
 	{
-		str.cat(" tacho");
+		str.cat(", tacho");
 		tachoPort.AppendBasicDetails(str);
+		str.catf(", %.1f pulses per revolution", (double)(StepTimer::StepClockRate * TachoMaxInterruptCount * 60.0/tachoMultiplier));
+	}
+	else
+	{
+		str.cat(", no tacho");
 	}
 }
 
 // Set the hardware PWM
 // If you want make sure that the PWM is definitely updated, set lastPWM negative before calling this
-void LocalFan::SetHardwarePwm(float pwmVal)
+void LocalFan::SetHardwarePwm(float pwmVal) noexcept
 {
 	port.WriteAnalog(pwmVal);
 }
 
+void LocalFan::SetTachoPulsesPerRev(float ppr) noexcept
+{
+	tachoMultiplier = (uint32_t)(StepTimer::StepClockRate * TachoMaxInterruptCount * 60.0/ppr);
+}
+
 // Refresh the fan PWM
 // If you want make sure that the PWM is definitely updated, set lastPWM negative before calling this
-void LocalFan::Refresh(bool checkSensors)
+void LocalFan::Refresh(bool checkSensors) noexcept
 {
 	float reqVal;
 #if 0 //TODO HAS_SMART_DRIVERS
@@ -158,20 +168,20 @@ void LocalFan::Refresh(bool checkSensors)
 	SetHardwarePwm((blipping) ? 1.0 : reqVal);
 }
 
-bool LocalFan::UpdateFanConfiguration(const StringRef& reply)
+bool LocalFan::UpdateFanConfiguration(const StringRef& reply) noexcept
 {
 	Refresh(true);
 	return true;
 }
 
 // Update the fan if necessary. Return true if it is a thermostatic fan and is running.
-bool LocalFan::Check(bool checkSensors)
+bool LocalFan::Check(bool checkSensors) noexcept
 {
 	Refresh(checkSensors);
 	return !sensorsMonitored.IsEmpty() && lastVal != 0.0;
 }
 
-bool LocalFan::AssignPorts(const char *pinNames, const StringRef& reply)
+bool LocalFan::AssignPorts(const char *pinNames, const StringRef& reply) noexcept
 {
 	IoPort* const ports[] = { &port, &tachoPort };
 	const PinAccess access1[] = { PinAccess::pwm, PinAccess::read};
@@ -195,27 +205,27 @@ bool LocalFan::AssignPorts(const char *pinNames, const StringRef& reply)
 }
 
 // Tacho support
-int32_t LocalFan::GetRPM()
+int32_t LocalFan::GetRPM() noexcept
 {
 	// The ISR sets fanInterval to the number of step interrupt clocks it took to get fanMaxInterruptCount interrupts.
 	// We get 2 tacho pulses per revolution, hence 2 interrupts per revolution.
 	// When the fan stops, we get no interrupts and fanInterval stops getting updated. We must recognise this and return zero.
 	return (!tachoPort.IsValid())
 			? -1																			// we return -1 if there is no tacho configured
-			: (fanInterval != 0 && StepTimer::GetTimerTicks() - fanLastResetTime < 3 * StepTimer::StepClockRate)	// if we have a reading and it is less than 3 seconds old
-			  ? (StepTimer::StepClockRate * fanMaxInterruptCount * (60/2))/fanInterval		// then calculate RPM assuming 2 interrupts per rev
+			: (tachoInterval != 0 && StepTimer::GetTimerTicks() - tachoLastResetTime < 3 * StepTimer::StepClockRate)	// if we have a reading and it is less than 3 seconds old
+			  ? tachoMultiplier/tachoInterval												// then calculate RPM
 			  : 0;																			// else assume fan is off or tacho not connected
 }
 
-void LocalFan::Interrupt()
+void LocalFan::Interrupt() noexcept
 {
-	++fanInterruptCount;
-	if (fanInterruptCount == fanMaxInterruptCount)
+	++tachoInterruptCount;
+	if (tachoInterruptCount == TachoMaxInterruptCount)
 	{
 		const uint32_t now = StepTimer::GetTimerTicks();
-		fanInterval = now - fanLastResetTime;
-		fanLastResetTime = now;
-		fanInterruptCount = 0;
+		tachoInterval = now - tachoLastResetTime;
+		tachoLastResetTime = now;
+		tachoInterruptCount = 0;
 	}
 }
 
