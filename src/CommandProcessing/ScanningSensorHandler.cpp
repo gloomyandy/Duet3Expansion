@@ -27,7 +27,7 @@ static CallbackParameter callbackParameter;
 // This hook function is called by the AnalogIn task
 static void LDC1612TaskHook() noexcept
 {
-#if defined(SHT36)
+#if defined(SHT36) || defined(FLYSB2040V3_0)
 	// There is no interrupt pin available so sample every 2ms
 	if (!isCalibrating && millis() - lastReadingTakenAt > 1)
 #else
@@ -63,7 +63,7 @@ void ScanningSensorHandler::Init(SharedI2CMaster& i2cDevice) noexcept
 {
 	// Set up the external clock to the LDC1612.
 	// The higher the better, but the maximum is 40MHz
-#if defined(SAMMYC21) || defined(TOOL1LC) || defined(SHT36)
+#if defined(SAMMYC21) || defined(TOOL1LC) || defined(SHT36) || defined(FLYSB2040V3_0)
 	// Assume we are using a LDC1612 breakout board with its own crystal, so we don't need to generate a clock
 #elif defined(SZP)
 	// We can use the 96MHz DPLL output divided by 3 to get 32MHz but it is probably better to use 25MHz from the crystal directly for better stability.
@@ -97,7 +97,7 @@ void ScanningSensorHandler::Init(SharedI2CMaster& i2cDevice) noexcept
 	if (sensor->CheckPresent())
 	{
 		sensor->SetDefaultConfiguration(0, false);
-#if !defined(SHT36)
+#if !defined(SHT36) || defined(FLYSB2040V3_0)
 		pinMode(LDC1612InterruptPin, PinMode::INPUT);
 #else
 		lastReadingTakenAt = millis();

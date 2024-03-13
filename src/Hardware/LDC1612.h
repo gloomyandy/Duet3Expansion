@@ -37,7 +37,7 @@ public:
 	static constexpr uint32_t ERR_WD0 = 1u << 1;
 	static constexpr uint32_t ERR_AE0 = 1u << 0;
 
-#if defined(SAMMYC21) || defined(TOOL1LC) || defined(SHT36)
+#if defined(SAMMYC21) || defined(TOOL1LC) || defined(SHT36) || defined(FLYSB2040V3_0)
 	static constexpr float ClockFrequency =	40.0;					// External or internal clock frequency. Assume we are using a LDC1612 breakout module with 40MHz crystal oscillator
 	static constexpr uint16_t ClockDivisor = 2;						// The divisor we use for the clock. In continuous conversion mode the max divided clock speed allowed is 35MHz.
 #else
