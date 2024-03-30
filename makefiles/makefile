@@ -68,8 +68,8 @@ LINKER_SCRIPT_BASE = $(EXP_DIR)/src/Hardware/RP2040/
 
 #Path to the linker Script
 LINKER_SCRIPT  = $(LINKER_SCRIPT_BASE)$(LDNAME).ld
-$(info  - Linker Script used: $(LINKER_SCRIPT))
-
+$(info - Linker Script used: $(LINKER_SCRIPT))
+$(info - Output name: $(OUTPUT_NAME))
 
 #Flags common for Core in c and c++
 FLAGS  += -DRTOS $(PROCFLAGS) -DSUPPORT_CAN=1 -DSUPPORT_USB=1
