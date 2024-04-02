@@ -586,7 +586,7 @@ uint32_t flashTime = 0;
 	// make sure that nothing runs from flash memory
 	IrqDisable();
 	// Reboot in 10 seconds no matter what happens (The flash operation usually takes less than 2 seconds)!
-	watchdog_reboot(0, 0, 10000);
+	watchdog_reboot(0, 0, 5000);
 	// Erase the flash pages
 	flash_range_erase(0, length);
 	eraseTime = StepTimer::GetTimerTicks() - start;
@@ -604,7 +604,7 @@ extern "C" [[noreturn]] void UpdateFirmwareTask(void *pvParameters) noexcept
 {
 	// Allocate a buffer large enough to contain the entire bootloader
 	Platform::InitMinimal();
-	delay(10000);
+	delay(1000);
 	debugPrintf("Starting firmware update free RAM %d\n", Tasks::GetNeverUsedRam());
 	uint8_t * blockBuffer = (uint8_t *)(new uint32_t[FlashBlockSize/4]);		// if this fails then an OutOfMemory reset will occur;
 	debugPrintf("After memory allocation1 free %d\n", Tasks::GetNeverUsedRam());
