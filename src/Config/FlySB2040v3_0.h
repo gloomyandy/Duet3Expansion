@@ -12,17 +12,19 @@
 #ifndef SRC_CONFIG_FLYSB2040V3_0_H_
 #define SRC_CONFIG_FLYSB2040V3_0_H_
 
-#if BOARD_REV < 3
+#if BOARD_REV < 300
 #error "Unsupported board version"
 #endif
 
 #include <Hardware/PinDescription.h>
-#if BOARD_REV > 100
-#define BOARD_TYPE_NAME		"FLYSB2040PROV3_0"
-#define BOOTLOADER_NAME		"FLYSB2040PROV3_0"
+#if BOARD_REV == 300
+#define BOARD_TYPE_NAME		"SB2040MAX3"
+#define BOOTLOADER_NAME		"SB2040MAX3"
+#elif BOARD_REV == 301
+#define BOARD_TYPE_NAME		"SB2040PROMAX3"
+#define BOOTLOADER_NAME		"SB2040PROMAX3"
 #else
-#define BOARD_TYPE_NAME		"FLYSB2040V3_0"
-#define BOOTLOADER_NAME		"FLYSB2040V3_0"
+#error "unsupported board revision"
 #endif
 #define BOARD_USES_UF2_BINARY	1
 
@@ -53,7 +55,7 @@
 #define SUPPORT_TMC2160			0
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			1
-#if BOARD_REV > 100
+#if BOARD_REV == 301
 #define SUPPORT_TMC2208			0
 #define SUPPORT_TMC2209			0
 #define SUPPORT_TMC2240			1
@@ -76,7 +78,7 @@ constexpr size_t MaxSmartDrivers = 1;
 // In testing I found that 500kbaud was not reliable on the Duet Maestro, so now using 200kbaud.
 constexpr uint32_t DriversBaudRate = 200000;
 constexpr uint32_t TransferTimeout = 10;									// any transfer should complete within 10 ticks @ 1ms/tick
-#if BOARD_REV > 100
+#if BOARD_REV == 301
 // TMC2240 config
 constexpr uint32_t Tmc2240CurrentRange = 0x01;								// which current range we set the TMC2240 to (2A)
 constexpr uint32_t Tmc2240SlopeControl = 0x01;								// which slope control we set the TMC2240 to (200V/us)
