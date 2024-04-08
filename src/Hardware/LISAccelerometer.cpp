@@ -35,7 +35,7 @@ constexpr uint32_t Lis3dSpiTimeout = 25;							// timeout while waiting for the 
 
 LISAccelerometer::LISAccelerometer(SharedSpiDevice& dev, Pin p_csPin, Pin p_int1Pin) noexcept
 	: SharedSpiClient(dev, DefaultAccelerometerSpiFrequency, lisMode, p_csPin, false),
-	  taskWaiting(nullptr), accelerometerType(AccelerometerType::LISAccelerometer), int1Pin(p_int1Pin)
+	  taskWaiting(nullptr), accelerometerType(AccelerometerType::LIS3DH), int1Pin(p_int1Pin)
 {
 	SetCsPin(p_csPin);
 }
@@ -380,7 +380,7 @@ bool LISAccelerometer::ReadRegisters(LisRegister reg, size_t numToRead) noexcept
 	// On the LIS3DH, bit 6 must be set to 1 to auto-increment the address when doing reading multiple registers
 	// On the LIS3DSH and LIS2DW, bit 6 is an extra register address bit, so we must not set it.
 	// So that we can read the WHO_AM_I register of both chips before we know which chip we have, only set bit 6 if we have a LIS3DH and we are reading multiple registers.
-	transferBuffer.reg = (uint8_t)reg | ((numToRead < 2 || accelerometerType != AccelerometerType::LISAccelerometer) ? 0x80 : 0xC0);
+	transferBuffer.reg = (uint8_t)reg | ((numToRead < 2 || accelerometerType != AccelerometerType::LIS3DH) ? 0x80 : 0xC0);
 	const bool ret = TransceivePacket(&transferBuffer.reg, &transferBuffer.reg, 1 + numToRead);
 	Deselect();
 	return ret;
@@ -406,7 +406,7 @@ bool LISAccelerometer::WriteRegisters(LisRegister reg, size_t numToWrite) noexce
 	{
 		return false;
 	}
-	transferBuffer.reg = (numToWrite < 2 || accelerometerType != AccelerometerType::LISAccelerometer) ? (uint8_t)reg : (uint8_t)reg | 0x40;		// set auto increment bit if LIS3DH
+	transferBuffer.reg = (numToWrite < 2 || accelerometerType != AccelerometerType::LIS3DH) ? (uint8_t)reg : (uint8_t)reg | 0x40;		// set auto increment bit if LIS3DH
 	const bool ret = TransceivePacket(&transferBuffer.reg, &transferBuffer.reg, 1 + numToWrite);
 	Deselect();
 	return ret;
