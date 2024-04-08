@@ -10,7 +10,7 @@
 #if SUPPORT_LIS3DH
 
 #include <RTOSIface/RTOSIface.h>
-#include <Hardware/LIS3DH.h>
+#include <Hardware/LISAccelerometer.h>
 #include <CanMessageFormats.h>
 #include <Platform/TaskPriorities.h>
 #include <CanMessageBuffer.h>
@@ -26,7 +26,7 @@ constexpr uint16_t DefaultSamplingRate = 1000;
 constexpr size_t AccelerometerTaskStackWords = 130;
 static Task<AccelerometerTaskStackWords> *accelerometerTask;
 
-static LIS3DH *accelerometer = nullptr;
+static LISAccelerometer *accelerometer = nullptr;
 static bool present = false;								// note that present => (accelerometer != nullptr)
 
 static uint16_t samplingRate = DefaultSamplingRate;
@@ -223,9 +223,9 @@ void AccelerometerHandler::Init(SharedI2CMaster& dev) noexcept
 #endif
 {
 #if ACCELEROMETER_USES_SPI
-	accelerometer = new LIS3DH(dev, Lis3dhCsPin, Lis3dhInt1Pin);
+	accelerometer = new LISAccelerometer(dev, Lis3dhCsPin, Lis3dhInt1Pin);
 #else
-	accelerometer = new LIS3DH(dev, Lis3dhInt1Pin);
+	accelerometer = new LISAccelerometer(dev, Lis3dhInt1Pin);
 #endif
 	if (accelerometer->CheckPresent())
 	{
