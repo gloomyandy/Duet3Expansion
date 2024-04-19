@@ -6,24 +6,37 @@
  */
 /* Supported board revisions
 	REV 0-2 : Klipper version (not supported)
-	REV 3 : New spican board with scanning sensor
+	REV 300 : New spican board with scanning sensor prototype
+	REV 301 : New spican board with scanning sensor production
 */
 
 #ifndef SRC_CONFIG_SHT36_H_
 #define SRC_CONFIG_SHT36_H_
 
-#if BOARD_REV < 3
+#if BOARD_REV < 300
 #error "Unsupported board version"
 #endif
 
 #include <Hardware/PinDescription.h>
+#if BOARD_REV == 300
 #define BOARD_TYPE_NAME		"SHT36V3"
 #define BOOTLOADER_NAME		"SHT36V3"
+#elif BOARD_REV == 301
+#define BOARD_TYPE_NAME		"SHT36MAX3"
+#define BOOTLOADER_NAME		"SHT36MAX3"
+#else
+#error "Unsupported board version"
+#endif
+
 #define BOARD_USES_UF2_BINARY	1
 
 // General features
 #define HAS_VREF_MONITOR		0
+#if BOARD_REV == 300
 #define HAS_VOLTAGE_MONITOR		1
+#elif BOARD_REV == 301
+#define HAS_VOLTAGE_MONITOR		0
+#endif
 #define HAS_12V_MONITOR			0
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_ADDRESS_SWITCHES	0
@@ -114,9 +127,11 @@ constexpr Pin CanRxPin = GpioPin(1);
 constexpr Pin ButtonPins[] = { PIN_TODO };
 
 // VIN voltage monitor
+#if HAS_VOLTAGE_MONITOR
 constexpr Pin VinMonitorPin = GpioPin(29);
 constexpr float VinDividerRatio = (47.0 + 4.7)/4.7;
 constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico uses the 3.3V supply as the voltage reference
+#endif
 
 // Diagnostic LEDs
 constexpr Pin LedPins[] = { GpioPin(5) };
@@ -193,7 +208,7 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm5a,	AdcInput::adc0_0,	"rgbled"	},	// GPIO26 RGB
 	{ PwmOutput::pwm5b,	AdcInput::adc0_1,	"temp0"		},	// GPIO27 TEMP0
 	{ PwmOutput::pwm6a,	AdcInput::adc0_2,	"temp1"		},	// GPIO28 CHAMBER_TEMP
-	{ PwmOutput::none,	AdcInput::adc0_3,	nullptr		},	// GPIO29 VIN ADC
+	{ PwmOutput::none,	AdcInput::adc0_3,	nullptr		},	// GPIO29 VIN ADC/ldc1612 int pin
 	// Virtual pins
 #if SUPPORT_LDC1612
 	{ PwmOutput::none,	AdcInput::ldc1612,	"i2c.ldc1612"},	// LDC1612 sensor connected via I2C
