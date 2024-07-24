@@ -43,6 +43,7 @@
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			0
 #define SUPPORT_TMC2240			0
+#define SUPPORT_INPUT_SHAPING	0
 
 constexpr size_t NumDrivers = 2;
 constexpr size_t MaxSmartDrivers = 2;
