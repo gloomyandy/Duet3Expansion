@@ -32,16 +32,10 @@
 # elif SAMC21
 #  include <hri_sercom_c21.h>
 # endif
-
-static inline const Move& GetMoveInstance() noexcept { return *moveInstance; }
-
 #elif SAME70
-
 # include <pmc/pmc.h>
 # include <xdmac/xdmac.h>
-
 # define TMC51xx_USES_SERCOM	0
-static inline const Move& GetMoveInstance() noexcept { return reprap.GetMove(); }
 
 #elif TMC51xx_USES_SHARED_SPI
 #  include <SharedSpiClient.h>
@@ -851,12 +845,12 @@ void TmcDriverState::UpdateCurrent() noexcept
 	const uint16_t desiredStandstillCurrentFraction =
 #if SUPPORT_CLOSED_LOOP
 # if SINGLE_DRIVER
-		(ClosedLoop::GetClosedLoopInstance(0)->IsClosedLoopEnabled()) ? 256 : standstillCurrentFraction;
+					(moveInstance->IsClosedLoopEnabled(axisNumber)) ? 256 : standstillCurrentFraction;
 # else
 #  error Multiple closed loop drivers not supported here
 # endif
 #else
-		standstillCurrentFraction;
+					standstillCurrentFraction;
 #endif
 	const uint16_t limitedStandstillCurrentFraction = (motorCurrent * desiredStandstillCurrentFraction <= MaxStandstillCurrentTimes256)
 														? desiredStandstillCurrentFraction
@@ -964,10 +958,10 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 		threshold -= 128;
 	}
 	const uint32_t fullstepsPerSecond = StepTimer::StepClockRate/maxStallStepInterval;
-	const float speed1 = ((fullstepsPerSecond << microstepShiftFactor)/Platform::DriveStepsPerUnit(axisNumber));
+	const float speed1 = ((fullstepsPerSecond << microstepShiftFactor)/moveInstance->DriveStepsPerUnit(axisNumber));
 	const uint32_t tcoolthrs = writeRegisters[WriteTcoolthrs] & ((1ul << 20) - 1u);
 	bool bdummy;
-	const float speed2 = ((float)GetTmcClockSpeed() * GetMicrostepping(bdummy))/(256 * tcoolthrs * Platform::DriveStepsPerUnit(axisNumber));
+	const float speed2 = ((float)GetTmcClockSpeed() * GetMicrostepping(bdummy))/(256 * tcoolthrs * moveInstance->DriveStepsPerUnit(axisNumber));
 	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 " (%.1f mm/sec), coolstep threshold %" PRIu32 " (%.1f mm/sec)",
 				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed1, tcoolthrs, (double)speed2);
 }
@@ -1456,7 +1450,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		}
 
 #if SUPPORT_CLOSED_LOOP
-		ClosedLoop::ControlLoop();				// allow closed-loop to set the motor currents before we write
+		moveInstance->ClosedLoopControlLoop();				// allow closed-loop to set the motor currents before we write
 #endif
 		// Set up data to write. Driver 0 is the first in the SPI chain so we must write them in reverse order.
 
@@ -1942,9 +1936,6 @@ StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bo
 	if (driver < numTmc51xxDrivers)
 	{
 		rslt = driverStates[driver].GetStatus(accumulated, clearAccumulated);
-#if SUPPORT_CLOSED_LOOP
-		rslt = ClosedLoop::GetClosedLoopInstance(driver)->ModifyDriverStatus(rslt);
-#endif
 	}
 	return rslt;
 }

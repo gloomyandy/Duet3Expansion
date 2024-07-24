@@ -10,14 +10,6 @@
 
 #include <CoreIO.h>
 
-// Define floating point type to use for calculations where we would like high precision in matrix calculations
-#if SAME70
-typedef double floatc_t;						// type of matrix element used for calibration
-#else
-// We are more memory-constrained on the other processors and they don't support double precision
-typedef float floatc_t;							// type of matrix element used for calibration
-#endif
-
 #include <Config/BoardDef.h>
 #include <Config/Configuration.h>
 #include <General/String.h>
@@ -29,14 +21,12 @@ typedef float floatc_t;							// type of matrix element used for calibration
 // Warn of what's to come, so we can use pointers to classes without including the entire header files
 #if SUPPORT_DRIVERS
 class Move;
-class DDA;
 class DriveMovement;
 class Kinematics;
 #endif
 #if SUPPORT_CLOSED_LOOP
 class ClosedLoop;
 #endif
-
 
 class TemperatureSensor;
 class FilamentMonitor;
@@ -54,6 +44,58 @@ extern "C" void debugVprintf(const char *fmt, va_list vargs) noexcept;
 #endif
 
 #define SPEED_CRITICAL	__attribute__((optimize("O2")))
+
+#if SAME5x || SAME70
+
+// Functions to set and clear data watchpoints
+inline void SetWatchpoint(unsigned int number, const void* addr, unsigned int addrBits = 2) noexcept
+{
+	CoreDebug->DEMCR = CoreDebug_DEMCR_TRCENA_Msk | CoreDebug_DEMCR_MON_EN_Msk;		// enable tracing and debug interrupt
+	volatile uint32_t *const watchpointRegs = &(DWT->COMP0);						// 4 groups of (COMP, MASK, FUNCTION, reserved)
+	watchpointRegs[4 * number] = reinterpret_cast<uint32_t>(addr);					// set COMP register
+	watchpointRegs[4 * number + 1] = addrBits;										// ignore the least significant N bits of the address
+	watchpointRegs[4 * number + 2] = 0x06;
+}
+
+inline void ClearWatchpoint(unsigned int number) noexcept
+{
+	volatile uint32_t *const watchpointRegs = &(DWT->COMP0);						// 4 groups of (COMP, MASK, FUNCTION, reserved)
+	watchpointRegs[4 * number + 2] = 0;
+}
+
+#endif
+
+// Define floating point type to use for calculations where we would like high precision in matrix calculations
+#if SAME70
+typedef double floatc_t;						// type of matrix element used for calibration
+#else
+// We are more memory-constrained on the other processors and they don't support double precision
+typedef float floatc_t;							// type of matrix element used for calibration
+#endif
+
+// Define a floating point type for recording numbers of microsteps including fractional microsteps.
+// This is normally defined as float, but we can use double to check whether rounding error is causing problems.
+#define USE_DOUBLE_MOTIONCALC		(0)	//(SAME70)
+
+#if USE_DOUBLE_MOTIONCALC
+typedef double motioncalc_t;
+#else
+typedef float motioncalc_t;
+#endif
+
+inline motioncalc_t msquare(motioncalc_t a) noexcept
+{
+	return a * a;
+}
+
+inline motioncalc_t fabsm(motioncalc_t a) noexcept
+{
+#if USE_DOUBLE_MOTIONCALC
+	return fabs(a);
+#else
+	return fabsf(a);
+#endif
+}
 
 // Classes to facilitate range-based for loops that iterate from 0 up to just below a limit
 template<class T> class SimpleRangeIterator
@@ -143,26 +185,14 @@ extern Move *moveInstance;
 #endif
 
 // Module numbers and names, used for diagnostics and debug
-enum Module : uint8_t
+enum class Module : uint8_t
 {
-	modulePlatform = 0,
-	moduleNetwork = 1,
-	moduleWebserver = 2,
-	moduleGcodes = 3,
-	moduleMove = 4,
-	moduleHeat = 5,
-	moduleDda = 6,
-	moduleRoland = 7,
-	moduleScanner = 8,
-	modulePrintMonitor = 9,
-	moduleStorage = 10,
-	modulePortControl = 11,
-	moduleDuetExpansion = 12,
-	moduleFilamentSensors = 13,
-	moduleWiFi = 14,
-	moduleDisplay = 15,
-	numModules = 16,				// make this one greater than the last module number
-	noModule = 16
+	Platform = 0,
+	Move = 1,
+	Heat = 2,
+	FilamentSensors = 3,
+	numModules = 4,				// make this one greater than the last module number
+	noModule = 4
 };
 
 extern const char * const moduleName[];

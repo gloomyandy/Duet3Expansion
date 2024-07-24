@@ -9,43 +9,44 @@
 
 #if SUPPORT_DRIVERS
 
-#include "DDA.h"
 #include "Move.h"
 #include "StepTimer.h"
+#include "MoveTiming.h"
 #include <Math/Isqrt.h>
 #include <Platform/Platform.h>
 
-#if SUPPORT_DELTA_MOVEMENT
-# include "Kinematics/LinearDeltaKinematics.h"
-#endif
-
 int32_t DriveMovement::maxStepsLate = 0;
+
+void DriveMovement::Init(size_t drv) noexcept
+{
+	drive = (uint8_t)drv;
+	state = DMState::idle;
+	stepErrorType = 0;
+	distanceCarriedForwards = 0.0;
+	currentMotorPosition = positionAtSegmentStart = 0;
+	movementAccumulator = 0;
+	extruderPrinting = false;
+	driversNormallyUsed = driversCurrentlyUsed = 0;
+#if !SINGLE_DRIVER
+	nextDM = nullptr;
+#endif
+	segments = nullptr;
+	isExtruder = false;
+	segmentFlags.Init();
+#if SUPPORT_CLOSED_LOOP
+	closedLoopControl.InitInstance();
+#endif
+}
 
 void DriveMovement::DebugPrint() const noexcept
 {
 	const char c = drive + '0';
 	if (state != DMState::idle)
 	{
-		const char *const errText = (state == DMState::stepError1) ? " ERR1:"
-									: (state == DMState::stepError2) ? " ERR2:"
-										: (state == DMState::stepError3) ? " ERR3:"
-											: (state == DMState::stepError4) ? " ERR4:"
-												: (state == DMState::stepError5) ? " ERR5:"
-													: ":";
-		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " ssl=%" PRIu32 " A=%.4e B=%.4e C=%.4e dsf=%.4e tsf=%.1f",
-						c, errText, (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, segmentStepLimit,
-							(double)pA, (double)pB, (double)pC, (double)distanceSoFar, (double)timeSoFar);
-#if SUPPORT_DELTA_MOVEMENT
-		if (isDelta)
-		{
-			debugPrintf(" hmz0s=%.4e minusAaPlusBbTimesS=%.4e dSquaredMinusAsquaredMinusBsquared=%.4e drev=%.4e\n",
-							(double)mp.delta.fHmz0s, (double)mp.delta.fMinusAaPlusBbTimesS, (double)mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared, (double)mp.delta.reverseStartDistance);
-		}
-		else
-#endif
-		{
-			debugPrintf("\n");
-		}
+		debugPrintf("DM%c state=%u err=%u dir=%c next=%" PRIi32 " rev=%" PRIi32 " ssl=%" PRIi32 " sns=%" PRIi32 " interval=%" PRIu32 " q=%.4e t0=%.4e p=%.4e dcf=%.2f\n",
+						c, (unsigned int)state, (unsigned int)stepErrorType, (direction) ? 'F' : 'B',
+							nextStep, reverseStartStep, segmentStepLimit, netStepsThisSegment, stepInterval,
+								(double)q, (double)t0, (double)p, (double)distanceCarriedForwards);
 	}
 	else
 	{
@@ -53,472 +54,467 @@ void DriveMovement::DebugPrint() const noexcept
 	}
 }
 
-// This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
-#if RP2040
-__attribute__((section(".time_critical")))
-#elif SAMC21
-__attribute__((aligned(8)))			// insufficient RAM to put it there, so align it on a flash cache line boundary
-#endif
-bool DriveMovement::NewCartesianSegment() noexcept
+// Calculate the initial speed given the duration, distance and acceleration
+static inline motioncalc_t CalcInitialSpeed(uint32_t duration, motioncalc_t distance, motioncalc_t a) noexcept
 {
-	while (true)
-	{
-		if (currentSegment == nullptr)
-		{
-			return false;
-		}
-
-		// Work out the movement limit in steps
-		pC = currentSegment->CalcCFromMmPerStep(mp.cart.effectiveMmPerStep);
-		if (currentSegment->IsLinear())
-		{
-			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
-			pA = 0.0;																							// clear this to make debugging easier
-			pB = currentSegment->CalcLinearB(distanceSoFar, timeSoFar);
-			state = DMState::cartLinear;
-		}
-		else
-		{
-			// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * stepNumber)
-			pA = currentSegment->CalcNonlinearA(distanceSoFar);
-			pB = currentSegment->CalcNonlinearB(timeSoFar);
-			state = (currentSegment->IsAccelerating()) ? DMState::cartAccel : DMState::cartDecelNoReverse;
-		}
-
-		distanceSoFar += currentSegment->GetSegmentLength();
-		timeSoFar += currentSegment->GetSegmentTime();
-
-		segmentStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
-
-#if 0	//DEBUG
-		if (__get_BASEPRI() == 0)
-		{
-			debugPrintf("New cart seg: state %u A=%.4e B=%.4e C=%.4e ns=%" PRIu32 " ssl=%" PRIu32 "\n",
-						(unsigned int)state, (double)pA, (double)pB, (double)pC, nextStep, segmentStepLimit);
-		}
-#endif
-		if (nextStep < segmentStepLimit)
-		{
-			reverseStartStep = segmentStepLimit;						// need to set this so that CalcNextStepTime works properly
-			return true;
-		}
-
-		currentSegment = currentSegment->GetNext();						// skip this segment
-	}
+	return distance/(motioncalc_t)duration - (motioncalc_t)0.5 * a * (motioncalc_t)duration;
 }
 
-#if SUPPORT_DELTA_MOVEMENT
+uint32_t maxCriticalElapsedTime = 0;
 
-// This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
-#if RP2040
-__attribute__((section(".time_critical")))
-#elif SAMC21
-__attribute__((aligned(8)))			// insufficient RAM to put it there, so align it on a flash cache line boundary
-#endif
-bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
+// Add a segment into the list. If the list is not empty then the new segment may overlap segments already in the list but will never start earlier than the first existing one.
+// The units of the input parameters are steps for distance and step clocks for time.
+void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a, MovementFlags moveFlags) noexcept
 {
-	while (true)
+	if ((int32_t)duration <= 0)
 	{
-		if (currentSegment == nullptr)
-		{
-			return false;
-		}
-
-		const float stepsPerMm = Platform::DriveStepsPerUnit(drive);
-		pC = currentSegment->CalcCFromStepsPerMm(stepsPerMm);			// should we store the reciprocal to avoid the division?
-		if (currentSegment->IsLinear())
-		{
-			// Set up pB, pC such that for forward motion, time = pB + pC * (distanceMoved * steps/mm)
-			pA = 0.0;													// clear this to make debugging easier
-			pB = currentSegment->CalcLinearB(distanceSoFar, timeSoFar);
-		}
-		else
-		{
-			// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * (distanceMoved * steps/mm))
-			pA = currentSegment->CalcNonlinearA(distanceSoFar);
-			pB = currentSegment->CalcNonlinearB(timeSoFar);
-		}
-
-		distanceSoFar += currentSegment->GetSegmentLength();
-		timeSoFar += currentSegment->GetSegmentTime();
-
-		// Work out whether we reverse in this segment and the movement limit in steps.
-		// First check whether the first step in this segment is the previously-calculated reverse start step, and if so then do the reversal.
-		if (nextStep == reverseStartStep)
-		{
-			direction = false;													// we must have been going up, so now we are going down
-			directionChanged = directionReversed = true;
-		}
-
-		if (currentSegment->GetNext() == nullptr)
-		{
-			// This is the last segment, so the phase step limit is the number of total steps, and we can avoid some calculation
-			segmentStepLimit = totalSteps + 1;
-			state = (reverseStartStep <= totalSteps && nextStep < reverseStartStep) ? DMState::deltaForwardsReversing : DMState::deltaNormal;
-		}
-		else
-		{
-			// Work out how many whole steps we have moved up or down at the end of this segment
-			const float sDx = distanceSoFar * dda.directionVector[0];
-			const float sDy = distanceSoFar * dda.directionVector[1];
-			int32_t netStepsAtEnd = (int32_t)floorf(fastSqrtf(mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + mp.delta.fTwoA) + sDy * (sDy + mp.delta.fTwoB)))
-												+ (distanceSoFar * dda.directionVector[2] - mp.delta.h0MinusZ0) * stepsPerMm);
-
-			// If there is a reversal then we only ever move up by (reverseStartStep - 1) steps, so netStepsAtEnd should be less than reverseStartStep.
-			// However, because of rounding error, it might possibly be equal.
-			// If there is no reversal then reverseStartStep is set to totalSteps + 1, so netStepsAtEnd must again be less than reverseStartStep.
-			if (netStepsAtEnd >= reverseStartStep)
-			{
-				netStepsAtEnd = reverseStartStep - 1;							// correct the rounding error - we know that reverseStartStep cannot be 0 so subtracting 1 is safe
-			}
-
-			if (!direction)
-			{
-				// We are going down so any reversal has already happened
-				state = DMState::deltaNormal;
-				segmentStepLimit = (nextStep >= reverseStartStep)
-									? (2 * reverseStartStep) - netStepsAtEnd	// we went up (reverseStartStep-1) steps, now we are going down to netStepsAtEnd
-										: -netStepsAtEnd;						// we are just going down to netStepsAtEnd
-			}
-			else if (distanceSoFar <= mp.delta.reverseStartDistance)
-			{
-				// This segment is purely upwards motion of the tower
-				state = DMState::deltaNormal;
-				segmentStepLimit = netStepsAtEnd + 1;
-			}
-			else
-			{
-				// This segment ends with reverse motion
-				segmentStepLimit = (2 * reverseStartStep) - netStepsAtEnd;
-				state = DMState::deltaForwardsReversing;
-			}
-		}
-
-		if (segmentStepLimit > nextStep)
-		{
-			return true;
-		}
-
-		currentSegment = currentSegment->GetNext();
+		debugPrintf("Adding zero duration segment: d=%3e a=%.3e\n", (double)distance, (double)a);
 	}
-}
-
-#endif // SUPPORT_LINEAR_DELTA
-
-// This is called for an extruder driver when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
-#if RP2040
-__attribute__((section(".time_critical")))
-#elif SAMC21
-__attribute__((aligned(8)))			// insufficient RAM to put it there, so align it on a flash cache line boundary
-#endif
-bool DriveMovement::NewExtruderSegment() noexcept
-{
-	while (true)
+	// Adjust the distance (and implicitly the initial speed) to account for pressure advance
+	if (isExtruder && !moveFlags.nonPrintingMove)
 	{
-		if (currentSegment == nullptr)
+		distance += a * (motioncalc_t)extruderShaper.GetKclocks() * (motioncalc_t)duration;
+	}
+
+	MoveSegment *prev = nullptr;
+
+	// Shut out the step interrupt and task switching while we mess with the segments
+	// TODO probably only need to shut out task switching here, or shut out the step interrupt but leave the UART interrupt enabled
+#if SAMC21 || RP2040
+	const uint32_t oldFlags = IrqSave();
+#else
+	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
+#endif
+	const uint32_t criticalStartTime = StepTimer::GetTimerTicks();
+
+	MoveSegment *seg = segments;
+
+	if (seg != nullptr)
+	{
+		// Check that the segment we are adding does not start before the currently-executing segment ends, because we can't modify an executing segment
+		int32_t offset = (int32_t)(startTime - seg->GetStartTime());
+		if (seg->GetFlags().executing)
 		{
-			return false;
+			 const int32_t timeInHand = offset - (int32_t)seg->GetDuration();
+			 if (timeInHand < 0)
+			 {
+				 const uint32_t now = StepTimer::GetMovementTimerTicks();
+				 LogStepError(3);
+#if SAMC21 || RP2040
+				 IrqRestore(oldFlags);
+#else
+				 RestoreBasePriority(oldPrio);
+#endif
+				 if (Platform::Debug(Module::Move))
+				 {
+					 debugPrintf("overlaps executing seg %" PRIi32 " while trying to add s=%" PRIu32 " t=%" PRIu32 " d=%.2f a=%.4e f=%02" PRIx32 " at time %" PRIu32 "\n",
+						 	 	 	 -timeInHand, startTime, duration, (double)distance, (double)a, moveFlags.all, now);
+					 MoveSegment::DebugPrintList(seg);
+				 }
+				 return;
+			 }
 		}
 
-		const float startDistance = distanceSoFar;
-		const float startTime = timeSoFar;
-
-		distanceSoFar += currentSegment->GetSegmentLength();
-		timeSoFar += currentSegment->GetSegmentTime();
-		pC = currentSegment->CalcCFromMmPerStep(mp.cart.effectiveMmPerStep);
-		if (currentSegment->IsLinear())
+		// Loop until we find the earliest existing segment that the new one will come before (i.e. new one starts before existing one) or will overlap (i.e. the new one starts before the existing segment ends)
+		while (true)
 		{
-			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
-			pA = 0.0;																							// clear this to make debugging easier
-			pB = currentSegment->CalcLinearB(startDistance, startTime);
-			state = DMState::cartLinear;
-			reverseStartStep = segmentStepLimit = (int32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
-		}
-		else
-		{
-			// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * stepNumber)
-			pA = currentSegment->CalcNonlinearA(startDistance, mp.cart.pressureAdvanceK);
-			pB = currentSegment->CalcNonlinearB(startTime, mp.cart.pressureAdvanceK);
-			distanceSoFar += currentSegment->GetNonlinearSpeedChange() * mp.cart.pressureAdvanceK;				// add the extra extrusion due to pressure advance to the extrusion done at the end of this move
-			const int32_t netStepsAtSegmentEnd = (int32_t)floorf(distanceSoFar * mp.cart.effectiveStepsPerMm);	// we must round towards minus infinity because distanceSoFar may be negative
-			const float endSpeed = currentSegment->GetNonlinearEndSpeed(mp.cart.pressureAdvanceK);
-			if (currentSegment->IsAccelerating())
+			if (offset < 0)															// if the new segment starts before the existing one starts
 			{
-				state = DMState::cartAccel;
-				reverseStartStep = segmentStepLimit = netStepsAtSegmentEnd + 1;
-			}
-			else
-			{
-				// This is a decelerating segment. If it includes pressure advance then it may include reversal.
-				if (endSpeed >= 0.0)
+				if (offset + (int32_t)duration <= 0)
 				{
-					state = DMState::cartDecelNoReverse;					// this segment is forwards throughout
-					reverseStartStep = segmentStepLimit = netStepsAtSegmentEnd + 1;
-					CheckDirection(false);
+					break;															// new segment fits entirely before the existing one
 				}
-				else
+				if (offset >= -MoveSegment::MinDuration && duration >= 10 * MoveSegment::MinDuration)	// if it starts only slightly earlier and we can reasonably shorten it
 				{
-					const float startSpeed = currentSegment->GetNonlinearStartSpeed(mp.cart.pressureAdvanceK);
-					if (startSpeed <= 0.0)
+					startTime = seg->GetStartTime();								// then just delay and shorten the new segment slightly, to avoid creating a tiny segment
+#if SEGMENT_DEBUG
+					debugPrintf("Adjusting(1) t=%" PRIu32 " a=%.4e", duration, (double)a);
+#endif
+					duration += offset;
+#if SEGMENT_DEBUG
+					debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
+#endif
+				}
+				else																// new segment starts before the existing one and can't be delayed/shortened so that it doesn't
+				{
+					// Insert part of the new segment before the existing one, then merge the rest
+					const uint32_t firstDuration = -offset;
+					const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + (motioncalc_t)0.5 * a * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
+					seg = MoveSegment::Allocate(seg);
+					seg->SetParameters(startTime, firstDuration, firstDistance, a, moveFlags);
+					if (prev == nullptr)
 					{
-						state = DMState::cartDecelReverse;					// this segment is reverse throughout
-						reverseStartStep = nextStep;
-						CheckDirection(true);
+						segments = seg;
 					}
 					else
 					{
-						// This segment starts forwards and then reverses. Either or both of the forward and reverse segments may be small enough to need no steps.
-						const float distanceToReverse = currentSegment->GetDistanceToReverse(startSpeed) + startDistance;
-						const int32_t netStepsToReverse = (int32_t)(distanceToReverse * mp.cart.effectiveStepsPerMm);
-						if (nextStep <= netStepsToReverse)
-						{
-							// There is at least one step before we reverse
-							reverseStartStep = netStepsToReverse + 1;
-							state = DMState::cartDecelForwardsReversing;
-							CheckDirection(false);
-						}
-						else
-						{
-							// There is no significant forward phase, so start in reverse
-							reverseStartStep = nextStep;					// they are probably equal anyway, but just in case...
-							state = DMState::cartDecelReverse;
-							CheckDirection(true);
-						}
+						prev->SetNext(seg);
 					}
-					segmentStepLimit = (2 * reverseStartStep) - netStepsAtSegmentEnd - 1;
+#if CHECK_SEGMENTS
+					CheckSegment(__LINE__, prev);
+					CheckSegment(__LINE__, seg);
+#endif
+					duration -= firstDuration;
+					startTime += firstDuration;
+					distance -= firstDistance;
+					prev = seg;
+					seg = seg->GetNext();
+				}
+				offset = 0;
+			}
+
+			// At this point the new segment starts later or at the same time as the existing one (i.e. offset is non-negative)
+			if (offset < (int32_t)seg->GetDuration())													// if new segment starts before the existing one ends
+			{
+				// If we get here then the new segment starts later or at the same time as the existing one
+				if (offset != 0 && offset + MoveSegment::MinDuration >= (int32_t)seg->GetDuration() && duration >= 10 * MoveSegment::MinDuration)
+				{
+					// New segment starts just before the existing one ends, but we can delay and shorten it to start when the existing segment ends
+#if SEGMENT_DEBUG
+					debugPrintf("Adjusting(3) t=%" PRIu32 " a=%.4e", duration, (double)a);
+#endif
+					const uint32_t delay = seg->GetDuration() - (uint32_t)offset;
+					startTime += delay;																	// postpone and shorten it a little
+					duration -= delay;
+#if SEGMENT_DEBUG
+					debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
+#endif
+					// Go round the loop again
+				}
+				else
+				{
+					// The new segment overlaps the existing one and can't be delayed so that it doesn't.
+					// If the new segment starts later than the existing one does, split the existing one.
+					if (offset != 0)
+					{
+						prev = seg;
+						seg = seg->Split((uint32_t)offset);
+#if CHECK_SEGMENTS
+						CheckSegment(__LINE__, prev);
+						CheckSegment(__LINE__, seg);
+#endif
+						offset = 0;
+					}
+
+					// The segment we wish to add now starts at the same time as 'seg' but it may end earlier or later than the one at 'seg' does.
+					int32_t timeDifference = (int32_t)(duration - seg->GetDuration());
+					if (timeDifference > 0 && timeDifference <= (int32_t)MoveSegment::MinDuration && duration >= 10 * MoveSegment::MinDuration)
+					{
+						// New segment is slightly longer then the old one but it can be shortened
+#if SEGMENT_DEBUG
+						debugPrintf("Adjusting(3) t=%" PRIu32 " a=%.4e", duration, (double)a);
+#endif
+						duration -= (uint32_t)timeDifference;
+#if SEGMENT_DEBUG
+						debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
+#endif
+						timeDifference = 0;
+					}
+
+					if (timeDifference > 0)
+					{
+						// The existing segment is shorter in time than the new one, so add the new segment in two or more parts
+						const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + (motioncalc_t)0.5 * a * (motioncalc_t)seg->GetDuration()) * (motioncalc_t)seg->GetDuration();	// distance moved by the first part of the new segment
+#if SEGMENT_DEBUG
+						debugPrintf("merge1: ");
+#endif
+						seg->Merge(firstDistance, a, moveFlags);
+#if CHECK_SEGMENTS
+						CheckSegment(__LINE__, prev);
+						CheckSegment(__LINE__, seg);
+#endif
+						distance -= firstDistance;
+						startTime += seg->GetDuration();
+						duration = (uint32_t)timeDifference;
+						// Now go round the loop again
+					}
+					else
+					{
+						// New segment ends earlier or at the same time as the old one
+						if (timeDifference != 0)
+						{
+							// Split the existing segment in two
+							seg->Split(duration);
+#if CHECK_SEGMENTS
+							CheckSegment(__LINE__, prev);
+							CheckSegment(__LINE__, seg);
+#endif
+						}
+
+						// The new segment and the existing one now have the same start time and duration, so merge them
+#if SEGMENT_DEBUG
+						debugPrintf("merge2: ");
+#endif
+						seg->Merge(distance, a, moveFlags);
+						goto finished;								// ugly but saves some code
+					}
 				}
 			}
-		}
 
-#if 0	//DEBUG
-		if (__get_BASEPRI() == 0)
-		{
-			debugPrintf("New ex seg: state %u A=%.4e B=%.4e C=%.4e ns=%" PRIi32 " ssl=%" PRIi32 " rss=%" PRIi32 "\n",
-						(unsigned int)state, (double)pA, (double)pB, (double)pC, nextStep, segmentStepLimit, reverseStartStep);
+			prev = seg;
+			seg = seg->GetNext();
+			if (seg == nullptr) break;
+			offset = (int32_t)(startTime - seg->GetStartTime());
 		}
+	}
+
+	// If we get here then the new segment (or what's left of it) needs to be added before 'seg' which may be null
+	seg = MoveSegment::Allocate(seg);
+	seg->SetParameters(startTime, duration, distance, a, moveFlags);
+	if (prev == nullptr)
+	{
+		segments = seg;
+	}
+	else
+	{
+		prev->SetNext(seg);
+	}
+
+finished:
+#if CHECK_SEGMENTS
+	CheckSegment(__LINE__, prev);
+	CheckSegment(__LINE__, seg);
 #endif
-		if (nextStep < segmentStepLimit)
+#if SEGMENT_DEBUG
+	MoveSegment::DebugPrintList(segments);
+#endif
+	const uint32_t elapsedTime = StepTimer::GetTimerTicks() - criticalStartTime;
+#if SAMC21 || RP2040
+	IrqRestore(oldFlags);
+#else
+	RestoreBasePriority(oldPrio);
+#endif
+	if (elapsedTime > maxCriticalElapsedTime) { maxCriticalElapsedTime = elapsedTime; }	//DEBUG
+}
+
+// Set up to schedule the first segment, returning true if an interrupt for this DM is needed
+bool DriveMovement::ScheduleFirstSegment() noexcept
+{
+	const uint32_t now = StepTimer::GetMovementTimerTicks();
+	if (NewSegment(now) != nullptr)
+	{
+		if (state == DMState::starting)
 		{
 			return true;
 		}
-
-		currentSegment = currentSegment->GetNext();							// skip this segment
+		return CalcNextStepTimeFull(now);
 	}
+	return false;
 }
 
-// Prepare this DM for a Cartesian axis move, returning true if there are steps to do
-bool DriveMovement::PrepareCartesianAxis(const DDA& dda) noexcept
+// This is called when we need to examine the segment list and prepare the head segment (if there is one) for execution.
+// If there is no segment to execute, set our state to 'idle' and return nullptr.
+// If there is a segment to execute but it isn't due to start for a while, set our state to 'starting', set nextStepTime to when the move is due to start or shortly before,
+// set driversCurrentlyUsed to 0 to suppress the step pulse, and return the segment.
+// If there is a segment ready to execute and it has steps, set up our movement parameters, copy the flags over, set the 'executing' flag in the segment, and return the segment.
+// If there is a segment ready to execute but it involves zero steps, skip and free it and start again.
+// This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
+#if RP2040
+__attribute__((section(".time_critical")))
+#elif SAMC21
+__attribute__((aligned(8)))			// insufficient RAM to put it there, so align it on a flash cache line boundary
+#endif
+MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 {
-	distanceSoFar = 0.0;
-	timeSoFar = 0.0;
-	mp.cart.pressureAdvanceK = 0.0;
-	// We can't use directionVector here because those values relate to Cartesian space, whereas we may be CoreXY etc.
-	mp.cart.effectiveStepsPerMm = (float)totalSteps;	// because totalDistance = 1.0
-	mp.cart.effectiveMmPerStep = 1.0/mp.cart.effectiveStepsPerMm;
-	isDelta = false;
-	isExtruder = false;
-	currentSegment = dda.segments;
-	nextStep = 1;									// must do this before calling NewCartesianSegment
-	directionChanged = directionReversed = false;	// must clear these before we call NewCartesianSegment
+	positionAtSegmentStart = currentMotorPosition;
 
-	if (!NewCartesianSegment())
+	while (true)
 	{
-		return false;
-	}
-
-	// Prepare for the first step
-	nextStepTime = 0;
-	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
-	stepInterval = 0;								// to keep the debug output deterministic
-	return CalcNextStepTimeFull(dda);				// calculate the scheduled time of the first step
-}
-
-#if SUPPORT_DELTA_MOVEMENT
-
-// Prepare this DM for a Delta axis move, returning true if there are steps to do
-bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept
-{
-	const float stepsPerMm = Platform::DriveStepsPerUnit(drive);
-	const float A = params.initialX - params.dparams->GetTowerX(drive);
-	const float B = params.initialY - params.dparams->GetTowerY(drive);
-	const float aAplusbB = A * dda.directionVector[X_AXIS] + B * dda.directionVector[Y_AXIS];
-	const float dSquaredMinusAsquaredMinusBsquared = params.dparams->GetDiagonalSquared(drive) - fsquare(A) - fsquare(B);
-	const float h0MinusZ0 = fastSqrtf(dSquaredMinusAsquaredMinusBsquared);
-
-	mp.delta.h0MinusZ0 = h0MinusZ0;
-	mp.delta.fTwoA = 2.0 * A;
-	mp.delta.fTwoB = 2.0 * B;
-	mp.delta.fHmz0s = h0MinusZ0 * stepsPerMm;
-	mp.delta.fMinusAaPlusBbTimesS = -(aAplusbB * stepsPerMm);
-	mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared = dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm);
-
-	// Calculate the distance at which we need to reverse direction.
-	if (params.a2plusb2 <= 0.0)
-	{
-		// Pure Z movement. We can't use the main calculation because it divides by params.a2plusb2.
-		direction = (dda.directionVector[Z_AXIS] >= 0.0);
-		mp.delta.reverseStartDistance = (direction) ? dda.totalDistance + 1.0 : -1.0;	// so that we never reverse and NewDeltaSegment knows which way we are going
-		reverseStartStep = totalSteps + 1;
-	}
-	else
-	{
-		// The distance to reversal is the solution to a quadratic equation. One root corresponds to the carriages being below the bed,
-		// the other root corresponds to the carriages being above the bed.
-		const float drev = ((dda.directionVector[Z_AXIS] * fastSqrtf(params.a2plusb2 * params.dparams->GetDiagonalSquared(drive) - fsquare(A * dda.directionVector[Y_AXIS] - B * dda.directionVector[X_AXIS])))
-							- aAplusbB)/params.a2plusb2;
-		mp.delta.reverseStartDistance = drev;
-		if (drev <= 0.0)
+		MoveSegment *seg = segments;				// capture volatile variable
+		if (seg == nullptr)
 		{
-			// No reversal, going down
-			reverseStartStep = totalSteps + 1;
-			direction = false;
+			segmentFlags.Init();
+			state = DMState::idle;					// if we have been round this loop already then we will have changed the state, so reset it to idle
+			return nullptr;
 		}
-		else if (drev >= dda.totalDistance)
-		{
-			// No reversal, going up
-			reverseStartStep = totalSteps + 1;
-			direction = true;
-		}
-		else																	// the reversal point is within range
-		{
-			// Calculate how many steps we need to move up before reversing
-			const float hrev = dda.directionVector[Z_AXIS] * drev + fastSqrtf(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - params.a2plusb2 * fsquare(drev));
-			const int32_t numStepsUp = (int32_t)((hrev - mp.delta.h0MinusZ0) * stepsPerMm);
 
-			// We may be going down but almost at the peak height already, in which case we don't really have a reversal.
-			// However, we could be going up by a whole step due to rounding, so we need to check the direction
-			if (numStepsUp < 1)
+		segmentFlags = seg->GetFlags();				// assume we are going to execute this segment, or at least generate an interrupt when it is due to begin
+
+		if ((int32_t)(seg->GetStartTime() - now) > (int32_t)MoveTiming::MaximumMoveStartAdvanceClocks)
+		{
+			state = DMState::starting;				// the segment is not due to start for a while. To allow it to be changed meanwhile, generate an interrupt when it is due to start.
+			driversCurrentlyUsed = 0;				// don't generate a step on that interrupt
+			nextStepTime = seg->GetStartTime();		// this is when we want the interrupt
+			return seg;
+		}
+
+		seg->SetExecuting();
+
+		// Calculate the movement parameters
+		bool newDirection;
+		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
+
+		// If netStepsThisSegment is zero then either this segment plus the distance carried forwards is less than one step, or it's a forwards-then-back move
+		if (seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0))
+		{
+			// Segment is linear
+			newDirection = !std::signbit(seg->GetLength());
+			if (newDirection)
 			{
-				if (direction)
-				{
-					mp.delta.reverseStartDistance = dda.totalDistance + 1.0;	// indicate that there is no reversal
-				}
-				else
-				{
-					mp.delta.reverseStartDistance = -1.0;						// so that we know we have reversed already
-					reverseStartStep = totalSteps + 1;
-				}
-			}
-			else if (direction && numStepsUp <= totalSteps)
-			{
-				// If numStepsUp == totalSteps then the reverse segment is too small to do.
-				// If numStepsUp < totalSteps then there has been a rounding error, because we are supposed to move up more than the calculated number of steps we move up.
-				// This can happen if the calculated reversal is very close to the end of the move, because we round the final step positions to the nearest step, which may be up.
-				// Either way, don't do a reverse segment.
-				reverseStartStep = totalSteps + 1;
-				mp.delta.reverseStartDistance = dda.totalDistance + 1.0;
+				p = seg->CalcLinearRecipU();
+				segmentStepLimit = netStepsThisSegment + 1;
 			}
 			else
 			{
-				reverseStartStep = numStepsUp + 1;
+				p = -(seg->CalcLinearRecipU());
+				segmentStepLimit = 1 - netStepsThisSegment;
+			}
+			reverseStartStep = segmentStepLimit;
+			q = 0.0;											// to make the debug output consistent
+			state = DMState::cartLinear;
+		}
+		else
+		{
+			// Segment has acceleration or deceleration
+			// n = distanceCarriedForwards + u * t + 0.5 * a * t^2
+			// Therefore 0.5 * t^2 + u * t/a + (distanceCarriedForwards - n)/a = 0
+			// Therefore t = -u/a +/- sqrt((u/a)^2 - 2 * (distanceCarriedForwards - n)/a)
+			// Calculate the t0, p and q coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q) and set up the initial direction
+			motioncalc_t multiplier = std::copysign((motioncalc_t)1.0, seg->GetA());
+			newDirection = !std::signbit(seg->GetA());			// assume accelerating motion
+			if (t0 <= (motioncalc_t)0.0)
+			{
+				// The direction reversal is in the past so the initial direction is the direction of the acceleration
+				segmentStepLimit = reverseStartStep = (newDirection) ? 1 + netStepsThisSegment : 1 - netStepsThisSegment;
+				state = DMState::cartAccel;
+			}
+			else
+			{
+				// The initial direction is opposite to the acceleration
+				multiplier = -multiplier;
+				newDirection = !newDirection;
+				const int32_t netStepsInInitialDirection = (newDirection) ? netStepsThisSegment : -netStepsThisSegment;
 
-				// Correct the initial direction and the total number of steps
-				if (direction)
+				if (t0 < (motioncalc_t)seg->GetDuration())
 				{
-					// Net movement is up, so we will go up first and then down by a lesser amount
-					totalSteps = (2 * numStepsUp) - totalSteps;
+					// Reversal is potentially in this segment, but it may be before the first step, or may be beyond the last step we are going to take
+					// It can also happen that the target end speed is zero but due to FP rounding error, distanceToReverse was just below netStepsInInitialDirection and got rounded down
+					const motioncalc_t distanceToReverse = ((motioncalc_t)-0.5 * seg->GetA() * msquare(t0) + distanceCarriedForwards) * multiplier;
+					const int32_t stepsBeforeReverse = (int32_t)(distanceToReverse - (motioncalc_t)0.2);			// don't step and immediately step back again
+					// Note, stepsBeforeReverse may be negative at this point
+					if (stepsBeforeReverse <= netStepsInInitialDirection && netStepsInInitialDirection >= 0)
+					{
+						segmentStepLimit = reverseStartStep = netStepsInInitialDirection + 1;
+						state = DMState::cartDecelNoReverse;
+					}
+					else if (stepsBeforeReverse <= 0)
+					{
+						// Reversal happens immediately
+						newDirection = !newDirection;
+						multiplier = -multiplier;
+						segmentStepLimit = reverseStartStep = 1 - netStepsInInitialDirection;
+						state = DMState::cartAccel;
+					}
+					else
+					{
+						reverseStartStep = stepsBeforeReverse + 1;
+						segmentStepLimit = 2 * reverseStartStep - netStepsInInitialDirection - 1;
+						state = DMState::cartDecelForwardsReversing;
+					}
 				}
 				else
 				{
-					// Net movement is down, so we will go up first and then down by a greater amount
-					direction = true;
-					totalSteps = (2 * numStepsUp) + totalSteps;
+					// Reversal doesn't occur until after the end of this segment
+					segmentStepLimit = reverseStartStep = netStepsInInitialDirection + 1;
+					state = DMState::cartDecelNoReverse;
 				}
 			}
+			const motioncalc_t rawP = (motioncalc_t)2.0/seg->GetA();
+			p = rawP * multiplier;
+			q = msquare(t0) - rawP * distanceCarriedForwards;
+#if 0
+			if (std::isinf(q))
+			{
+				debugPrintf("t0=%.1f mult=%.1f dcf=%.3e a=%.4e\n", (double)t0, (double)multiplier, (double)distanceCarriedForwards, (double)seg->GetA());
+			}
+#endif
 		}
-	}
 
-	distanceSoFar = 0.0;
-	timeSoFar = 0.0;
-	isDelta = true;
-	isExtruder = false;
-	currentSegment = dda.segments;
-	nextStep = 1;									// must do this before calling NewDeltaSegment
-	directionChanged = directionReversed = false;	// must clear these before we call NewDeltaSegment
-
-	if (!NewDeltaSegment(dda))
-	{
-		return false;
-	}
-
-	// Prepare for the first step
-	nextStepTime = 0;
-	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
-	stepInterval = 0;								// to keep the debug output deterministic
-	return CalcNextStepTimeFull(dda);				// calculate the scheduled time of the first step
-}
-
-#endif	// SUPPORT_DELTA_MOVEMENT
-
-// Prepare this DM for an extruder move, returning true if there are steps to do
-// If there are no steps to do, set nextStep = 0 so that DDARing::CurrentMoveCompleted doesn't add any steps to the movement accumulator
-// We have already generated the extruder segments and we know that there are some
-// effStepsPerMm is the number of extruder steps needed per mm of totalDistance before we apply pressure advance
-void DriveMovement::PrepareExtruder(const DDA& dda, float signedEffStepsPerMm) noexcept
-{
-	const float effStepsPerMm = fabsf(signedEffStepsPerMm);
-	mp.cart.effectiveStepsPerMm = effStepsPerMm;
-	mp.cart.effectiveMmPerStep = 1.0/effStepsPerMm;
-
-	timeSoFar = 0.0;
-	currentSegment = dda.segments;
-	isDelta = false;
-	isExtruder = true;
-	nextStep = 1;									// must do this before calling NewExtruderSegment
-	totalSteps = 0;									// we don't use totalSteps but set it to 0 to avoid random values being printed by DebugPrint
-	directionChanged = directionReversed = false;	// must clear these before we call NewExtruderSegment
-
-	// Prepare for the first step
-	nextStepTime = 0;
-	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
-	stepInterval = 0;								// to keep the debug output deterministic
-
-	// The remainder of the preparation can't be done until we start the move, because until then we don't know how much extrusion is pending
-	state = DMState::extruderPendingPreparation;
-}
-
-// Finish preparing this DM for execution, returning true if there are any steps to do.
-// A note on accumulating partial extruder steps:
-// We must only accumulate partial steps when the extrusion is forwards. If we try to accumulate partial steps on reverse extrusion too,
-// things go horribly wrong under particular circumstances. We use the pressure advance flag as a proxy for forward extrusion.
-// This means that partial extruder steps don't get accumulated on a reprime move, but that is probably a good thing because it will
-// behave in a similar way to a retraction move.
-bool DriveMovement::LatePrepareExtruder(const DDA& dda) noexcept
-{
-	ExtruderShaper& shaper = moveInstance->GetExtruderShaper(drive);
-
-	// distanceSoFar will accumulate the equivalent amount of totalDistance that the extruder moves forwards.
-	// It would be equal to totalDistance if there was no pressure advance and no extrusion pending.
-	if (dda.flags.usePressureAdvance)
-	{
-		const float extrusionPending = shaper.GetExtrusionPending();
-		moveInstance->UpdateExtrusionPendingLimits(extrusionPending);
-		distanceSoFar = extrusionPending * mp.cart.effectiveMmPerStep;
-		mp.cart.pressureAdvanceK = shaper.GetKclocks();
-	}
-	else
-	{
-		mp.cart.pressureAdvanceK = 0.0;
-		distanceSoFar =	0.0;
-	}
-
-	if (!NewExtruderSegment())						// if no steps to do
-	{
-		if (dda.flags.usePressureAdvance)
+		nextStep = 1;
+		if (nextStep < segmentStepLimit)
 		{
-			shaper.SetExtrusionPending(distanceSoFar * mp.cart.effectiveStepsPerMm);
-		}
-		state = DMState::idle;
-		return false;								// quit if no steps to do
-	}
+			if (newDirection != direction)
+			{
+				direction = newDirection;
+				directionChanged = true;
+			}
 
-	return CalcNextStepTimeFull(dda);				// calculate the scheduled time of the first step
+			// Re-enable all drivers for this axis
+			driversCurrentlyUsed = driversNormallyUsed;
+
+			if (isExtruder)
+			{
+				if (segmentFlags.nonPrintingMove)
+				{
+					extruderPrinting = false;
+				}
+				else if (!extruderPrinting)
+				{
+					extruderPrintingSince = millis();
+					extruderPrinting = true;
+				}
+			}
+
+#if 0	//DEBUG
+			debugPrintf("New cart seg: state %u q=%.4e t0=%.4e p=%.4e ns=%" PRIi32 " ssl=%" PRIi32 "\n",
+							(unsigned int)state, (double)q, (double)t0, (double)p, nextStep, segmentStepLimit);
+#endif
+			return seg;
+		}
+
+#if 0
+		if (netStepsThisSegment != 0)
+		{
+			debugPrintf("Calc error! dcf=%.2f seg: ", (double)distanceCarriedForwards);
+			seg->DebugPrint();
+		}
+#endif
+
+#if 0
+		debugPrintf("skipping seg: state %u q=%.4e t0=%.4e p=%.4e ns=%" PRIi32 " ssl=%" PRIi32 "\n",
+						(unsigned int)state, (double)q, (double)t0, (double)p, nextStep, segmentStepLimit);
+		seg->DebugPrint();
+#endif
+		motioncalc_t newDcf = distanceCarriedForwards + seg->GetLength();
+		if (newDcf > 1.0 || newDcf < -1.0)
+		{
+			if (Platform::Debug(Module::Move))
+			{
+				debugPrintf("newDcf=%.3e\n", (double)newDcf);
+			}
+			LogStepError(7);
+			newDcf = (motioncalc_t)0.0;							// to prevent the next segment erroring out
+		}
+		distanceCarriedForwards = newDcf;
+		MoveSegment *oldSeg = seg;
+		segments = seg = seg->GetNext();						// skip this segment
+		MoveSegment::Release(oldSeg);
+	}
 }
 
-// Version of fastSqrtf that allows for slightly negative operands caused by rounding error
-static inline float fastLimSqrtf(float f) noexcept
+// Version of fastSqrt that allows for slightly negative operands caused by rounding error
+static inline motioncalc_t fastLimSqrtm(motioncalc_t f) noexcept
 {
-	return (f <= 0.0) ? 0.0 : fastSqrtf(f);
+#if USE_DOUBLE_MOTIONCALC
+	return (f >= (motioncalc_t)0.0) ? fastSqrtd(f) : (motioncalc_t)0.0;
+#else
+	return (f > 0.0) ? fastSqrtf(f) : 0.0;
+#endif
+}
+
+// Tell the Move class that we had a step error. This always returns false so that CalcNextStepTimeFull can tail-chain to it.
+bool DriveMovement::LogStepError(uint8_t type) noexcept
+{
+	state = DMState::stepError;
+	stepErrorType = type;
+	if (Platform::Debug(Module::Move))
+	{
+		debugPrintf("Step err %u on ", type);
+		DebugPrint();
+		MoveSegment::DebugPrintList(segments);
+	}
+	moveInstance->LogStepError(type);
+	return false;
 }
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
@@ -527,57 +523,48 @@ static inline float fastLimSqrtf(float f) noexcept
 #if SAMC21 || RP2040
 __attribute__((section(".time_critical")))
 #endif
-bool DriveMovement::CalcNextStepTimeFull(const DDA &dda) noexcept
-pre(nextStep <= totalSteps; stepsTillRecalc == 0)
+bool DriveMovement::CalcNextStepTimeFull(uint32_t now) noexcept
+pre(stepsTillRecalc == 0; segments != nullptr)
 {
+	MoveSegment *currentSegment = segments;							// capture volatile variable
 	uint32_t shiftFactor = 0;										// assume single stepping
 	{
 		int32_t stepsToLimit = segmentStepLimit - nextStep;
 		// If there are no more steps left in this segment, skip to the next segment and use single stepping
-		if (stepsToLimit == 0)
+		if (stepsToLimit <= 0)
 		{
-			currentSegment = currentSegment->GetNext();
+			distanceCarriedForwards += currentSegment->GetLength() - (motioncalc_t)netStepsThisSegment;
+			if (distanceCarriedForwards > (motioncalc_t)1.0 || distanceCarriedForwards < (motioncalc_t)-1.0)
+			{
+				return LogStepError(5);
+			}
+			if (currentMotorPosition - positionAtSegmentStart != netStepsThisSegment)
+			{
+				return LogStepError(6);
+			}
 			if (isExtruder)
 			{
-				{
-					AtomicCriticalSectionLocker lock;										// avoid a race with GetNetStepsTaken called by filament monitor code
-					nextStep = nextStep - 2 * (segmentStepLimit - reverseStartStep);		// set nextStep to the net steps taken in the original direction (this may make nextStep negative)
-					CheckDirection(false);													// so that GetNetStepsTaken returns the correct value
-				}
-#if 0	//DEBUG
-				DMState oldState = state;
-#endif
-				if (!NewExtruderSegment())
-				{
-					if (dda.flags.usePressureAdvance)
-					{
-						ExtruderShaper& shaper = moveInstance->GetExtruderShaper(drive);
-						const int32_t netStepsDone = nextStep - 1;
-						const float stepsCarriedForward = (distanceSoFar - (float)netStepsDone * mp.cart.effectiveMmPerStep) * mp.cart.effectiveStepsPerMm;
-						shaper.SetExtrusionPending(stepsCarriedForward);
-#if 0	//DEBUG
-						if (stepsCarriedForward > 1.0 || stepsCarriedForward < -1.0)
-						{
-							debugPrintf("calc xpend=%.2f s=%u\n", (double)stepsCarriedForward, (unsigned int)oldState);
-						}
-#endif
-					}
-					return false;
-				}
+				movementAccumulator += netStepsThisSegment;			// update the amount of extrusion
 			}
-			else
+			segments = currentSegment->GetNext();
+			const uint32_t prevEndTime = currentSegment->GetStartTime() + currentSegment->GetDuration();
+			MoveSegment::Release(currentSegment);
+			currentSegment = NewSegment(now);
+			if (currentSegment == nullptr)
 			{
-				const bool more =
-#if SUPPORT_DELTA_MOVEMENT
-								(isDelta) ? NewDeltaSegment(dda) :
-#endif
-									NewCartesianSegment();
-				if (!more)
-				{
-					state = DMState::stepError1;
-					return false;
-				}
+				return false;										// the call to NewSegment has already set the state to idle
 			}
+
+			if (state == DMState::starting)
+			{
+				return true;										// the call to NewSegment has already set up the interrupt time
+			}
+
+			if (unlikely((int32_t)(currentSegment->GetStartTime() - prevEndTime) < -10))
+			{
+				return LogStepError(1);
+			}
+
 			// Leave shiftFactor set to 0 so that we compute a single step time, because the interval will have changed
 			stepsTakenThisSegment = 1;								// this will be the first step in this segment
 		}
@@ -593,18 +580,18 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		}
 		else
 		{
-			if (reverseStartStep < segmentStepLimit && nextStep < reverseStartStep)
+			if (reverseStartStep < segmentStepLimit && nextStep <= reverseStartStep)
 			{
 				stepsToLimit = reverseStartStep - nextStep;
 			}
 
-			if (stepsToLimit > 1 && stepInterval < DDA::MinCalcInterval)
+			if (stepsToLimit > 1 && stepInterval < MoveTiming::MinCalcInterval)
 			{
-				if (stepInterval < DDA::MinCalcInterval/4 && stepsToLimit > 8)
+				if (stepInterval < MoveTiming::MinCalcInterval/4 && stepsToLimit > 8)
 				{
 					shiftFactor = 3;							// octal stepping
 				}
-				else if (stepInterval < DDA::MinCalcInterval/2 && stepsToLimit > 4)
+				else if (stepInterval < MoveTiming::MinCalcInterval/2 && stepsToLimit > 4)
 				{
 					shiftFactor = 2;							// quad stepping
 				}
@@ -618,196 +605,120 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 
 	stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
 
-	float nextCalcStepTime;
+	motioncalc_t nextCalcStepTime;
 
 	// Work out the time of the step
 	switch (state)
 	{
 	case DMState::cartLinear:									// linear steady speed
-		nextCalcStepTime = pB + (float)(nextStep + stepsTillRecalc) * pC;
+		nextCalcStepTime = (motioncalc_t)(nextStep + (int32_t)stepsTillRecalc) * p;
 		break;
 
 	case DMState::cartAccel:									// Cartesian accelerating
-		nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+		nextCalcStepTime = fastLimSqrtm(q + p * (motioncalc_t)(nextStep + (int32_t)stepsTillRecalc));
 		break;
 
 	case DMState::cartDecelForwardsReversing:
-		if (nextStep + stepsTillRecalc < reverseStartStep)
+		if (nextStep + (int32_t)stepsTillRecalc < reverseStartStep)
 		{
-			nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+			nextCalcStepTime = -fastLimSqrtm(q + p * (motioncalc_t)(nextStep + (int32_t)stepsTillRecalc));
 			break;
 		}
 
-		CheckDirection(true);
+		direction = !direction;
+		directionChanged = true;
 		state = DMState::cartDecelReverse;
 		// no break
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion. Convert the steps to int32_t because the net steps may be negative.
 		{
 			const int32_t netSteps = 2 * reverseStartStep - nextStep - 1;
-			nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)(netSteps - (int32_t)stepsTillRecalc));
+			nextCalcStepTime = fastLimSqrtm(q + p * (motioncalc_t)(netSteps - (int32_t)stepsTillRecalc));
 		}
 		break;
 
 	case DMState::cartDecelNoReverse:							// Cartesian decelerating with no reversal
-		nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+		nextCalcStepTime = -fastLimSqrtm(q + p * (motioncalc_t)(nextStep + (int32_t)stepsTillRecalc));
 		break;
-
-#if SUPPORT_DELTA_MOVEMENT
-	case DMState::deltaForwardsReversing:						// moving forwards
-		if (nextStep == reverseStartStep)
-		{
-			direction = false;
-			directionChanged = directionReversed = true;
-			state = DMState::deltaNormal;
-		}
-		// no break
-	case DMState::deltaNormal:
-		// Calculate d*s where d = distance the head has travelled, s = steps/mm for this drive
-		{
-			const float steps = (float)(1u << shiftFactor);
-			if (direction)
-			{
-				mp.delta.fHmz0s += steps;						// get new carriage height above Z in steps
-			}
-			else
-			{
-				mp.delta.fHmz0s -= steps;						// get new carriage height above Z in steps
-			}
-
-			const float hmz0sc = mp.delta.fHmz0s * dda.directionVector[Z_AXIS];
-			const float t1 = mp.delta.fMinusAaPlusBbTimesS + hmz0sc;
-			const float t2a = mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(mp.delta.fHmz0s) + fsquare(t1);
-			// Due to rounding error we can end up trying to take the square root of a negative number if we do not take precautions here
-			const float t2 = fastLimSqrtf(t2a);
-			const float ds = (direction) ? t1 - t2 : t1 + t2;
-
-			// Now feed ds into the step algorithm for Cartesian motion
-			if (ds < 0.0)
-			{
-				state = DMState::stepError2;
-				return false;
-			}
-
-			const float pCds = pC * ds;
-			nextCalcStepTime = (currentSegment->IsLinear()) ? pB + pCds
-								: (currentSegment->IsAccelerating()) ? pB + fastLimSqrtf(pA + pCds)
-									 : pB - fastLimSqrtf(pA + pCds);
-		}
-		break;
-#endif
 
 	default:
-		return false;
+#if SEGMENT_DEBUG
+		debugPrintf("DMstate %u, quitting\n", (unsigned int)state);
+#endif
+		return LogStepError(4);
 	}
 
-#if 0	//DEBUG
-	if (std::isnan(nextCalcStepTime) || nextCalcStepTime < 0.0)
+	nextCalcStepTime += t0;
+
+	if (unlikely(std::isnan(nextCalcStepTime) || nextCalcStepTime < (motioncalc_t)0.0))
 	{
-		state = DMState::stepError5;
-		distanceSoFar = nextCalcStepTime;					//DEBUG
-		return false;
+		if (Platform::Debug(Module::Move))
+		{
+			debugPrintf("nextCalcStepTime=%.3e\n", (double)nextCalcStepTime);
+		}
+		return LogStepError(2);
 	}
-#endif
 
 	uint32_t iNextCalcStepTime = (uint32_t)nextCalcStepTime;
 
-	if (iNextCalcStepTime > dda.clocksNeeded)
+	if (iNextCalcStepTime > currentSegment->GetDuration())
 	{
 		// The calculation makes this step late.
 		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
 		// So if this is the last step and it is late, bring it forward to the expected finish time.
-		// Very rarely on a delta, the penultimate step may also be calculated late. Allow for that here in case it affects Cartesian axes too.
-		// Don't use totalSteps here because it isn't valid for extruders
-		if (currentSegment->GetNext() == nullptr)
+		// 2023-12-06: we now allow any step to be late but we record the maximum number.
+		// 2024-040-5: we now allow steps to be late on any segment, not just the last one, because a segment may be 0 or 1 step long and on deltas the last 2 steps may be calculated late.
+		iNextCalcStepTime = currentSegment->GetDuration();
+		const int32_t nextCalcStep = nextStep + (int32_t)stepsTillRecalc;
+		const int32_t stepsLate = segmentStepLimit - nextCalcStep;
+		if (stepsLate > maxStepsLate) { maxStepsLate = stepsLate; }
+	}
+
+	iNextCalcStepTime += currentSegment->GetStartTime();
+	if (nextStep == 1)
+	{
+		nextStepTime = iNextCalcStepTime;
+	}
+	else
+	{
+		// When crossing between movement phases with high microstepping, due to rounding errors the next step may appear to be due before the last one
+		const int32_t interval = (int32_t)(iNextCalcStepTime - nextStepTime);
+		if (interval > 0)
 		{
-			iNextCalcStepTime = dda.clocksNeeded;
-			const int32_t nextCalcStep = nextStep + (int32_t)stepsTillRecalc;
-			const int32_t stepsLate = segmentStepLimit - nextCalcStep;
-			if (stepsLate > maxStepsLate) { maxStepsLate = stepsLate; }
+			stepInterval = (uint32_t)interval >> shiftFactor;		// calculate the time per step, ready for next time
+#if 0	//debug
+			if (interval < minStepInterval) { minStepInterval = interval; }
+#endif
 		}
 		else
 		{
-			// We don't expect any segment except the last to have late steps
-			state = DMState::stepError3;
-			stepInterval = iNextCalcStepTime;				//DEBUG
-			return false;
+			stepInterval = 0;
 		}
-	}
-
-	// When crossing between movement phases with high microstepping, due to rounding errors the next step may appear to be due before the last one
-	stepInterval = (iNextCalcStepTime > nextStepTime)
-					? (iNextCalcStepTime - nextStepTime) >> shiftFactor	// calculate the time per step, ready for next time
-					: 0;
 
 #if 0	//DEBUG
-	if (isExtruder && stepInterval < 20 /*&& nextStep + stepsTillRecalc + 1 < totalSteps*/)
-	{
-		state = DMState::stepError4;
-		return false;
-	}
+		if (isExtruder && stepInterval < 20 /*&& nextStep + stepsTillRecalc + 1 < totalSteps*/)
+		{
+			state = DMState::stepError1;
+			return LogStepError();
+		}
 #endif
 
-	nextStepTime = iNextCalcStepTime - (stepsTillRecalc * stepInterval);
+		nextStepTime = iNextCalcStepTime - (stepsTillRecalc * stepInterval);
+	}
+
 	return true;
 }
 
-#if SUPPORT_CLOSED_LOOP
-
-// Get the current position relative to the start of this move, speed and acceleration. Units are microsteps and step clocks.
-// Interrupts are disabled on entry and must remain disabled.
-void DriveMovement::GetCurrentMotion(const DDA& dda, uint32_t ticksSinceStart, MotionParameters& mParams) noexcept
+// If the driver is moving, stop it and release the segments. Caller will remote it from the active list and disable interrupts before calling this.
+void DriveMovement::StopDriverFromRemote() noexcept
 {
-	const MoveSegment *ms = currentSegment;
-	if (ms == nullptr)
+	if (state != DMState::idle)
 	{
-		// Drive was not commanded to move
-		mParams.position = mParams.speed = mParams.acceleration = 0.0;
-		return;
-	}
-
-	const float timeSinceMoveStart = (float)ticksSinceStart;
-	for (;;)
-	{
-		const float segTimeRemaining = timeSoFar - timeSinceMoveStart;
-		if (segTimeRemaining >= 0.0 || ms->GetNext() == nullptr)
-		{
-			// The current move segment is still in progress, or it is the last move segment and it has only just finished
-			const float multiplier = (direction != directionReversed) ? mp.cart.effectiveStepsPerMm : -mp.cart.effectiveStepsPerMm;
-			if (ms->IsLinear())
-			{
-				const float effectiveSpeed = dda.topSpeed * multiplier;
-				mParams.position = (timeSinceMoveStart - pB) * effectiveSpeed;
-				mParams.speed = effectiveSpeed;
-				mParams.acceleration = 0.0;
-			}
-			else
-			{
-				const float effectiveAcceleration = ms->GetAcceleration() * multiplier;
-				mParams.position = 0.5 * effectiveAcceleration * (fsquare(timeSinceMoveStart - pB) - pA);
-				mParams.speed = effectiveAcceleration * (timeSinceMoveStart - pB);
-				mParams.acceleration = effectiveAcceleration;
-			}
-			return;
-		}
-		currentSegment = ms = ms->GetNext();
-		if (isExtruder)
-		{
-			(void)NewExtruderSegment();
-		}
-#if SUPPORT_DELTA_MOVEMENT
-		else if (isDelta)
-		{
-			(void)NewDeltaSegment(dda);
-		}
-#endif
-		else
-		{
-			(void)NewCartesianSegment();
-		}
+		state = DMState::idle;
+		MoveSegment *seg = nullptr;
+		std::swap(seg, const_cast<MoveSegment*&>(segments));
+		MoveSegment::ReleaseAll(seg);
 	}
 }
-
-#endif
 
 #endif	// SUPPORT_DRIVERS
 

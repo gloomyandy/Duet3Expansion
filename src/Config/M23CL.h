@@ -27,7 +27,6 @@
 #define HAS_STALL_DETECT		1
 #define SINGLE_DRIVER			1
 #define SUPPORT_SLOW_DRIVERS	0
-#define SUPPORT_DELTA_MOVEMENT	0
 #define DEDICATED_STEP_TIMER	1
 
 // The SAMC21 can sink more current than it can source, therefore we use active low signals to drive external drivers
@@ -38,6 +37,7 @@
 #define SUPPORT_TMC2160			1
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			0
+#define SUPPORT_INPUT_SHAPING	1
 #define SUPPORT_CLOSED_LOOP		1
 #define SUPPORT_BRAKE_PWM		1
 
