@@ -22,7 +22,7 @@
 #define HAS_ADDRESS_SWITCHES	0
 #define HAS_BUTTONS				0
 #define HAS_USB_SERIAL			1
-#define USE_SERIAL_DEBUG		1
+#define USE_SERIAL_DEBUG		0
 
 // Drivers configuration
 #define SUPPORT_DRIVERS			1
@@ -43,7 +43,7 @@
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			0
 #define SUPPORT_TMC2240			0
-#define SUPPORT_INPUT_SHAPING	0
+#define SUPPORT_INPUT_SHAPING	1
 
 constexpr size_t NumDrivers = 2;
 constexpr size_t MaxSmartDrivers = 2;

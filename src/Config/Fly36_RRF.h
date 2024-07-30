@@ -25,10 +25,10 @@
 #define HAS_ADDRESS_SWITCHES	0
 #define HAS_BUTTONS				0
 #define HAS_USB_SERIAL			1
-#define USE_SERIAL_DEBUG		1
+#define USE_SERIAL_DEBUG		0
 #define SUPPORT_LED_STRIPS		1
 #define SUPPORT_PIO_NEOPIXEL	1
-#define SUPPORT_INPUT_SHAPING	0
+#define SUPPORT_INPUT_SHAPING	1
 
 // Drivers configuration
 #define SUPPORT_DRIVERS			1
