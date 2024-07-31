@@ -87,14 +87,14 @@ public:
 	static uint32_t ConvertToMasterTime(uint32_t localTime) noexcept { return localTime - localTimeOffset; }
 	static uint32_t GetMasterTime() noexcept { return ConvertToMasterTime(GetTimerTicks()); }
 
-	static bool IsSynced() noexcept;
+	static bool CheckSynced() noexcept;											// check whether we have synced and received a clock sync message recently
+	static bool IsSynced() noexcept;											// check whether we have synced
 
 	static void Diagnostics(const StringRef& reply) noexcept;
 
 	static constexpr uint32_t StepClockRate = 48000000/64;						// 48MHz divided by 64
 	static constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
 	static constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
-	static constexpr uint32_t MinInterruptInterval = 6;							// about 8us. Needs to be long enough for StepTimer::ScheduleTimerInterrupt to work during DMA.
 	static constexpr uint32_t MinSyncInterval = 2000;							// maximum interval in milliseconds between sync messages for us to remain synced
 																				// increased from 1000 because of workaround we added for bad Tx time stamps on SAME70
 private:

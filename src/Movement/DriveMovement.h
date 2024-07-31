@@ -51,13 +51,8 @@ public:
 	bool CalcNextStepTime(uint32_t now) noexcept SPEED_CRITICAL;
 
 	void DebugPrint() const noexcept;
-	int32_t GetCurrentMotorPosition() const noexcept { return currentMotorPosition; }
 	void StopDriverFromRemote() noexcept;
 	int32_t GetNetStepsTaken() const noexcept;							// return the number of steps taken in the current segment
-	void SetMotorPosition(int32_t pos) noexcept;
-	bool MotionPending() const noexcept { return segments != nullptr; }
-	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
-	bool CheckingEndstops() const noexcept;								// returns true when executing a move that checks endstops or Z probe
 
 	void AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a, MovementFlags moveFlags) noexcept;
 	void SetAsExtruder(bool p_isExtruder) noexcept { isExtruder = p_isExtruder; }
@@ -105,7 +100,7 @@ private:
 	int32_t netStepsThisSegment;						// the (signed) net number of steps in the current segment
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
 	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
-	motioncalc_t q, t0, p;								// the movement parameters of the current segment
+	motioncalc_t q, t0, p, u;							// the movement parameters of the current segment, if there is one
 	MovementFlags segmentFlags;							// whether this segment checks endstops etc.
 	motioncalc_t distanceCarriedForwards;				// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
 
@@ -157,13 +152,6 @@ inline bool DriveMovement::CalcNextStepTime(uint32_t now) noexcept
 	return CalcNextStepTimeFull(now);
 }
 
-// Return true if this is an extruder executing a printing move
-// Call must disable interrupts before calling this
-inline bool DriveMovement::IsPrintingExtruderMovement() const noexcept
-{
-	return !segmentFlags.nonPrintingMove;
-}
-
 inline int32_t DriveMovement::GetAndClearMaxStepsLate() noexcept
 {
 	const int32_t ret = maxStepsLate;
@@ -187,7 +175,6 @@ inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 			timeSinceStart = seg->GetDuration();
 		}
 
-		const float u = seg->CalcU();
 		return lrintf((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart);
 	}
 #endif
@@ -213,36 +200,38 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 // Inlined because it is only called from one place
 inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept
 {
-	AtomicCriticalSectionLocker lock;			// we don't want 'segments' changing while we do this
+	AtomicCriticalSectionLocker lock;								// we don't want 'segments' changing while we do this
 	MoveSegment *seg = segments;
 	while (seg != nullptr)
 	{
 		int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
-		if (timeSinceStart < 0) break;
-		if ((uint32_t)timeSinceStart >= seg->GetDuration())
+		if (timeSinceStart < 0)
+		{
+			break;													// segment isn't due to start yet
+		}
+		if ((uint32_t)timeSinceStart >= seg->GetDuration())			// if segment should have finished by now
 		{
 			if (closedLoopControl.IsClosedLoopEnabled())
 			{
+				currentMotorPosition += netStepsThisSegment;
 				MoveSegment *oldSeg = seg;
-				segments = seg = oldSeg->GetNext();
+				segments = oldSeg->GetNext();
 				MoveSegment::Release(oldSeg);
+				seg = NewSegment(when);
 				continue;
 			}
-			else
-			{
-				timeSinceStart = seg->GetDuration();
-			}
+			timeSinceStart = seg->GetDuration();
 		}
 
-		const float u = seg->CalcU();
-		mParams.position = (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart;
+		mParams.position = (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)currentMotorPosition;
 		mParams.speed = u + seg->GetA() * timeSinceStart;
 		mParams.acceleration = seg->GetA();
 		return true;
 	}
 
 	// If we get here then no movement is taking place
-	mParams.position = mParams.speed = mParams.acceleration = 0.0;
+	mParams.position = (float)currentMotorPosition;
+	mParams.speed = mParams.acceleration = 0.0;
 	return false;
 }
 
