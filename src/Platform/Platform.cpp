@@ -1276,22 +1276,30 @@ GCodeResult Platform::DoDiagnosticTest(const CanMessageDiagnosticTest& msg, cons
 			reply.printf("Reading step timer 100 times took %.2fus", (double)((1'000'000.0f * (float)tim1)/(float)SystemCoreClock));
 		}
 
-#if !RP2040
+#if !RP2040 || USE_SPICAN
 		// Also check the correspondence between the CAN timestamp timer and the step clock
 		{
 			uint32_t startClocks, endClocks;
 			uint16_t startTimeStamp, endTimeStamp;
+# if USE_SPICAN
+			CanInterface::GetTimeStampCounters(startTimeStamp, startClocks);
+# else
 			{
 				AtomicCriticalSectionLocker lock;
 				startClocks = StepTimer::GetTimerTicks();
 				startTimeStamp = CanInterface::GetTimeStampCounter();
 			}
+# endif
 			delay(2);
+# if USE_SPICAN
+			CanInterface::GetTimeStampCounters(endTimeStamp, endClocks);
+# else
 			{
 				AtomicCriticalSectionLocker lock;
 				endClocks = StepTimer::GetTimerTicks();
 				endTimeStamp = CanInterface::GetTimeStampCounter();
 			}
+# endif
 			const uint32_t tsDiff = (((endTimeStamp - startTimeStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
 			reply.lcatf("Clock diff %" PRIu32 ", ts diff %" PRIu32, endClocks - startClocks, tsDiff);
 		}

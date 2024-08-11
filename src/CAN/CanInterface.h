@@ -36,7 +36,11 @@ namespace CanInterface
 #endif
 
 #if (!SAME70 && !RP2040) || USE_SPICAN
+#if USE_SPICAN
+	void GetTimeStampCounters(uint16_t& canTimeStamp, uint32_t& stepTimeStamp) noexcept;
+#else
 	uint16_t GetTimeStampCounter() noexcept;
+#endif
 	uint16_t GetTimeStampPeriod() noexcept;
 #endif
 

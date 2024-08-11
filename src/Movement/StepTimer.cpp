@@ -114,12 +114,15 @@ void StepTimer::Init() noexcept
 #else
 	uint32_t localTimeNow;
 	uint16_t timeStampNow;
+#if USE_SPICAN
+	CanInterface::GetTimeStampCounters(timeStampNow, localTimeNow);
+#else
 	{
 		AtomicCriticalSectionLocker lock;							// there must be no delay between calling GetTimerTicks and GetTimeStampCounter
 		timeStampNow = CanInterface::GetTimeStampCounter();
 		localTimeNow = StepTimer::GetTimerTicks();
 	}
-
+#endif
 	// The time stamp counter runs at the CAN normal bit rate, but the step clock runs at 48MHz/64. Calculate the delay to in step clocks.
 	// Datasheet suggests that on the SAMC21 only 15 bits of timestamp counter are readable, but Microchip confirmed this is a documentation error (case 00625843)
 	const uint32_t timeStampDelay = ((uint32_t)((timeStampNow - timeStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;	// timestamp counter is 16 bits

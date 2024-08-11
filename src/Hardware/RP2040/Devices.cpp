@@ -19,6 +19,7 @@
 # include <CanSpi.h>
 # include <GPIO/GpioPorts.h>
 # include "hardware/spi.h"
+# include "StepTimer.h"
 #endif
 
 // Analog input support
@@ -74,6 +75,12 @@ extern "C" int8_t DRV_SPI_TransferData(uint32_t index, uint8_t *SpiTxData, uint8
 	IoPort::WriteDigital(SPICanCsPin, 1);
 	return !(bytesTransferred == (int)spiTransferSize);
 }
+
+extern "C" uint32_t DRV_SPI_GetStepTimerTicks()
+{
+    return StepTimer::GetTimerTicks();
+}
+
 #endif
 #endif
 
