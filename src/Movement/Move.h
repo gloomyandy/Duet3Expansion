@@ -95,8 +95,8 @@ public:
 	// Function to send the status of our drivers - must be called only by the Heat task
 	void SendDriversStatus(CanMessageBuffer& buf) noexcept;
 
-	float DriveStepsPerUnit(size_t drive) const noexcept;
-	void SetDriveStepsPerUnit(size_t drive, float val) noexcept;
+	float DriveStepsPerMm(size_t drive) const noexcept;
+	void SetDriveStepsPerMm(size_t drive, float val) noexcept;
 
 #if SUPPORT_SLOW_DRIVERS
 	void SetDriverStepTiming(size_t drive, const float timings[4]) noexcept;
@@ -146,7 +146,7 @@ public:
 	// Movement error handling
 	void LogStepError(uint8_t type) noexcept;										// stop all movement because of a step error
 
-	int32_t GetLastMoveStepsTaken(size_t drive) const noexcept { return lastMoveStepsTaken[drive]; }
+	int32_t GetLastMoveStepsTaken(size_t drive) const noexcept;						// get the number of steps taken by the last move, if it was an isolated move
 
 	[[noreturn]] void TaskLoop() noexcept;
 
@@ -325,7 +325,6 @@ private:
 	StepTimer timer;
 #endif
 
-	int32_t lastMoveStepsTaken[NumDrivers];							// how many steps were taken in the last move we did, used for reverting
 	unsigned int numHiccups = 0;									// The number of hiccups inserted
 
 #if SUPPORT_INPUT_SHAPING
@@ -343,6 +342,11 @@ private:
 };
 
 //******************************************************************************************************
+
+inline float Move::DriveStepsPerMm(size_t drive) const noexcept
+{
+	return stepsPerMm[drive];
+}
 
 // Update the min and max extrusion pending values. These are reported by M122 to assist with debugging print quality issues.
 // Inlined because this is only called from one place.

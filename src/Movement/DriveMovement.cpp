@@ -23,7 +23,7 @@ void DriveMovement::Init(size_t drv) noexcept
 	state = DMState::idle;
 	stepErrorType = 0;
 	distanceCarriedForwards = 0.0;
-	currentMotorPosition = positionAtSegmentStart = 0;
+	currentMotorPosition = positionAtSegmentStart = positionAtMoveStart = 0;
 	movementAccumulator = 0;
 	extruderPrinting = false;
 	driversNormallyUsed = driversCurrentlyUsed = 0;
@@ -446,8 +446,8 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 			if (newDirection != direction)
 			{
 				directionChanged = true;
+				direction = newDirection;
 			}
-			direction = newDirection;								// note, directionChanged could have been set externally
 
 			// Re-enable all drivers for this axis
 			driversCurrentlyUsed = driversNormallyUsed;

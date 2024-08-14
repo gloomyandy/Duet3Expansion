@@ -86,7 +86,6 @@ Move::Move() noexcept
 
 	for (size_t i = 0; i < NumDrivers; ++i)
 	{
-		lastMoveStepsTaken[i] = 0;
 		stepsPerMm[i] = DefaultStepsPerMm;
 		directions[i] = true;
 	}
@@ -518,7 +517,6 @@ bool Move::AddMove(const CanMessageMovementLinearShaped& msg) noexcept
 			else
 			{
 				const float delta = (float)msg.perDrive[drive].steps;
-				lastMoveStepsTaken[drive] = delta;
 				if (delta != 0.0)
 				{
 					AddLinearSegments(drive, msg.whenToExecute, params, delta, segFlags);
@@ -531,6 +529,13 @@ bool Move::AddMove(const CanMessageMovementLinearShaped& msg) noexcept
 		}
 	}
 	return true;
+}
+
+// Get the number of steps taken by the last move, if it was an isolated move
+int32_t Move::GetLastMoveStepsTaken(size_t drive) const noexcept
+{
+	const DriveMovement& dm = dms[drive];
+	return dm.currentMotorPosition - dm.positionAtMoveStart;
 }
 
 #if SINGLE_DRIVER
@@ -563,20 +568,22 @@ void Move::StepDrivers(uint32_t now) noexcept
 			if (dms[0].driversCurrentlyUsed != 0)
 			{
 				const uint32_t lastStepPulseTime = lastStepHighTime;
-				while (now - lastStepPulseTime < GetSlowDriverStepPeriodClocks() || now - lastDirChangeTime < GetSlowDriverDirSetupClocks())
+				uint32_t rawNow;
+				do
 				{
-					now = StepTimer::GetTimerTicks();
-				}
+					rawNow = StepTimer::GetTimerTicks();
+				} while (rawNow - lastStepPulseTime < GetSlowDriverStepPeriodClocks() || rawNow - lastDirChangeTime < GetSlowDriverDirSetupClocks());
 				StepGenTc->CTRLBSET.reg = TC_CTRLBSET_CMD_RETRIGGER;
 				lastStepHighTime = StepTimer::GetTimerTicks();
 			}
-			PrepareForNextSteps( now);
+			PrepareForNextSteps(now);
 #  else
 			uint32_t lastStepPulseTime = lastStepLowTime;
-			while (now - lastStepPulseTime < GetSlowDriverStepLowClocks() || now - lastDirChangeTime < GetSlowDriverDirSetupClocks())
+			uint32_t rawNow;
+			do
 			{
-				now = StepTimer::GetTimerTicks();
-			}
+				rawNow = StepTimer::GetTimerTicks();
+			} while (rawNow - lastStepPulseTime < GetSlowDriverStepLowClocks() || rawNow - lastDirChangeTime < GetSlowDriverDirSetupClocks());
 			StepDriversHigh(dms[0].driversCurrentlyUsed);						// generate the step
 			lastStepPulseTime = StepTimer::GetTimerTicks();
 			PrepareForNextSteps(now);
@@ -680,6 +687,9 @@ void Move::StepDrivers(uint32_t now) noexcept
 // Prepare each DM that we generated a step for for the next step
 #if SINGLE_DRIVER
 
+#if SAMC21 || RP2040
+__attribute__((section(".time_critical")))
+#endif
 void Move::PrepareForNextSteps(uint32_t now) noexcept
 {
 	if (unlikely(dms[0].state == DMState::starting))
@@ -824,9 +834,15 @@ void Move::AddLinearSegments(size_t drive, uint32_t startTime, const PrepParams&
 #endif
 	if (dmp.state == DMState::idle)
 	{
+		dmp.positionAtMoveStart = dmp.currentMotorPosition;							// needed for homing moves, which are always isolated moves
 		if (dmp.ScheduleFirstSegment())
 		{
-#if !SINGLE_DRIVER
+			// Always set the direction when starting the first move
+			dmp.directionChanged = false;
+#if SINGLE_DRIVER
+			SetDirection(dmp.direction);
+#else
+			SetDirection(dmp.drive, dmp.direction);
 			InsertDM(&dmp);
 			if (activeDMs == &dmp)													// if this is now the first DM in the active list
 #endif
@@ -918,9 +934,7 @@ void Move::Interrupt() noexcept
 	}
 }
 
-float Move::DriveStepsPerUnit(size_t drive) const noexcept { return stepsPerMm[drive]; }
-
-void Move::SetDriveStepsPerUnit(size_t drive, float val)
+void Move::SetDriveStepsPerMm(size_t drive, float val)
 {
 	if (drive < NumDrivers)
 	{
@@ -1369,7 +1383,7 @@ GCodeResult Move::ProcessM569(const CanMessageGeneric& msg, const StringRef& rep
 		{
 			const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
 			bool bdummy;
-			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * DriveStepsPerUnit(drive));
+			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * DriveStepsPerMm(drive));
 			reply.catf(", thigh %" PRIu32 " (%.1f mm/sec)", thigh, (double)mmPerSec);
 		}
 # endif
@@ -1389,7 +1403,7 @@ GCodeResult Move::ProcessM569(const CanMessageGeneric& msg, const StringRef& rep
 		{
 			const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
 			bool bdummy;
-			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * DriveStepsPerUnit(drive));
+			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * DriveStepsPerMm(drive));
 			const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
 			const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
 			const unsigned int pwmScaleSum = pwmScale & 0xFF;
