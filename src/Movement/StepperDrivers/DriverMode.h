@@ -14,7 +14,7 @@ enum class DriverMode : unsigned int
 	randomOffTime,
 	spreadCycle,
 	stealthChop,			// includes stealthChop2
-#if SUPPORT_CLOSED_LOOP
+#if SUPPORT_TMC51xx && (SUPPORT_CLOSED_LOOP || SUPPORT_PHASE_STEPPING)
 	direct,					// field-oriented control
 #endif
 	unknown					// must be last!

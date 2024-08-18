@@ -26,7 +26,7 @@
 
 static inline Move& GetMoveInstance() noexcept { return reprap.GetMove(); }
 
-#elif defined(EXP3HC) || defined(EXP1HCL) || defined(M23CL)
+#elif defined(EXP3HC) || defined(EXP1HCL) || defined(M23CL) || defined(PITBV1_0) || defined(PITBV2_0) || defined(STRIDEMAXV2_0)
 
 static inline Move& GetMoveInstance() noexcept { return *moveInstance; }
 
@@ -795,7 +795,7 @@ bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 DriverMode TmcDriverState::GetDriverMode() const noexcept
 {
 	return
-#if TMC_TYPE == 5160
+#if (TMC_TYPE == 5160) && (SUPPORT_CLOSED_LOOP || SUPPORT_PHASE_STEPPING)
 		  ((writeRegisters[WriteGConf] & GCONF_DIRECT_MODE) != 0) ? DriverMode::direct :
 #endif
 		  ((writeRegisters[WriteGConf] & GCONF_STEALTHCHOP) != 0) ? DriverMode::stealthChop
