@@ -95,9 +95,6 @@ void Move::Init() noexcept
 {
 #if HAS_SMART_DRIVERS
 	SmartDrivers::Init();
-# if SUPPORT_CLOSED_LOOP
-	ClosedLoop::Init();						// this must be called AFTER SmartDrivers::Init()
-# endif
 	temperatureShutdownDrivers.Clear();
 	temperatureWarningDrivers.Clear();
 #endif
@@ -247,6 +244,11 @@ void Move::Init() noexcept
 	pinMode(BrakeOnPin, OUTPUT_LOW);
 	pinMode(BrakePwmPin, OUTPUT_LOW);
 #endif
+
+# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	ClosedLoop::Init();						// this must be called AFTER SmartDrivers::Init()
+	ResetPhaseStepMonitoringVariables();
+# endif
 
 	moveTask = new Task<MoveTaskStackWords>;
 	moveTask->Create(MoveLoop, "Move", this, TaskPriority::MovePriority);
@@ -449,11 +451,23 @@ void Move::LogStepError(uint8_t type) noexcept
 	stepErrorTypesLogged.SetBit(type);
 }
 
-void Move::Diagnostics(const StringRef& reply) noexcept
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+
+// Helper function to convert a time period (expressed in StepTimer::Ticks) to a frequency in Hz
+static inline uint32_t TickPeriodToFreq(StepTimer::Ticks tickPeriod) noexcept
 {
-	const float delayToReport = (float)StepTimer::GetMovementDelay() * (1000.0/(float)StepTimer::GetTickRate());
-	reply.catf("Moves scheduled %" PRIu32 ", hiccups %u (%.2fms), segs %u, step errors %u (types 0x%x), maxLate %" PRIi32 " maxPrep %" PRIu32,
-					scheduledMoves, numHiccups, (double)delayToReport, MoveSegment::NumCreated(),
+	return StepTimer::GetTickRate()/tickPeriod;
+}
+
+#endif
+
+void Move::AppendDiagnostics(const StringRef& reply) noexcept
+{
+	const float totalDelayToReport = (float)StepTimer::GetMovementDelay() * (1000.0/(float)StepTimer::GetTickRate());
+	const float ownDelayToReport = (float)StepTimer::GetOwnMovementDelay() * (1000.0/(float)StepTimer::GetTickRate());
+
+	reply.lcatf("Moves scheduled %" PRIu32 ", hiccups %u (%.2f/%.2fms), segs %u, step errors %u (types 0x%x), maxLate %" PRIi32 " maxPrep %" PRIu32,
+					scheduledMoves, numHiccups, (double)ownDelayToReport, (double)totalDelayToReport, MoveSegment::NumCreated(),
 					numStepErrors, stepErrorTypesLogged.GetRaw(), DriveMovement::GetAndClearMaxStepsLate(), maxPrepareTime);
 	numHiccups = 0;
 	maxPrepareTime = 0;
@@ -462,6 +476,12 @@ void Move::Diagnostics(const StringRef& reply) noexcept
 #if 1	//debug
 	reply.catf(", ebfmin %.2f max %.2f", (double)minExtrusionPending, (double)maxExtrusionPending);
 	minExtrusionPending = maxExtrusionPending = 0.0;
+#endif
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	reply.lcatf("Phase step loop runtime (us): min=%" PRIu32 ", max=%" PRIu32 ", frequency (Hz): min=%" PRIu32 ", max=%" PRIu32 "\n",
+			StepTimer::TicksToIntegerMicroseconds(minPSControlLoopRuntime), StepTimer::TicksToIntegerMicroseconds(maxPSControlLoopRuntime),
+			TickPeriodToFreq(maxPSControlLoopCallInterval), TickPeriodToFreq(minPSControlLoopCallInterval));
+	ResetPhaseStepMonitoringVariables();
 #endif
 }
 
@@ -511,7 +531,7 @@ bool Move::AddMove(const CanMessageMovementLinearShaped& msg) noexcept
 				const float extrusionRequested = msg.perDrive[drive].extrusion;
 				if (extrusionRequested != 0.0)
 				{
-					AddLinearSegments(drive, msg.whenToExecute, params, extrusionRequested, segFlags);
+					AddLinearSegments(drive, msg.whenToExecute, params, extrusionRequested, segFlags, msg.usePressureAdvance);
 				}
 			}
 			else
@@ -519,7 +539,7 @@ bool Move::AddMove(const CanMessageMovementLinearShaped& msg) noexcept
 				const float delta = (float)msg.perDrive[drive].steps;
 				if (delta != 0.0)
 				{
-					AddLinearSegments(drive, msg.whenToExecute, params, delta, segFlags);
+					AddLinearSegments(drive, msg.whenToExecute, params, delta, segFlags, false);
 				}
 			}
 		}
@@ -696,6 +716,12 @@ void Move::PrepareForNextSteps(uint32_t now) noexcept
 	{
 		if (dms[0].NewSegment(now) != nullptr && dms[0].state != DMState::starting)
 		{
+# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+			if (dms[0].state == DMState::phaseStepping)
+			{
+				return;
+			}
+# endif
 			dms[0].driversCurrentlyUsed = dms[0].driversNormallyUsed;	// we previously set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
 			(void)dms[0].CalcNextStepTimeFull(now);					// calculate next step time
 			dms[0].directionChanged = true;							// force the direction to be set up
@@ -717,7 +743,9 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, uint32_t now) noexcept
 		{
 			if (dm2->NewSegment(now) != nullptr && dm2->state != DMState::starting)
 			{
+# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 				dm2->driversCurrentlyUsed = dm2->driversNormallyUsed;	// we previously set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
+# endif
 				(void)dm2->CalcNextStepTimeFull(now);					// calculate next step time
 				dm2->directionChanged = true;							// force the direction to be set up
 			}
@@ -752,7 +780,11 @@ void Move::StopDrivers(uint16_t whichDrives) noexcept
 // Called with interrupts disabled.
 void Move::DeactivateDM(DriveMovement *dmToRemove) noexcept
 {
-	DriveMovement **dmp = &activeDMs;
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	DriveMovement** dmp = dmToRemove->state == DMState::phaseStepping ? &phaseStepDMs : &activeDMs;
+#else
+	DriveMovement** dmp = &activeDMs;
+#endif
 	while (*dmp != nullptr)
 	{
 		DriveMovement * const dm = *dmp;
@@ -770,7 +802,7 @@ void Move::DeactivateDM(DriveMovement *dmToRemove) noexcept
 
 // Add some linear segments to be executed by a driver, taking account of possible input shaping. This is used by linear axes and by extruders.
 // We never add a segment that starts earlier than any existing segments, but we may add segments when there are none already.
-void Move::AddLinearSegments(size_t drive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags) noexcept
+void Move::AddLinearSegments(size_t drive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags, bool usePressureAdvance) noexcept
 {
 	EnableDrive(drive);
 
@@ -791,15 +823,15 @@ void Move::AddLinearSegments(size_t drive, uint32_t startTime, const PrepParams&
 	{
 		if (params.accelClocks != 0)
 		{
-			dmp.AddSegment(startTime, params.accelClocks, accelDistance * stepsPerMm, (motioncalc_t)params.acceleration * stepsPerMm, moveFlags);
+			dmp.AddSegment(startTime, params.accelClocks, accelDistance * stepsPerMm, (motioncalc_t)params.acceleration * stepsPerMm, moveFlags, usePressureAdvance);
 		}
 		if (params.steadyClocks != 0)
 		{
-			dmp.AddSegment(steadyStartTime, params.steadyClocks, steadyDistance * stepsPerMm, (motioncalc_t)0.0, moveFlags);
+			dmp.AddSegment(steadyStartTime, params.steadyClocks, steadyDistance * stepsPerMm, (motioncalc_t)0.0, moveFlags, usePressureAdvance);
 		}
 		if (params.decelClocks != 0)
 		{
-			dmp.AddSegment(decelStartTime, params.decelClocks, decelDistance * stepsPerMm, -((motioncalc_t)params.deceleration * stepsPerMm), moveFlags);
+			dmp.AddSegment(decelStartTime, params.decelClocks, decelDistance * stepsPerMm, -((motioncalc_t)params.deceleration * stepsPerMm), moveFlags, usePressureAdvance);
 		}
 	}
 #if SUPPORT_INPUT_SHAPING
@@ -811,15 +843,15 @@ void Move::AddLinearSegments(size_t drive, uint32_t startTime, const PrepParams&
 			const uint32_t delay = axisShaper.GetImpulseDelay(index);
 			if (params.accelClocks != 0)
 			{
-				dmp.AddSegment(startTime + delay, params.accelClocks, accelDistance * factor, (motioncalc_t)params.acceleration * factor, moveFlags);
+				dmp.AddSegment(startTime + delay, params.accelClocks, accelDistance * factor, (motioncalc_t)params.acceleration * factor, moveFlags, usePressureAdvance);
 			}
 			if (params.steadyClocks != 0)
 			{
-				dmp.AddSegment(steadyStartTime + delay, params.steadyClocks, steadyDistance * factor, (motioncalc_t)0.0, moveFlags);
+				dmp.AddSegment(steadyStartTime + delay, params.steadyClocks, steadyDistance * factor, (motioncalc_t)0.0, moveFlags, usePressureAdvance);
 			}
 			if (params.decelClocks != 0)
 			{
-				dmp.AddSegment(decelStartTime + delay, params.decelClocks, decelDistance * factor, -((motioncalc_t)params.deceleration * factor), moveFlags);
+				dmp.AddSegment(decelStartTime + delay, params.decelClocks, decelDistance * factor, -((motioncalc_t)params.deceleration * factor), moveFlags, usePressureAdvance);
 			}
 		}
 	}
@@ -1161,24 +1193,6 @@ StandardDriverStatus Move::GetStandardDriverStatus(size_t driver) noexcept
 	StandardDriverStatus rslt;
 	rslt.all = 0;
 	return rslt;
-}
-
-#endif
-
-#if SUPPORT_CLOSED_LOOP
-
-bool Move::EnableIfIdle(size_t driver) noexcept
-{
-	if (driverStates[driver] == DriverStateControl::driverIdle)
-	{
-		driverStates[driver] = DriverStateControl::driverActive;
-# if HAS_SMART_DRIVERS
-		driverAtIdleCurrent[driver] = false;
-		UpdateMotorCurrent(driver);
-# endif
-	}
-
-	return driverStates[driver] == DriverStateControl::driverActive;
 }
 
 #endif
@@ -1830,7 +1844,7 @@ bool Move::SetMicrostepping(size_t driver, unsigned int microsteps, bool interpo
 
 #endif
 
-#if SUPPORT_CLOSED_LOOP
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 
 GCodeResult Move::ProcessM569Point1(const CanMessageGeneric &msg, const StringRef &reply) noexcept
 {
@@ -1894,17 +1908,58 @@ GCodeResult Move::ProcessM569Point6(const CanMessageGeneric &msg, const StringRe
 	return dms[drive].closedLoopControl.ProcessM569Point6(parser, reply);
 }
 
-void Move::ClosedLoopControlLoop() noexcept
+void Move::PhaseStepControlLoop() noexcept
 {
+	// Record the control loop call interval
+	const StepTimer::Ticks loopCallTime = StepTimer::GetTimerTicks();
+	const StepTimer::Ticks timeElapsed = loopCallTime - prevPSControlLoopCallTime;
+	prevPSControlLoopCallTime = loopCallTime;
+	if (timeElapsed < minPSControlLoopCallInterval) { minPSControlLoopCallInterval = timeElapsed; }
+	if (timeElapsed > maxPSControlLoopCallInterval) { maxPSControlLoopCallInterval = timeElapsed; }
+
+	const uint32_t now = StepTimer::ConvertLocalToMovementTime(loopCallTime);
 	for (DriveMovement& dm : dms)
 	{
-		dm.closedLoopControl.InstanceControlLoop();
+		dm.closedLoopControl.InstanceControlLoop(now, timeElapsed);
 	}
+
+	// Record how long this has taken to run
+	const StepTimer::Ticks loopRuntime = StepTimer::GetTimerTicks() - loopCallTime;
+	if (loopRuntime < minPSControlLoopRuntime) { minPSControlLoopRuntime = loopRuntime; }
+	if (loopRuntime > maxPSControlLoopRuntime) { maxPSControlLoopRuntime = loopRuntime; }
 }
 
 void Move::ClosedLoopDiagnostics(size_t driver, const StringRef& reply) noexcept
 {
 	dms[driver].closedLoopControl.InstanceDiagnostics(driver, reply);
+}
+
+bool Move::EnableIfIdle(size_t driver) noexcept
+{
+	if (driverStates[driver] == DriverStateControl::driverIdle)
+	{
+		driverStates[driver] = DriverStateControl::driverActive;
+# if HAS_SMART_DRIVERS
+		driverAtIdleCurrent[driver] = false;
+		UpdateMotorCurrent(driver);
+# endif
+	}
+
+	return driverStates[driver] == DriverStateControl::driverActive;
+}
+
+void Move::ResetPhaseStepControlLoopCallTime() noexcept
+{
+	prevPSControlLoopCallTime = StepTimer::GetTimerTicks();
+}
+
+// Helper function to reset the 'monitoring variables' as defined above
+void Move::ResetPhaseStepMonitoringVariables() noexcept
+{
+	minPSControlLoopRuntime = std::numeric_limits<StepTimer::Ticks>::max();
+	maxPSControlLoopRuntime = 1;
+	minPSControlLoopCallInterval = std::numeric_limits<StepTimer::Ticks>::max();
+	maxPSControlLoopCallInterval = 1;
 }
 
 #endif

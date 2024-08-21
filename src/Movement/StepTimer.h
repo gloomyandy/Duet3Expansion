@@ -59,6 +59,9 @@ public:
 	// Get the current tick count, adjusted for the movement delay
 	static Ticks GetMovementTimerTicks() noexcept SPEED_CRITICAL;
 
+	// Convert local time to movement time
+	static Ticks ConvertLocalToMovementTime(Ticks localTime) noexcept;
+
 	// Get the tick rate (can also access it directly as StepClockRate)
 	static uint32_t GetTickRate() noexcept { return StepClockRate; }
 
@@ -67,6 +70,12 @@ public:
 
 	// Return the current movement delay
 	static uint32_t GetMovementDelay() noexcept { return movementDelay; }
+
+	// Report the amount of movement delay that this board is responsible for
+	static uint32_t GetOwnMovementDelay() noexcept { return ownMovementDelay; }
+
+	// Check whether the movement delay has increased since we last called this. If yes, return the movement delay; else return zero.
+	static uint32_t CheckMovementDelayIncreasedNoClear() noexcept;
 
 #if DEDICATED_STEP_TIMER
 	// Schedule the dedicated step interrupt. Caller must have base priority >= NvicPriorityStep.
@@ -101,6 +110,8 @@ private:
 	static bool ScheduleTimerInterrupt(Ticks tim) SPEED_CRITICAL;				// schedule an interrupt at the specified clock count, or return true if it has passed already
 
 	static uint32_t movementDelay;												// how many timer ticks the move timer is behind the raw timer
+	static uint32_t ownMovementDelay;											// the total amount of movement delay that this board has requested
+	static bool movementDelayIncreased;											// true if we have more movement delay than the main board
 
 	StepTimer *next;
 	Ticks whenDue;
@@ -144,14 +155,29 @@ inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks(
 // Add more movement delay
 inline void StepTimer::IncreaseMovementDelay(uint32_t increase) noexcept
 {
+	AtomicCriticalSectionLocker lock;
 	movementDelay += increase;
-	//TODO consider sending a CAN clock message to update expansion boards
+	ownMovementDelay += increase;
+	movementDelayIncreased = true;
 }
 
-// Get the current tick count
+// Get the current tick count for the motion system
 inline StepTimer::Ticks StepTimer::GetMovementTimerTicks() noexcept
 {
 	return GetTimerTicks() - (movementDelay + localTimeOffset);
+}
+
+// Convert local time to movement time
+inline StepTimer::Ticks StepTimer::ConvertLocalToMovementTime(Ticks localTime) noexcept
+{
+	return localTime - (movementDelay + localTimeOffset);
+}
+
+// Check whether the movement delay has increased since we last called this. If yes, return the movement delay; else return zero.
+// We leave the movementDelayIncreased flag set until the main board acknowledges the increased movement delay.
+inline StepTimer::Ticks StepTimer::CheckMovementDelayIncreasedNoClear() noexcept
+{
+	return (movementDelayIncreased) ? movementDelay : 0;
 }
 
 #endif /* SRC_MOVEMENT_STEPTIMER_H_ */

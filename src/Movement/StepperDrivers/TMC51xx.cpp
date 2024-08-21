@@ -795,7 +795,7 @@ bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 DriverMode TmcDriverState::GetDriverMode() const noexcept
 {
 	return
-#if (TMC_TYPE == 5160) && (SUPPORT_CLOSED_LOOP || SUPPORT_PHASE_STEPPING)
+#if TMC_TYPE == 5160 && (SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP)
 		  ((writeRegisters[WriteGConf] & GCONF_DIRECT_MODE) != 0) ? DriverMode::direct :
 #endif
 		  ((writeRegisters[WriteGConf] & GCONF_STEALTHCHOP) != 0) ? DriverMode::stealthChop
@@ -1249,7 +1249,7 @@ static void SetupDMA() noexcept
 	DmacManager::DisableChannel(DmacChanTmcTx);
 # if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	DmacManager::SetSourceAddress(DmacChanTmcTx, (void*)txData);
-	DmacManager::SetDataLength(DmacChanTmcRx, 5 * MaxSmartDrivers);
+	DmacManager::SetDataLength(DmacChanTmcTx, 5 * MaxSmartDrivers);
 	DmacManager::SetDestinationAddress(DmacChanTmcRx, (void*)rxData);
 	DmacManager::SetDataLength(DmacChanTmcRx, 5 * MaxSmartDrivers);
 # endif
@@ -1472,7 +1472,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		// Set the motor phase currents before we write them
-		GetMoveInstance().ClosedLoopControlLoop();
+		GetMoveInstance().PhaseStepControlLoop();
 #endif
 
 		// Set up data to write. Driver 0 is the first in the SPI chain so we must write them in reverse order.

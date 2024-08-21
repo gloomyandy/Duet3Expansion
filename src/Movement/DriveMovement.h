@@ -37,6 +37,9 @@ enum class DMState : uint8_t
 	cartDecelNoReverse,
 	cartDecelForwardsReversing,						// linear decelerating motion, expect reversal
 	cartDecelReverse,								// linear decelerating motion, reversed
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	phaseStepping,
+#endif
 };
 
 // This class describes a single movement of one drive
@@ -54,8 +57,7 @@ public:
 	void StopDriverFromRemote() noexcept;
 	int32_t GetNetStepsTaken() const noexcept;							// return the number of steps taken in the current segment
 
-	void AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a, MovementFlags moveFlags) noexcept;
-	void SetAsExtruder(bool p_isExtruder) noexcept { isExtruder = p_isExtruder; }
+	void AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a, MovementFlags moveFlags, bool usePressureAdvance) noexcept;
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
@@ -92,7 +94,7 @@ private:
 	uint8_t drive;										// the drive that this DM controls
 	uint8_t direction : 1,								// true=forwards, false=backwards
 			directionChanged : 1,						// set by CalcNextStepTime if the direction is changed
-			isExtruder : 1,								// true if this DM is for an extruder (only matters if !isDelta)
+							: 1,						// spare for alignment
 			stepErrorType : 3,							// records what type of step error we had
 			stepsTakenThisSegment : 2;					// how many steps we have taken this phase, counts from 0 to 2. Last field in the byte so that we can increment it efficiently.
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
@@ -197,14 +199,16 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 
 #endif
 
-#if SUPPORT_CLOSED_LOOP
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 
 // Get the current position relative to the start of this segment, speed and acceleration. Units are microsteps and step clocks.
-// Return true if this drive is moving. Segments are advanced as necessary if we are in closed loop mode.
+// Return true if this drive is moving or should have moved since the last call. Segments are advanced as necessary if we are in closed loop mode.
 // Inlined because it is only called from one place
 inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept
 {
+	bool hasMotion = false;
 	AtomicCriticalSectionLocker lock;								// we don't want 'segments' changing while we do this
+
 	MoveSegment *seg = segments;
 	while (seg != nullptr)
 	{
@@ -213,30 +217,43 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 		{
 			break;													// segment isn't due to start yet
 		}
+
 		if ((uint32_t)timeSinceStart >= seg->GetDuration())			// if segment should have finished by now
 		{
 			if (closedLoopControl.IsClosedLoopEnabled())
 			{
-				currentMotorPosition += netStepsThisSegment;
+				currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
+				distanceCarriedForwards += seg->GetLength() - (motioncalc_t)netStepsThisSegment;
+				movementAccumulator += netStepsThisSegment;		// update the amount of extrusion
 				MoveSegment *oldSeg = seg;
 				segments = oldSeg->GetNext();
 				MoveSegment::Release(oldSeg);
 				seg = NewSegment(when);
+				hasMotion = true;
 				continue;
 			}
 			timeSinceStart = seg->GetDuration();
 		}
+		else if (state == DMState::starting && closedLoopControl.IsClosedLoopEnabled())
+		{
+			seg = NewSegment(when);
+		}
 
-		mParams.position = (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)currentMotorPosition;
-		mParams.speed = u + seg->GetA() * timeSinceStart;
-		mParams.acceleration = seg->GetA();
+		if (state != DMState::phaseStepping)
+		{
+			break;
+		}
+		mParams.position = (float)((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
+		currentMotorPosition = (int32_t)mParams.position;		// store the approximate position for OM updates
+		mParams.speed = (float)(u + seg->GetA() * timeSinceStart);
+		mParams.acceleration = (float)seg->GetA();
 		return true;
 	}
 
 	// If we get here then no movement is taking place
-	mParams.position = (float)currentMotorPosition;
+	mParams.position = (float)((motioncalc_t)currentMotorPosition + distanceCarriedForwards);
 	mParams.speed = mParams.acceleration = 0.0;
-	return false;
+	return hasMotion;
 }
 
 #endif	// SUPPORT_CLOSED_LOOP

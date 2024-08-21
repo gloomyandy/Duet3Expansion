@@ -31,7 +31,6 @@ void DriveMovement::Init(size_t drv) noexcept
 	nextDM = nullptr;
 #endif
 	segments = nullptr;
-	isExtruder = false;
 	segmentFlags.Init();
 #if SUPPORT_CLOSED_LOOP
 	closedLoopControl.InitInstance();
@@ -64,14 +63,15 @@ uint32_t maxCriticalElapsedTime = 0;
 
 // Add a segment into the list. If the list is not empty then the new segment may overlap segments already in the list but will never start earlier than the first existing one.
 // The units of the input parameters are steps for distance and step clocks for time.
-void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a, MovementFlags moveFlags) noexcept
+void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a, MovementFlags moveFlags, bool usePressureAdvance) noexcept
 {
 	if ((int32_t)duration <= 0)
 	{
 		debugPrintf("Adding zero duration segment: d=%3e a=%.3e\n", (double)distance, (double)a);
 	}
+
 	// Adjust the distance (and implicitly the initial speed) to account for pressure advance
-	if (isExtruder && !moveFlags.nonPrintingMove)
+	if (usePressureAdvance)
 	{
 		distance += a * (motioncalc_t)extruderShaper.GetKclocks() * (motioncalc_t)duration;
 	}
@@ -298,6 +298,12 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 		{
 			return true;
 		}
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		if (state == DMState::phaseStepping)
+		{
+			return false;
+		}
+#endif
 		return CalcNextStepTimeFull(now);
 	}
 	return false;
@@ -341,17 +347,25 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 
 		// Calculate the movement parameters
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
+
+		const bool isLinear = seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0);
+
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		if (closedLoopControl.IsClosedLoopEnabled())
+		{
+			u = isLinear ? seg->CalcLinearU() : -seg->GetA() * t0;
+			state = DMState::phaseStepping;
+			return seg;
+		}
+#endif
+
 		bool newDirection;
 		int32_t multiplier;
 		motioncalc_t rawP;
 
-		// If netStepsThisSegment is zero then either this segment plus the distance carried forwards is less than one step, or it's a forwards-then-back move
-		if (seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0))
+		if (isLinear)
 		{
 			// Segment is linear
-#if SUPPORT_CLOSED_LOOP
-			u = seg->CalcLinearU();								// needed by GetCurrentMotion so pre-calculate it
-#endif
 			rawP = seg->CalcLinearRecipU();
 			newDirection = !std::signbit(seg->GetLength());
 			multiplier = 2 * (int32_t)newDirection - 1;			// +1 or -1
@@ -366,9 +380,6 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 			// Therefore 0.5 * t^2 + u * t/a + (distanceCarriedForwards - n)/a = 0
 			// Therefore t = -u/a +/- sqrt((u/a)^2 - 2 * (distanceCarriedForwards - n)/a)
 			// Calculate the t0, p and q coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q) and set up the initial direction
-#if SUPPORT_CLOSED_LOOP
-			u = -seg->GetA() * t0;								// needed by GetCurrentMotion so pre-calculate it
-#endif
 			newDirection = !std::signbit(seg->GetA());			// assume accelerating motion
 			multiplier = 2 * (int32_t)newDirection - 1;			// +1 or -1
 			if (t0 <= (motioncalc_t)0.0)
@@ -453,17 +464,14 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 			driversCurrentlyUsed = driversNormallyUsed;
 
 			// Update variables used by filament monitoring
-			if (isExtruder)
+			if (segmentFlags.nonPrintingMove)
 			{
-				if (segmentFlags.nonPrintingMove)
-				{
-					extruderPrinting = false;
-				}
-				else if (!extruderPrinting)
-				{
-					extruderPrintingSince = millis();
-					extruderPrinting = true;
-				}
+				extruderPrinting = false;
+			}
+			else if (!extruderPrinting)
+			{
+				extruderPrintingSince = millis();
+				extruderPrinting = true;
 			}
 
 #if 0	//DEBUG
@@ -553,10 +561,8 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 			{
 				return LogStepError(6);
 			}
-			if (isExtruder)
-			{
-				movementAccumulator += netStepsThisSegment;			// update the amount of extrusion for filament monitors
-			}
+
+			movementAccumulator += netStepsThisSegment;				// update the amount of extrusion for filament monitors
 			segments = currentSegment->GetNext();
 			const uint32_t prevEndTime = currentSegment->GetStartTime() + currentSegment->GetDuration();
 			MoveSegment::Release(currentSegment);

@@ -61,7 +61,7 @@ public:
 #endif
 
 	StandardDriverStatus GetDriverStatus(size_t driver, bool accumulated, bool clearAccumulated) const noexcept;
-	void Diagnostics(const StringRef& reply) noexcept;								// Report useful stuff
+	void AppendDiagnostics(const StringRef& reply) noexcept;						// Report useful stuff
 
 	void SetDirectionValue(size_t driver, bool dVal);
 	bool GetDirectionValue(size_t driver) const noexcept;
@@ -133,7 +133,7 @@ public:
 
 	// Input shaping support
 	GCodeResult HandleInputShaping(const CanMessageSetInputShapingNew& msg, size_t dataLength, const StringRef& reply) noexcept;
-	void AddLinearSegments(size_t logicalDrive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags) noexcept;
+	void AddLinearSegments(size_t logicalDrive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags, bool usePressureAdvance) noexcept;
 
 	// Pressure advance
 	ExtruderShaper& GetExtruderShaper(size_t drive) noexcept { return dms[drive].extruderShaper; }
@@ -162,8 +162,10 @@ public:
 	void SetCurrentMotorSteps(size_t driver, float fullSteps) noexcept;
 	void InvertCurrentMotorSteps(size_t driver) noexcept;
 
-	void ClosedLoopControlLoop() noexcept;
+	void PhaseStepControlLoop() noexcept;
 	void ClosedLoopDiagnostics(size_t driver, const StringRef& reply) noexcept;
+	void ResetPhaseStepMonitoringVariables() noexcept;
+	void ResetPhaseStepControlLoopCallTime() noexcept;
 #endif
 
 private:
@@ -262,7 +264,19 @@ private:
 	void DeactivateDM(DriveMovement *dmToRemove) noexcept;							// remove a DM from the active list
 
 	DriveMovement *activeDMs = nullptr;
+# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	DriveMovement *phaseStepDMs = nullptr;
+# endif
 	uint32_t allDriverBits = 0;
+#endif
+
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	// These variables monitor how fast the PID loop is running etc.
+	StepTimer::Ticks prevPSControlLoopCallTime;			// The last time the control loop was called
+	StepTimer::Ticks minPSControlLoopRuntime;			// The minimum time the control loop has taken to run
+	StepTimer::Ticks maxPSControlLoopRuntime;			// The maximum time the control loop has taken to run
+	StepTimer::Ticks minPSControlLoopCallInterval;		// The minimum interval between the control loop being called
+	StepTimer::Ticks maxPSControlLoopCallInterval;		// The maximum interval between the control loop being called
 #endif
 
 #if SUPPORT_SLOW_DRIVERS
@@ -508,7 +522,11 @@ inline void Move::SetDirection(size_t driver, bool direction) noexcept
 // Base priority must be >= NvicPriorityStep when calling this, unless we are simulating.
 inline void Move::InsertDM(DriveMovement *dm) noexcept
 {
+# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	DriveMovement **dmp = dm->state == DMState::phaseStepping ? &phaseStepDMs : &activeDMs;
+# else
 	DriveMovement **dmp = &activeDMs;
+# endif
 	while (*dmp != nullptr && (int32_t)((*dmp)->nextStepTime - dm->nextStepTime) < 0)
 	{
 		dmp = &((*dmp)->nextDM);
