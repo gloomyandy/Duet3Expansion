@@ -316,8 +316,12 @@ namespace Platform
 	{
 		Heat::SwitchOffAll();
 #if SUPPORT_DRIVERS
-# if SUPPORT_TMC51xx || SUPPORT_TMC2160
+# if SUPPORT_TMC51xx
+#  if TMC51xx_USES_SEPARATE_ENABLE
 		SmartDrivers::TurnDriversOff();
+#  else
+		IoPort::WriteDigital(GlobalTmc51xxEnablePin, true);
+#  endif
 # endif
 # if SUPPORT_TMC22xx
 		IoPort::WriteDigital(GlobalTmc22xxEnablePin, true);

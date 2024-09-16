@@ -53,7 +53,6 @@
 #define SUPPORT_DELTA_MOVEMENT	0
 
 #define SUPPORT_TMC51xx			0
-#define SUPPORT_TMC2160			0
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			1
 #if BOARD_REV == 301
