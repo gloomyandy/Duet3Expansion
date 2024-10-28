@@ -114,6 +114,16 @@ SECTIONS
         _eCanMessage = . ;
     } > ram
 
+    /* DMA programming and write-back memory, here because they are volatile so we must't CRC them when we check for data corruption */
+    .dmaState (NOLOAD) :
+    {
+    	. = ALIGN(16);
+    	_sDmaState = . ;
+    	*(.DmaState .DmaState.*)
+    	. = ALIGN(4);
+    	_eDmaState = . ;
+    } > ram
+
     .relocate : AT (_etext)
     {
         . = ALIGN(4);
