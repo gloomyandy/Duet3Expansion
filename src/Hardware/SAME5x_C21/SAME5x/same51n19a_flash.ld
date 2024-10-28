@@ -115,13 +115,13 @@ SECTIONS
     } > ram
 
     /* DMA programming and write-back memory, here because they are volatile so we must't CRC them when we check for data corruption */
-    .dmaState (NOLOAD) :
+    .dmaBuffers (NOLOAD) :
     {
     	. = ALIGN(16);
-    	_sDmaState = . ;
-    	*(.DmaState .DmaState.*)
+    	_sDmaBuffers = . ;
+    	*(.DmaBuffers .DmaBuffers.*)
     	. = ALIGN(4);
-    	_eDmaState = . ;
+    	_eDmaBuffers = . ;
     } > ram
 
     .relocate : AT (_etext)
