@@ -45,6 +45,8 @@
 # include "PITBv2_0.h"
 #elif defined(STRIDEMAXV2_0)
 # include "StrideMaxv2_0.h"
+#elif defined(FYSETCSB2040V2)
+# include "FysetcSB2040v2.h"
 #elif defined(M23CL)
 # include "M23CL.h"
 #elif defined(SZP)
