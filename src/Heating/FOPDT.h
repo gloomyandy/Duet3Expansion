@@ -37,7 +37,7 @@ class FileStore;
 class FopDt
 {
 public:
-	FopDt();
+	FopDt() noexcept;
 
 	void Reset() noexcept;
 	bool SetParameters(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept;

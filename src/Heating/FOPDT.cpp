@@ -9,7 +9,7 @@
 #include "CanMessageFormats.h"
 
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
-FopDt::FopDt()
+FopDt::FopDt() noexcept
 {
 	Reset();
 }
@@ -106,12 +106,12 @@ M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const
 }
 
 // Override the PID parameters. We set both sets to the same parameters.
-void FopDt::SetM301PidParameters(const M301PidParameters& pp)
+void FopDt::SetM301PidParameters(const M301PidParameters& pp) noexcept
 {
 	SetRawPidParameters(pp.kP * (1.0/255.0), pp.kI/pp.kP, pp.kD/pp.kP);
 }
 
-void FopDt::SetRawPidParameters(float p_kP, float p_recipTi, float p_tD)
+void FopDt::SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcept
 {
 	loadChangeParams.kP = setpointChangeParams.kP = p_kP;
 	loadChangeParams.recipTi = setpointChangeParams.recipTi = p_recipTi;
