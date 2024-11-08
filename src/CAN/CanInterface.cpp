@@ -760,7 +760,6 @@ void CanInterface::RaiseEvent(EventType type, uint16_t param, uint8_t device, co
 	msg->eventType = type.ToBaseType();
 	msg->deviceNumber = device;
 	msg->eventParam = param;
-	msg->zero = 0;
 	SafeVsnprintf(msg->text, ARRAY_SIZE(msg->text), format, vargs);
 	buf.dataLength = msg->GetActualDataLength();
 	CanInterface::Send(&buf);
@@ -861,7 +860,6 @@ extern "C" [[noreturn]] void CanAsyncSenderLoop(void *) noexcept
 		// Set up a message ready
 		auto msg = buf.SetupStatusMessage<CanMessageInputChangedNew>(CanInterface::GetCanAddress(), currentMasterAddress);
 		msg->states = 0;
-		msg->zero = 0;
 		msg->numHandles = 0;
 
 		const uint32_t timeToWait = InputMonitor::AddStateChanges(msg);

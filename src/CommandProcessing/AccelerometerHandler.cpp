@@ -156,7 +156,6 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 							msg.actualSampleRate = dataRate;
 							msg.overflowed = overflowed;
 							msg.lastPacket = (samplesWanted == 0);
-							msg.zero = 0;
 
 							buf.dataLength = msg.GetActualDataLength();
 							CanInterface::Send(&buf);

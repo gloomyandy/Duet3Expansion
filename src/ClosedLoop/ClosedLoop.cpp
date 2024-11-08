@@ -835,7 +835,6 @@ void ClosedLoop::InstanceControlLoop(StepTimer::Ticks now, StepTimer::Ticks time
 				// Populate the control fields
 				msg.firstSampleNumber = samplesSent;
 				msg.filter = filterRequested;
-				msg.zero = msg.zero2 = 0;
 
 				unsigned int numSamplesInMessage = 0;
 				size_t dataIndex = 0;

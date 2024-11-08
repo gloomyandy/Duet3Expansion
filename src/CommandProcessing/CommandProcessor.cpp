@@ -662,7 +662,7 @@ void CommandProcessor::Spin()
 			break;
 
 		case CanMessageType::heaterFeedForwardNew:
-			requestId = buf->msg.heaterFeedForwardNew.requestId;
+			requestId = CanRequestIdNoReplyNeeded;
 			rslt = Heat::FeedForward(buf->msg.heaterFeedForwardNew, replyRef);
 			break;
 
