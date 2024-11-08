@@ -405,7 +405,7 @@ static FirmwareFlashErrorCode GetBlock(uint32_t startingOffset, uint32_t& fileSi
 // Request a block of the bootloader, returning true if successful
 static FirmwareFlashErrorCode RequestBootloaderBlock(uint32_t fileOffset, uint32_t numBytes, CanMessageBuffer& buf)
 {
-	CanMessageFirmwareUpdateRequest * const msg = buf.SetupRequestMessage<CanMessageFirmwareUpdateRequest>(0, CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+	CanMessageFirmwareUpdateRequest * const msg = buf.SetupRequestMessageNoRid<CanMessageFirmwareUpdateRequest>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 	SafeStrncpy(msg->boardType, BOOTLOADER_NAME, sizeof(msg->boardType));
 	msg->boardVersion = 0;
 	msg->bootloaderVersion = CanMessageFirmwareUpdateRequest::BootloaderVersion0;

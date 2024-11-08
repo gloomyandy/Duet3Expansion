@@ -63,7 +63,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 		{
 			// Collect and send the samples
 			CanMessageBuffer buf;
-			CanMessageAccelerometerData& msg = *(buf.SetupStatusMessage<CanMessageAccelerometerData>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress()));
+			CanMessageAccelerometerData& msg = *(buf.SetupRequestMessageNoRid<CanMessageAccelerometerData>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress()));
 			const unsigned int MaxSamplesInBuffer = msg.SetAxesAndResolution(axesRequested, resolution);
 
 			unsigned int samplesSent = 0;

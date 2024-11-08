@@ -2039,7 +2039,7 @@ StandardDriverStatus Move::GetDriverStatus(size_t driver, bool accumulated, bool
 // Function to broadcast the drivers status message. Called only by the Heat task.
 void Move::SendDriversStatus(CanMessageBuffer& buf) noexcept
 {
-	CanMessageDriversStatus * const msg = buf.SetupStatusMessage<CanMessageDriversStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+	CanMessageDriversStatus * const msg = buf.SetupRequestMessageNoRid<CanMessageDriversStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 # if SUPPORT_CLOSED_LOOP
 	msg->SetStandardFields(NumDrivers, true);
 	for (size_t driver = 0; driver < NumDrivers; ++driver)

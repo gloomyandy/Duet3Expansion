@@ -830,7 +830,7 @@ void ClosedLoop::InstanceControlLoop(StepTimer::Ticks now, StepTimer::Ticks time
 			{
 				// Set up a CAN message
 				CanMessageBuffer buf;
-				CanMessageClosedLoopData& msg = *(buf.SetupStatusMessage<CanMessageClosedLoopData>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress()));
+				CanMessageClosedLoopData& msg = *(buf.SetupRequestMessageNoRid<CanMessageClosedLoopData>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress()));
 
 				// Populate the control fields
 				msg.firstSampleNumber = samplesSent;
