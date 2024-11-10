@@ -317,7 +317,7 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 static void RequestFirmwareBlock(uint32_t fileOffset, uint32_t numBytes, CanMessageBuffer& buf)
 {
 	//debugPrintf("Request block %d\n", fileOffset);
-	CanMessageFirmwareUpdateRequest * const msg = buf.SetupRequestMessage<CanMessageFirmwareUpdateRequest>(0, CanInterface::GetCanAddress(), CanId::MasterAddress);
+	CanMessageFirmwareUpdateRequest * const msg = buf.SetupRequestMessageNoRid<CanMessageFirmwareUpdateRequest>(CanInterface::GetCanAddress(), CanId::MasterAddress);
 	SafeStrncpy(msg->boardType, BOARD_TYPE_NAME, sizeof(msg->boardType));
 	msg->boardVersion = 0;
 	msg->bootloaderVersion = CanMessageFirmwareUpdateRequest::BootloaderVersion0;
