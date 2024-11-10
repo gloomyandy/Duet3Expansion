@@ -534,7 +534,7 @@ CanMessageBuffer *CanInterface::ProcessReceivedMessage(CanMessageBuffer *buf) no
 				const uint32_t clocksAllowed = buf->msg.revertPosition.clocksAllowed;
 
 				// Now we can re-use the buffer to build a regular movement message
-				auto msg = buf->SetupRequestMessage<CanMessageMovementLinearShaped>(0, GetCurrentMasterAddress(), GetCanAddress());
+				auto msg = buf->SetupRequestMessageNoRid<CanMessageMovementLinearShaped>(GetCurrentMasterAddress(), GetCanAddress());
 				for (size_t driver = 0; driver < NumDrivers; ++driver)
 				{
 					msg->perDrive[driver].steps = stepsToTake[driver];
@@ -659,7 +659,7 @@ bool CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
 		return false;
 	}
 
-	auto msg = buf->SetupStatusMessage<CanMessageAnnounceNew>(boardAddress, currentMasterAddress);
+	auto msg = buf->SetupRequestMessageNoRid<CanMessageAnnounceNew>(boardAddress, currentMasterAddress);
 	msg->timeSinceStarted = millis();
 	msg->numDrivers = NumDrivers;
 	msg->usesUf2Binary = BOARD_USES_UF2_BINARY;
@@ -768,11 +768,10 @@ uint16_t CanInterface::GetTimeStampPeriod() noexcept
 void CanInterface::RaiseEvent(EventType type, uint16_t param, uint8_t device, const char *format, va_list vargs) noexcept
 {
 	CanMessageBuffer buf;
-	auto msg = buf.SetupStatusMessage<CanMessageEvent>(GetCanAddress(), GetCurrentMasterAddress());
+	auto msg = buf.SetupRequestMessageNoRid<CanMessageEvent>(GetCanAddress(), GetCurrentMasterAddress());
 	msg->eventType = type.ToBaseType();
 	msg->deviceNumber = device;
 	msg->eventParam = param;
-	msg->zero = 0;
 	SafeVsnprintf(msg->text, ARRAY_SIZE(msg->text), format, vargs);
 	buf.dataLength = msg->GetActualDataLength();
 	CanInterface::Send(&buf);
@@ -871,9 +870,8 @@ extern "C" [[noreturn]] void CanAsyncSenderLoop(void *) noexcept
 	for (;;)
 	{
 		// Set up a message ready
-		auto msg = buf.SetupStatusMessage<CanMessageInputChangedNew>(CanInterface::GetCanAddress(), currentMasterAddress);
+		auto msg = buf.SetupRequestMessageNoRid<CanMessageInputChangedNew>(CanInterface::GetCanAddress(), currentMasterAddress);
 		msg->states = 0;
-		msg->zero = 0;
 		msg->numHandles = 0;
 
 		const uint32_t timeToWait = InputMonitor::AddStateChanges(msg);
@@ -888,7 +886,7 @@ extern "C" [[noreturn]] void CanAsyncSenderLoop(void *) noexcept
 		size_t numChars;
 		while (!debugBufferBeingWritten && (numChars = debugBuffer.ItemsPresent()) != 0)
 		{
-			auto debugMsg = buf.SetupStatusMessage<CanMessageDebugText>(CanInterface::GetCanAddress(), currentMasterAddress);
+			auto debugMsg = buf.SetupRequestMessageNoRid<CanMessageDebugText>(CanInterface::GetCanAddress(), currentMasterAddress);
 			size_t numToSend = min<size_t>(numChars, ARRAY_SIZE(debugMsg->text));
 			debugBuffer.GetBlock(debugMsg->text, numToSend);
 			if (debugMsg->text[numToSend - 1] == '\n')

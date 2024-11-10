@@ -42,7 +42,7 @@ static bool tuningCycleComplete;
 
 // Member functions and constructors
 
-LocalHeater::LocalHeater(unsigned int heaterNum) : Heater(heaterNum), mode(HeaterMode::off)
+LocalHeater::LocalHeater(unsigned int heaterNum) noexcept : Heater(heaterNum), mode(HeaterMode::off)
 {
 	LocalHeater::ResetHeater();
 	SetHeater(0.0);							// set up the pin even if the heater is not enabled (for PCCB)
@@ -61,17 +61,17 @@ LocalHeater::~LocalHeater()
 	}
 }
 
-float LocalHeater::GetTemperature() const
+float LocalHeater::GetTemperature() const noexcept
 {
 	return temperature;
 }
 
-float LocalHeater::GetAccumulator() const
+float LocalHeater::GetAccumulator() const noexcept
 {
 	return iAccumulator;
 }
 
-void LocalHeater::SetHeater(float power) const
+void LocalHeater::SetHeater(float power) const noexcept
 {
 	for (auto& port : ports)
 	{
@@ -79,8 +79,10 @@ void LocalHeater::SetHeater(float power) const
 	}
 }
 
-void LocalHeater::ResetHeater()
+void LocalHeater::ResetHeater() noexcept
 {
+	Heater::ResetHeater();
+	lastExtrusionTemperatureBoost = 0.0;
 	mode = HeaterMode::off;
 	previousTemperaturesGood = 0;
 	previousTemperatureIndex = 0;
@@ -92,7 +94,7 @@ void LocalHeater::ResetHeater()
 }
 
 // Configure the heater port and the sensor number
-GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply)
+GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) noexcept
 {
 	if constexpr (MaxPortsPerHeater == 1)
 	{
@@ -136,7 +138,7 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 	return GCodeResult::ok;
 }
 
-GCodeResult LocalHeater::SetPwmFrequency(PwmFrequency freq, const StringRef& reply)
+GCodeResult LocalHeater::SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept
 {
 	for (auto& port : ports)
 	{
@@ -145,7 +147,7 @@ GCodeResult LocalHeater::SetPwmFrequency(PwmFrequency freq, const StringRef& rep
 	return GCodeResult::ok;
 }
 
-GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const
+GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const noexcept
 {
 	reply.printf("Heater %u pin(s) ", GetHeaterNumber());
 	ports[0].AppendPinName(reply);
@@ -172,7 +174,7 @@ GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const
 }
 
 // Read and store the temperature of this heater and returns the error code.
-TemperatureError LocalHeater::ReadTemperature()
+TemperatureError LocalHeater::ReadTemperature() noexcept
 {
 	TemperatureError err(TemperatureError::unknownError);
 	temperature = Heat::GetSensorTemperature(GetSensorNumber(), err);		// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
@@ -194,7 +196,7 @@ GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 		return GCodeResult::error;
 	}
 
-	const float target = GetTargetTemperature();
+	const float target = min<float>(GetTargetTemperature() + extrusionTemperatureBoost, GetHighestTemperatureLimit());
 	const HeaterMode newMode = (temperature + TemperatureCloseEnough < target) ? HeaterMode::heating
 					: (temperature > target + TemperatureCloseEnough) ? HeaterMode::cooling
 						: HeaterMode::stable;
@@ -214,7 +216,7 @@ GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 }
 
 // Switch off the specified heater. If in tuning mode, delete the array used to store tuning temperature readings.
-void LocalHeater::SwitchOff()
+void LocalHeater::SwitchOff() noexcept
 {
 	lastPwm = 0.0;
 	if (GetModel().IsEnabled())
@@ -225,16 +227,18 @@ void LocalHeater::SwitchOff()
 			mode = HeaterMode::off;
 		}
 	}
+	Heater::SwitchOff();
+	lastExtrusionTemperatureBoost = 0.0;
 }
 
 // This is called when the heater model has been updated. Returns true if successful.
-GCodeResult LocalHeater::UpdateModel(const StringRef& reply)
+GCodeResult LocalHeater::UpdateModel(const StringRef& reply) noexcept
 {
 	return GCodeResult::ok;
 }
 
 // This is the main heater control loop function
-void LocalHeater::Spin()
+void LocalHeater::Spin() noexcept
 {
 	// Read the temperature even if the heater is suspended or the model is not enabled
 	const TemperatureError err = ReadTemperature();
@@ -278,8 +282,16 @@ void LocalHeater::Spin()
 		if (GetModel().IsEnabled())
 		{
 			// Get the target temperature and the error
-			const float targetTemperature = GetTargetTemperature();
+			const float targetTemperature = min<float>(GetTargetTemperature() + extrusionTemperatureBoost, GetHighestTemperatureLimit());
 			const float error = targetTemperature - temperature;
+
+			if (extrusionTemperatureBoost != 0.0 || lastExtrusionTemperatureBoost != extrusionTemperatureBoost)
+			{
+				// Calculate new heater mode to prevent heater fault due to exceededAllowedExcursion
+				String<1> dummy;
+				(void)SwitchOn(dummy.GetRef());
+			}
+			lastExtrusionTemperatureBoost = extrusionTemperatureBoost;
 
 			// Do the heating checks
 			switch(mode)
@@ -479,7 +491,7 @@ void LocalHeater::Spin()
 	}
 }
 
-void LocalHeater::ResetFault()
+void LocalHeater::ResetFault() noexcept
 {
 	badTemperatureCount = 0;
 	if (mode == HeaterMode::fault)
@@ -489,13 +501,13 @@ void LocalHeater::ResetFault()
 	}
 }
 
-float LocalHeater::GetAveragePWM() const
+float LocalHeater::GetAveragePWM() const noexcept
 {
 	return averagePWM;
 }
 
 // Get a conservative estimate of the expected heating rate at the current temperature and average PWM. The result may be negative.
-float LocalHeater::GetExpectedHeatingRate() const
+float LocalHeater::GetExpectedHeatingRate() const noexcept
 {
 	const float temperatureRise = max<float>(temperature - LowAmbientTemperature, 0.0);
 	const float pwm = min<float>(GetAveragePWM(), lastPwm);
@@ -503,7 +515,7 @@ float LocalHeater::GetExpectedHeatingRate() const
 }
 
 // Start or stop running heater tuning cycles
-GCodeResult LocalHeater::TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply)
+GCodeResult LocalHeater::TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept
 {
 	if (msg.on)
 	{
@@ -531,20 +543,28 @@ GCodeResult LocalHeater::TuningCommand(const CanMessageHeaterTuningCommand& msg,
 }
 
 // Adjust heater power for fan PWM or extrusion change
-GCodeResult LocalHeater::FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept
+GCodeResult LocalHeater::ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept
 {
 	if (mode == HeaterMode::stable)
 	{
-		const float boost = GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, fanPwmChange) * FanFeedForwardMultiplier;
-		TaskCriticalSectionLocker lock;
-		iAccumulator += boost;
+		float pwmBoost = msg.extrusionPwmBoost - lastExtrusionPwmBoost;
+		lastExtrusionPwmBoost = msg.extrusionPwmBoost;
+		if (msg.fanPwmFraction != lastFanPwm)
+		{
+			const float pwmChange = msg.fanPwmFraction - lastFanPwm;
+			lastFanPwm = msg.fanPwmFraction;
+			pwmBoost += GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, pwmChange) * FanFeedForwardMultiplier;
+		}
+		InterruptCriticalSectionLocker lock;
+		iAccumulator += pwmBoost;
 	}
+	extrusionTemperatureBoost = msg.extrusionTemperatureBoost;
 	return GCodeResult::ok;
 }
 
 // This is called on each temperature sample when auto tuning
 // It must set lastPWM to the required PWM, unless it is the same as last time.
-void LocalHeater::DoTuningStep()
+void LocalHeater::DoTuningStep() noexcept
 {
 	const uint32_t now = millis();
 	switch (mode)
@@ -634,7 +654,7 @@ void LocalHeater::DoTuningStep()
 }
 
 // Suspend the heater, or resume it
-void LocalHeater::Suspend(bool sus)
+void LocalHeater::Suspend(bool sus) noexcept
 {
 	if (sus)
 	{
@@ -653,7 +673,7 @@ void LocalHeater::Suspend(bool sus)
 }
 
 // Get a heater tuning cycle report, if we have one. Caller must fill in the heater number.
-/*static*/ bool LocalHeater::GetTuningCycleData(CanMessageHeaterTuningReport& msg)
+/*static*/ bool LocalHeater::GetTuningCycleData(CanMessageHeaterTuningReport& msg) noexcept
 {
 	if (tuningCycleComplete)
 	{

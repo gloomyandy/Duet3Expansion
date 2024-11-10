@@ -7,6 +7,7 @@
 
 #include "Heater.h"
 #include <Platform/Platform.h>
+#include <CanMessageFormats.h>
 #include "Heat.h"
 #include "Sensors/TemperatureSensor.h"
 
@@ -15,10 +16,24 @@ Heater::Heater(unsigned int num)
 	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime), maxBadTemperatureCount(DefaultMaxBadTemperatureCount),
 	  isBedOrChamber(false)
 {
+	Heater::ResetHeater();
 }
 
 Heater::~Heater()
 {
+}
+
+void Heater::ResetHeater() noexcept
+{
+	lastExtrusionPwmBoost = 0.0;
+	extrusionTemperatureBoost = 0.0;
+	lastFanPwm = 0.0;
+}
+
+void Heater::SwitchOff() noexcept
+{
+	lastExtrusionPwmBoost = 0.0;
+	extrusionTemperatureBoost = 0.0;
 }
 
 GCodeResult Heater::SetFaultDetectionParameters(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply)
@@ -39,6 +54,23 @@ GCodeResult Heater::SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, co
 		monitors[i].Set(msg.monitors[i].sensor, msg.monitors[i].limit, (HeaterMonitorAction)msg.monitors[i].action, (HeaterMonitorTrigger)msg.monitors[i].trigger);
 	}
 	return GCodeResult::ok;
+}
+
+float Heater::GetHighestTemperatureLimit() const noexcept
+{
+	float limit = BadErrorTemperature;
+	for (const HeaterMonitor& prot : monitors)
+	{
+		if (prot.GetTrigger() == HeaterMonitorTrigger::TemperatureExceeded)
+		{
+			const float t = prot.GetTemperatureLimit();
+			if (limit == BadErrorTemperature || t > limit)
+			{
+				limit = t;
+			}
+		}
+	}
+	return limit;
 }
 
 GCodeResult Heater::SetModel(unsigned int heater, const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept

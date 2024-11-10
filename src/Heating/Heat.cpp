@@ -80,13 +80,13 @@ namespace Heat
 	static uint8_t newDriverFaultState = 0;
 	static uint8_t newHeaterFaultState = 0;
 
-	static ReadLockedPointer<Heater> FindHeater(int heater)
+	static ReadLockedPointer<Heater> FindHeater(int heater) noexcept
 	{
 		return ReadLockedPointer<Heater>(heatersLock, (heater < 0 || heater >= (int)MaxHeaters) ? nullptr : heaters[heater]);
 	}
 
 	// Delete a sensor, if there is one. Must write-lock the sensors lock before calling this.
-	static void DeleteSensor(unsigned int sn)
+	static void DeleteSensor(unsigned int sn) noexcept
 	{
 		TemperatureSensor *currentSensor = sensorsRoot;
 		TemperatureSensor *lastSensor = nullptr;
@@ -115,7 +115,7 @@ namespace Heat
 	}
 
 	// Insert a sensor. Must write-lock the sensors lock before calling this.
-	static void InsertSensor(TemperatureSensor *newSensor)
+	static void InsertSensor(TemperatureSensor *newSensor) noexcept
 	{
 		TemperatureSensor *prev = nullptr;
 		TemperatureSensor *ts = sensorsRoot;
@@ -146,9 +146,9 @@ namespace Heat
 	}
 
 	// Broadcast our heater statuses
-	static void SendHeatersStatus(CanMessageBuffer& buf)
+	static void SendHeatersStatus(CanMessageBuffer& buf) noexcept
 	{
-		CanMessageHeatersStatus * const msg = buf.SetupStatusMessage<CanMessageHeatersStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+		CanMessageHeatersStatus * const msg = buf.SetupRequestMessageNoRid<CanMessageHeatersStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 		msg->whichHeaters = 0;
 		unsigned int heatersFound = 0;
 
@@ -178,13 +178,13 @@ namespace Heat
 }
 
 // Is the heater enabled?
-bool Heat::IsHeaterEnabled(size_t heater)
+bool Heat::IsHeaterEnabled(size_t heater) noexcept
 {
 	const auto h = FindHeater(heater);
 	return h.IsNotNull() && h->IsHeaterEnabled();
 }
 
-void Heat::Init()
+void Heat::Init() noexcept
 {
 	coldExtrude = false;
 	heaterBeingTuned = -1;
@@ -205,7 +205,7 @@ void Heat::Init()
 	heaterTask->Create(Heat::TaskLoop, "HEAT", nullptr, TaskPriority::HeatPriority);
 }
 
-void Heat::Exit()
+void Heat::Exit() noexcept
 {
 	for (Heater *h : heaters)
 	{
@@ -224,7 +224,7 @@ void Heat::Exit()
 // - Broadcast the status of our heaters
 // - Broadcast the status of our fans
 // - Broadcast the status of our motor drivers
-[[noreturn]] void Heat::TaskLoop(void *)
+[[noreturn]] void Heat::TaskLoop(void *) noexcept
 {
 	uint32_t nextWakeTime = millis();
 	for (;;)
@@ -328,7 +328,7 @@ void Heat::Exit()
 				const auto h = FindHeater(heaterBeingTuned);
 				if (h.IsNotNull() && h->IsTuning())
 				{
-					auto msg = buf.SetupStatusMessage<CanMessageHeaterTuningReport>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+					auto msg = buf.SetupRequestMessageNoRid<CanMessageHeaterTuningReport>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 					if (LocalHeater::GetTuningCycleData(*msg))
 					{
 						msg->SetStandardFields(heaterBeingTuned);
@@ -352,7 +352,7 @@ void Heat::Exit()
 
 			// Broadcast our fan RPMs
 			{
-				CanMessageFansReport * const msg = buf.SetupStatusMessage<CanMessageFansReport>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+				CanMessageFansReport * const msg = buf.SetupRequestMessageNoRid<CanMessageFansReport>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 				const unsigned int numReported = FansManager::PopulateFansReport(*msg);
 				if (numReported != 0)
 				{
@@ -376,7 +376,7 @@ void Heat::Exit()
 			if (!CanInterface::SendAnnounce(&buf))
 			{
 				// We didn't need to send an announcement so send a board health message instead
-				CanMessageBoardStatus * const boardStatusMsg = buf.SetupStatusMessage<CanMessageBoardStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+				CanMessageBoardStatus * const boardStatusMsg = buf.SetupRequestMessageNoRid<CanMessageBoardStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 				boardStatusMsg->Clear();
 
 				const StepTimer::Ticks movementDelayNeeded = StepTimer::CheckMovementDelayIncreasedNoClear();
@@ -425,7 +425,7 @@ void Heat::Exit()
 	}
 }
 
-GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply)
+GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply) noexcept
 {
 	CanMessageGenericParser parser(msg, M950HeaterParams);
 	uint16_t heater;
@@ -486,13 +486,13 @@ GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef&
 	return h->ReportDetails(reply);
 }
 
-GCodeResult Heat::ProcessM307New(const CanMessageHeaterModelNewNew& msg, const StringRef& reply)
+GCodeResult Heat::ProcessM307New(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heater);
 	return (h.IsNotNull()) ? h->SetModel(msg.heater, msg, reply) : UnknownHeater(msg.heater, reply);
 }
 
-GCodeResult Heat::ProcessM308(const CanMessageGeneric& msg, const StringRef& reply)
+GCodeResult Heat::ProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept
 {
 	CanMessageGenericParser parser(msg, M308NewParams);
 	uint16_t sensorNum;
@@ -552,7 +552,7 @@ GCodeResult Heat::ProcessM308(const CanMessageGeneric& msg, const StringRef& rep
 	return GCodeResult::error;
 }
 
-GCodeResult Heat::SetFaultDetection(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply)
+GCodeResult Heat::SetFaultDetection(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heater);
 	return (h.IsNotNull())
@@ -560,7 +560,7 @@ GCodeResult Heat::SetFaultDetection(const CanMessageSetHeaterFaultDetectionParam
 				: UnknownHeater(msg.heater, reply);
 }
 
-GCodeResult Heat::SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply)
+GCodeResult Heat::SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heater);
 	return (h.IsNotNull()) ? h->SetHeaterMonitors(msg, reply) : UnknownHeater(msg.heater, reply);
@@ -607,7 +607,7 @@ void Heat::ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemp
 							);
 }
 
-void Heat::SwitchOffAll()
+void Heat::SwitchOffAll() noexcept
 {
 	ReadLocker lock(heatersLock);
 
@@ -620,7 +620,7 @@ void Heat::SwitchOffAll()
 	}
 }
 
-void Heat::ResetFault(int heater)
+void Heat::ResetFault(int heater) noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
@@ -629,13 +629,13 @@ void Heat::ResetFault(int heater)
 	}
 }
 
-GCodeResult Heat::SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply)
+GCodeResult Heat::SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heaterNumber);
 	return (h.IsNotNull()) ? h->SetTemperature(msg, reply) : UnknownHeater(msg.heaterNumber, reply);
 }
 
-GCodeResult Heat::TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply)
+GCodeResult Heat::TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept
 {
 	if (heaterBeingTuned != -1 && heaterBeingTuned != (int)msg.heaterNumber)
 	{
@@ -651,20 +651,20 @@ GCodeResult Heat::TuningCommand(const CanMessageHeaterTuningCommand& msg, const 
 	return h->TuningCommand(msg, reply);
 }
 
-GCodeResult Heat::FeedForward(const CanMessageHeaterFeedForward& msg, const StringRef& reply)
+GCodeResult Heat::FeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heaterNumber);
-	return (h.IsNull()) ? UnknownHeater(msg.heaterNumber, reply) : h->FeedForwardAdjustment(msg.fanPwmAdjustment, msg.extrusionAdjustment);
+	return (h.IsNull()) ? UnknownHeater(msg.heaterNumber, reply) : h->ApplyFeedForward(msg, reply);
 }
 
-float Heat::GetAveragePWM(size_t heater)
+float Heat::GetAveragePWM(size_t heater) noexcept
 {
 	const auto h = FindHeater(heater);
 	return (h.IsNull()) ? 0.0 : h->GetAveragePWM();
 }
 
 // Get a pointer to the temperature sensor entry, or nullptr if the heater number is bad
-ReadLockedPointer<TemperatureSensor> Heat::FindSensor(int sn)
+ReadLockedPointer<TemperatureSensor> Heat::FindSensor(int sn) noexcept
 {
 	ReadLocker locker(sensorsLock);
 
@@ -679,7 +679,7 @@ ReadLockedPointer<TemperatureSensor> Heat::FindSensor(int sn)
 }
 
 // Get a pointer to the first temperature sensor with the specified or higher number
-ReadLockedPointer<TemperatureSensor> Heat::FindSensorAtOrAbove(unsigned int sn)
+ReadLockedPointer<TemperatureSensor> Heat::FindSensorAtOrAbove(unsigned int sn) noexcept
 {
 	ReadLocker locker(sensorsLock);
 
@@ -694,7 +694,7 @@ ReadLockedPointer<TemperatureSensor> Heat::FindSensorAtOrAbove(unsigned int sn)
 }
 
 // Suspend the heaters to conserve power or while doing Z probing
-void Heat::SuspendHeaters(bool sus)
+void Heat::SuspendHeaters(bool sus) noexcept
 {
 	for (Heater *h : heaters)
 	{
@@ -705,7 +705,7 @@ void Heat::SuspendHeaters(bool sus)
 	}
 }
 
-void Heat::Diagnostics(const StringRef& reply)
+void Heat::Diagnostics(const StringRef& reply) noexcept
 {
 	reply.lcatf("Last sensors broadcast 0x%08" PRIx64 " found %u %" PRIu32 " ticks ago, %u ordering errs, loop time %" PRIu32,
 					lastSensorsBroadcastWhich, lastSensorsFound, millis() - lastSensorsBroadcastWhen, sensorOrderingErrors, heatTaskLoopTime);
@@ -717,13 +717,13 @@ void Heat::Diagnostics(const StringRef& reply)
 #endif
 }
 
-void Heat::NewDriverFault()
+void Heat::NewDriverFault() noexcept
 {
 	newDriverFaultState = 1;
 	heaterTask->Give(NotifyIndices::Heat);
 }
 
-void Heat::NewHeaterFault()
+void Heat::NewHeaterFault() noexcept
 {
 	newHeaterFaultState = 1;
 	heaterTask->Give(NotifyIndices::Heat);
