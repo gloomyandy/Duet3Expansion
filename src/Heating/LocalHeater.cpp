@@ -283,18 +283,20 @@ void LocalHeater::Spin() noexcept
 		{
 			// Get the target temperature and the error
 			const float targetTemperature = min<float>(GetTargetTemperature() + extrusionTemperatureBoost, GetHighestTemperatureLimit());
-			const float error = targetTemperature - temperature;
 
-			if (extrusionTemperatureBoost != 0.0 || lastExtrusionTemperatureBoost != extrusionTemperatureBoost)
+			if (IsPidMode(mode) && extrusionTemperatureBoost != lastExtrusionTemperatureBoost)
 			{
 				// Calculate new heater mode to prevent heater fault due to exceededAllowedExcursion
-				String<1> dummy;
-				(void)SwitchOn(dummy.GetRef());
+				mode = (temperature + TemperatureCloseEnough < targetTemperature) ? HeaterMode::heating
+						: (temperature > targetTemperature + TemperatureCloseEnough) ? HeaterMode::cooling
+							: HeaterMode::stable;
+				lastExtrusionTemperatureBoost = extrusionTemperatureBoost;
 			}
-			lastExtrusionTemperatureBoost = extrusionTemperatureBoost;
+
+			const float error = targetTemperature - temperature;
 
 			// Do the heating checks
-			switch(mode)
+			switch (mode)
 			{
 			case HeaterMode::heating:
 				if (error <= TemperatureCloseEnough)
