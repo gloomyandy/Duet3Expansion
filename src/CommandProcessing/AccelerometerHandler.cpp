@@ -222,7 +222,11 @@ void AccelerometerHandler::Init(SharedSpiDevice& dev) noexcept
 void AccelerometerHandler::Init(SharedI2CMaster& dev) noexcept
 #endif
 {
+#if ACCELEROMETER_USES_SPI
+	accelerometer = new LISAccelerometer(dev, Lis3dhCsPin, Lis3dhInt1Pin);
+#else
 	accelerometer = new LISAccelerometer(dev, Lis3dhInt1Pin);
+#endif
 	if (accelerometer->CheckPresent())
 	{
 		accelerometer->Configure(samplingRate, resolution);
