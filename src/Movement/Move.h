@@ -85,7 +85,7 @@ public:
 	void SetMotorCurrent(size_t driver, float current) noexcept;		//TODO avoid the int->float->int conversion
 	float GetTmcDriversTemperature() noexcept;
 #  if HAS_STALL_DETECT
-	void SetOrResetEventOnStall(DriversBitmap drivers, bool enable) noexcept;
+	void SetOrResetEventOnStall(LocalDriversBitmap drivers, bool enable) noexcept;
 	bool GetEventOnStall(unsigned int driver) noexcept;
 #  endif
 # else
@@ -246,7 +246,7 @@ private:
 	float idleCurrentFactor[NumDrivers];
 
 #if HAS_SMART_DRIVERS
-	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers;
+	LocalDriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers;
 	uint8_t nextDriveToPoll = 0;
 	StandardDriverStatus lastEventStatus[NumDrivers];			// the status which we last reported as an event
 	MillisTimer openLoadTimers[NumDrivers];
@@ -259,7 +259,7 @@ private:
 #endif
 
 #if HAS_STALL_DETECT
-	DriversBitmap eventOnStallDrivers;
+	LocalDriversBitmap eventOnStallDrivers;
 #endif
 
 	TaskBase * volatile taskWaitingForMoveToComplete = nullptr;
