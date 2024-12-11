@@ -311,7 +311,7 @@ static GCodeResult ProcessM915(const CanMessageGeneric& msg, const StringRef& re
 		return GCodeResult::error;
 	}
 
-	const auto drivers = DriversBitmap::MakeFromRaw(driverBits);
+	const auto drivers = LocalDriversBitmap::MakeFromRaw(driverBits);
 
 	bool seen = false;
 	{

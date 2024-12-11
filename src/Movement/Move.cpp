@@ -316,7 +316,7 @@ void Move::Spin() noexcept
 	if (enableValues[nextDriveToPoll] >= 0)				// don't poll driver if it is flagged "no poll"
 	{
 		StandardDriverStatus stat = GetDriverStatus(nextDriveToPoll, true, true);
-		const DriversBitmap mask = DriversBitmap::MakeFromBits(nextDriveToPoll);
+		const LocalDriversBitmap mask = LocalDriversBitmap::MakeFromBits(nextDriveToPoll);
 
 		// First set the driver temperature status for the temperature sensor code
 		if (stat.ot)
@@ -791,7 +791,7 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, uint32_t now) noexcept
 // Stop some drivers and update the corresponding motor positions
 void Move::StopDrivers(uint16_t whichDrives) noexcept
 {
-	DriversBitmap dr(whichDrives);
+	LocalDriversBitmap dr(whichDrives);
 	dr.Iterate([this](size_t drive, unsigned int)
 				{
 					AtomicCriticalSectionLocker lock;
@@ -1499,7 +1499,7 @@ void Move::SetMotorCurrent(size_t driver, float current) noexcept
 // TMC driver temperatures
 float Move::GetTmcDriversTemperature()
 {
-	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(MaxSmartDrivers);
+	const LocalDriversBitmap mask = LocalDriversBitmap::MakeLowestNBits(MaxSmartDrivers);
 	return (temperatureShutdownDrivers.Intersects(mask)) ? 150.0
 			: (temperatureWarningDrivers.Intersects(mask)) ? 100.0
 				: 0.0;
@@ -1507,7 +1507,7 @@ float Move::GetTmcDriversTemperature()
 
 # if HAS_STALL_DETECT
 
-void Move::SetOrResetEventOnStall(DriversBitmap drivers, bool enable) noexcept
+void Move::SetOrResetEventOnStall(LocalDriversBitmap drivers, bool enable) noexcept
 {
 	if (enable)
 	{

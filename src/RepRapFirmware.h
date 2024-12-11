@@ -199,8 +199,7 @@ extern const char * const moduleName[];
 
 #include "Config/BoardDef.h"
 
-typedef Bitmap<uint32_t> AxesBitmap;				// Type of a bitmap representing a set of axes
-typedef Bitmap<uint32_t> DriversBitmap;				// Type of a bitmap representing a set of driver numbers
+typedef Bitmap<uint16_t> LocalDriversBitmap;		// Type of a bitmap representing a set of driver numbers
 typedef Bitmap<uint32_t> FansBitmap;				// Type of a bitmap representing a set of fan numbers
 typedef Bitmap<uint64_t> SensorsBitmap;				// Type of a bitmap representing sensors
 

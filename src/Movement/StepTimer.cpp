@@ -192,7 +192,7 @@ void StepTimer::Init() noexcept
 					peakNegJitter = diff;
 				}
 				Platform::SetPrinting(msg.isPrinting);
-				if (msgLen >= CanMessageTimeSync::SizeWithRealTime)	// if real time is included
+				if (msgLen >= CanMessageTimeSync::SizeWithRealTime)		// if real time is included
 				{
 					Platform::SetDateTime(msg.realTime);
 					if (msgLen >= CanMessageTimeSync::SizeWithRealTimeAndMovementDelay)
@@ -217,7 +217,7 @@ void StepTimer::Init() noexcept
 	}
 	else
 	{
-		// Looks like we missed a time sync message. Ignore it.
+		// Looks like we missed a time sync message, or the message didn't specify the acknowledge delay. Ignore it.
 #if 0 //RP2040
 		debugPrintf("missed ts msg, prev=%" PRIu32 " old=%" PRIu32 "\n", msg.lastTimeSent, oldMasterTime);
 #endif
