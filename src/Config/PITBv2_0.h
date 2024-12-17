@@ -1,5 +1,5 @@
 /*
- * PITBv1_0.h
+ * PITBv2_0.h
  *
  *  Created on: 19 June 2023
  *      Author: jay_s_uk
@@ -159,12 +159,12 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm2b,	AdcInput::none,		nullptr		},	// GPIO21 MOT1 CS
 	{ PwmOutput::pwm3a,	AdcInput::none,		nullptr		},	// GPIO22 MOT1 EN
 	{ PwmOutput::none,	AdcInput::none,		nullptr		},	// GPIO23 MOT1 DIR
-	{ PwmOutput::none,	AdcInput::none,		nullptr		},	// GPIO24 SDA
-	{ PwmOutput::none,	AdcInput::none,		nullptr		},	// GPIO25 SCL
+	{ PwmOutput::none,	AdcInput::none,		"i2c.sda"	},	// GPIO24 SDA
+	{ PwmOutput::none,	AdcInput::none,		"i2c.sdl"	},	// GPIO25 SCL
 	{ PwmOutput::pwm5a,	AdcInput::adc0_0,	"temp0"		},	// GPIO26 T0_TEMP
 	{ PwmOutput::pwm5b,	AdcInput::adc0_1,	"temp1"		},	// GPIO27 T1_TEMP
 	{ PwmOutput::pwm6a,	AdcInput::adc0_2,	"temp2"		},	// GPIO28 T2_TEMP
-	{ PwmOutput::none,	AdcInput::adc0_3,	"rgbled"	},	// GPIO29 ACC_INT1
+	{ PwmOutput::none,	AdcInput::adc0_3,	nullptr		},	// GPIO29 VOLTAGE MONITORING
 };
 
 static constexpr size_t NumPins = ARRAY_SIZE(PinTable);
