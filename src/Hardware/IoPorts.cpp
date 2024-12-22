@@ -37,7 +37,7 @@ int8_t IoPort::logicalPinModes[NumPins];	// what mode each logical pin is set to
 {
 	for (PinUsedBy& p : portUsedBy)
 	{
-		p = PinUsedBy::unused;
+		p = PinUsedBy::notUsed;
 	}
 	for (int8_t& p : logicalPinModes)
 	{
@@ -55,7 +55,7 @@ void IoPort::Release() noexcept
 	{
 		DetachInterrupt();
 		ClearAnalogCallback();
-		portUsedBy[pin] = PinUsedBy::unused;
+		portUsedBy[pin] = PinUsedBy::notUsed;
 		logicalPinModes[pin] = PIN_MODE_NOT_CONFIGURED;
 	}
 	pin = NoPin;
@@ -303,7 +303,7 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 	if (lp != NoPin)					// if not assigning "nil"
 	{
 		bool doSetMode = true;
-		if (portUsedBy[lp] == PinUsedBy::unused || (portUsedBy[lp] == PinUsedBy::temporaryInput && neededFor != PinUsedBy::temporaryInput))
+		if (portUsedBy[lp] == PinUsedBy::notUsed || (portUsedBy[lp] == PinUsedBy::temporaryInput && neededFor != PinUsedBy::temporaryInput))
 		{
 			portUsedBy[lp] = neededFor;
 		}
