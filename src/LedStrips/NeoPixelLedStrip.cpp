@@ -33,6 +33,13 @@ GCodeResult NeoPixelLedStrip::Configure(CanMessageGenericParser& parser, const S
 	GCodeResult rslt = CommonConfigure(parser, reply, seen, extra);
 	if (seen)
 	{
+#if SUPPORT_PIO_NEOPIXEL
+		if (ws2812Device != nullptr)
+		{
+			// make sure we configure any new pins next time we use it
+			ws2812Device->Configure(NoPin, isRGBW);
+		}
+#endif
 		// Nothing specific to configure for Neopixel strips in Duet3D builds
 		return rslt;
 	}
