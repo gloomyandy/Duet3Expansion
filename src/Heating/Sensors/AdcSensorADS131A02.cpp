@@ -113,12 +113,12 @@ void AdcSensorADS131A02Chan0::AppendAdditionalOutputParameters(const StringRef& 
 GCodeResult AdcSensorADS131A02Chan0::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
 {
 	bool seen = false;
-	if (parser.GetFloatParam('L', readingAtMin[0]))
+	if (parser.GetFloatParam('B', readingAtMin[0]))
 	{
 		seen = true;
 	}
 
-	if (parser.GetFloatParam('H', readingAtMax[0]))
+	if (parser.GetFloatParam('C', readingAtMax[0]))
 	{
 		seen = true;
 	}
@@ -141,8 +141,8 @@ GCodeResult AdcSensorADS131A02Chan0::ConfigureAdditionalOutput(const CanMessageG
 {
 	if (outputNumber > 0 && outputNumber < NumChannels)
 	{
-		if (parser.GetFloatParam('L', readingAtMin[outputNumber])) { changed = true; }
-		if (parser.GetFloatParam('H', readingAtMax[outputNumber])) { changed = true; }
+		if (parser.GetFloatParam('B', readingAtMin[outputNumber])) { changed = true; }
+		if (parser.GetFloatParam('C', readingAtMax[outputNumber])) { changed = true; }
 	}
 	return GCodeResult::ok;
 }
