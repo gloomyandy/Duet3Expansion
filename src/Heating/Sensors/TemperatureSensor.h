@@ -45,6 +45,12 @@ public:
 	// If we find no relevant parameters, report the current parameters to 'reply' and return success.
 	virtual GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply);
 
+	// Configure parameters for an additional output
+	virtual GCodeResult ConfigureAdditionalOutput(const CanMessageGenericParser& parser, const StringRef& reply, bool& changed, uint8_t outputNumber) noexcept;
+
+	// Report the parameters of an additional output
+	virtual void AppendAdditionalOutputParameters(const StringRef& reply, uint8_t outputNumber) noexcept;
+
 	// Try to get a temperature reading
 	virtual void Poll() = 0;
 

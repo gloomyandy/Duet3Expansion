@@ -35,13 +35,23 @@ GCodeResult AdditionalOutputSensor::Configure(const CanMessageGenericParser& par
 		}
 	}
 
+	const auto parent = Heat::FindSensor(parentSensor);
+	if (parent.IsNotNull())
+	{
+		parent->ConfigureAdditionalOutput(parser, reply, changed, outputNumber);
+	}
 	ConfigureCommonParameters(parser, changed);
-	if (!changed)
+	if (!changed && !parser.HasParameter('Y'))
 	{
 		CopyBasicDetails(reply);
+		if (parent.IsNotNull())
+		{
+			parent->AppendAdditionalOutputParameters(reply, outputNumber);
+		}
 	}
 	return rslt;
 }
+
 
 GCodeResult AdditionalOutputSensor::ConfigurePort(const char* portName, const StringRef& reply) noexcept
 {

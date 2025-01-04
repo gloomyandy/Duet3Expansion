@@ -67,6 +67,18 @@ GCodeResult TemperatureSensor::Configure(const CanMessageGenericParser& parser, 
 	return GCodeResult::ok;
 }
 
+// Default implementation to configure parameters for an additional output
+GCodeResult TemperatureSensor::ConfigureAdditionalOutput(const CanMessageGenericParser& parser, const StringRef& reply, bool& changed, uint8_t outputNumber) noexcept
+{
+	return GCodeResult::ok;
+}
+
+// Report the parameters of an additional output by appending them to the reply
+void TemperatureSensor::AppendAdditionalOutputParameters(const StringRef& reply, uint8_t outputNumber) noexcept
+{
+	// By default there are no parameters to report
+}
+
 void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 {
 	reply.printf("type %s", sensorType);
