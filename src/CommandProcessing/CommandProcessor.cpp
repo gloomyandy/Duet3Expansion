@@ -804,8 +804,13 @@ void CommandProcessor::Spin()
 			break;
 
 		case CanMessageType::createInputMonitorNew:
-			requestId = buf->msg.createInputMonitorNew.requestId;
-			rslt = InputMonitor::Create(buf->msg.createInputMonitorNew, buf->dataLength, replyRef, extra);
+			{
+				const CanMessageCreateInputMonitorNew& msg = buf->msg.createInputMonitorNew;
+				requestId = msg.requestId;
+				rslt = (msg.handle.u.parts.type == RemoteInputHandle::typeStallEndstop)
+						? moveInstance->SetStallEndstopReporting(msg)
+							: InputMonitor::Create(msg, buf->dataLength, replyRef, extra);
+			}
 			break;
 
 		case CanMessageType::changeInputMonitorNew:

@@ -137,6 +137,9 @@ public:
 	// Pressure advance
 	ExtruderShaper& GetExtruderShaper(size_t drive) noexcept { return dms[drive].extruderShaper; }
 
+	// Stall endstops
+	GCodeResult SetStallEndstopReporting(const CanMessageCreateInputMonitorNew& msg) noexcept;
+
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept;	// Get the current step interval for this axis or extruder
 	bool SetMicrostepping(size_t driver, unsigned int microsteps, bool interpolate) noexcept;
