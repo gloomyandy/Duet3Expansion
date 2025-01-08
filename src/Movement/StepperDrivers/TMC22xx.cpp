@@ -2540,6 +2540,18 @@ StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bo
 	return rslt;
 }
 
+GCodeResult SmartDrivers::SetStallEndstopReporting(RemoteDriversBitmap driversToReport) noexcept
+{
+	//TODO
+	return GCodeResult::error;
+}
+
+GCodeResult SmartDrivers::CancelStallEndstopReporting() noexcept
+{
+	//TODO
+	return GCodeResult::ok;
+}
+
 #if SUPPORT_TMC2240 && !(SUPPORT_TMC2208 || SUPPORT_TMC2209)
 
 float SmartDrivers::GetDriverTemperature(size_t driver) noexcept

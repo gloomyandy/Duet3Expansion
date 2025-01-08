@@ -138,7 +138,8 @@ public:
 	ExtruderShaper& GetExtruderShaper(size_t drive) noexcept { return dms[drive].extruderShaper; }
 
 	// Stall endstops
-	GCodeResult SetStallEndstopReporting(const CanMessageCreateInputMonitorNew& msg) noexcept;
+	GCodeResult SetStallEndstopReporting(const CanMessageCreateInputMonitorNew& msg, const StringRef& reply) noexcept;
+	GCodeResult ChangeStallEndstopReporting(const CanMessageChangeInputMonitorNew& msg) noexcept;
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept;	// Get the current step interval for this axis or extruder

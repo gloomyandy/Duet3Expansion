@@ -1988,6 +1988,18 @@ StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bo
 	return StandardDriverStatus();
 }
 
+GCodeResult SmartDrivers::SetStallEndstopReporting(RemoteDriversBitmap driversToReport) noexcept
+{
+	//TODO
+	return GCodeResult::error;
+}
+
+GCodeResult SmartDrivers::CancelStallEndstopReporting() noexcept
+{
+	//TODO
+	return GCodeResult::ok;
+}
+
 #endif
 
 // End

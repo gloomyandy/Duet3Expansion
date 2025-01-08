@@ -2338,7 +2338,7 @@ void Move::ResetPhaseStepMonitoringVariables() noexcept
 #endif
 
 // Stall endstops
-GCodeResult Move::SetStallEndstopReporting(const CanMessageCreateInputMonitorNew& msg) noexcept
+GCodeResult Move::SetStallEndstopReporting(const CanMessageCreateInputMonitorNew& msg, const StringRef& reply) noexcept
 {
 #if HAS_SMART_DRIVERS
 	return SmartDrivers::SetStallEndstopReporting(RemoteDriversBitmap((RemoteDriversBitmap::BaseType)msg.threshold));
@@ -2346,6 +2346,19 @@ GCodeResult Move::SetStallEndstopReporting(const CanMessageCreateInputMonitorNew
 	reply.copy("stall detection not supported on this board");
 	return GCodeResult::error;
 #endif
+}
+
+GCodeResult Move::ChangeStallEndstopReporting(const CanMessageChangeInputMonitorNew& msg) noexcept
+{
+	if (msg.action == CanMessageChangeInputMonitorNew::actionDelete)
+	{
+#if HAS_SMART_DRIVERS
+		return SmartDrivers::CancelStallEndstopReporting();
+#else
+		return GCodeResult::ok;
+#endif
+	}
+	return GCodeResult::error;
 }
 
 #endif	//SUPPORT_DRIVERS

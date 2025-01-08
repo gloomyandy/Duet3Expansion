@@ -807,15 +807,38 @@ void CommandProcessor::Spin()
 			{
 				const CanMessageCreateInputMonitorNew& msg = buf->msg.createInputMonitorNew;
 				requestId = msg.requestId;
-				rslt = (msg.handle.u.parts.type == RemoteInputHandle::typeStallEndstop)
-						? moveInstance->SetStallEndstopReporting(msg)
-							: InputMonitor::Create(msg, buf->dataLength, replyRef, extra);
+				if (msg.handle.u.parts.type == RemoteInputHandle::typeStallEndstop)
+				{
+#if SUPPORT_DRIVERS
+					rslt = moveInstance->SetStallEndstopReporting(msg, replyRef);
+#else
+					rslt = GCodeResult::error;
+#endif
+				}
+				else
+				{
+					rslt = InputMonitor::Create(msg, buf->dataLength, replyRef, extra);
+				}
 			}
 			break;
 
 		case CanMessageType::changeInputMonitorNew:
-			requestId = buf->msg.changeInputMonitorNew.requestId;
-			rslt = InputMonitor::Change(buf->msg.changeInputMonitorNew, replyRef, extra);
+			{
+				const CanMessageChangeInputMonitorNew& msg = buf->msg.changeInputMonitorNew;
+				requestId = msg.requestId;
+				if (msg.handle.u.parts.type == RemoteInputHandle::typeStallEndstop)
+				{
+#if SUPPORT_DRIVERS
+					rslt = moveInstance->ChangeStallEndstopReporting(msg);
+#else
+					rslt = GCodeResult::error;
+#endif
+				}
+				else
+				{
+					rslt = InputMonitor::Change(msg, replyRef, extra);
+				}
+			}
 			break;
 
 		case CanMessageType::readInputsRequest:
