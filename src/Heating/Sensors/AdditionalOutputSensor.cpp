@@ -10,6 +10,7 @@
 #include <Heating/Heat.h>
 #include <CanMessageGenericParser.h>
 #include <General/SafeStrtod.h>
+#include <CAN/CanInterface.h>
 
 AdditionalOutputSensor::AdditionalOutputSensor(unsigned int sensorNum, const char *type, bool pEnforcePollOrder) noexcept
 	: TemperatureSensor(sensorNum, type), parentSensor(0), outputNumber(0), enforcePollOrder(pEnforcePollOrder)
@@ -35,13 +36,23 @@ GCodeResult AdditionalOutputSensor::Configure(const CanMessageGenericParser& par
 		}
 	}
 
+	const auto parent = Heat::FindSensor(parentSensor);
+	if (parent.IsNotNull())
+	{
+		parent->ConfigureAdditionalOutput(parser, reply, changed, outputNumber);
+	}
 	ConfigureCommonParameters(parser, changed);
-	if (!changed)
+	if (!changed && !parser.HasParameter('Y'))
 	{
 		CopyBasicDetails(reply);
+		if (parent.IsNotNull())
+		{
+			parent->AppendAdditionalOutputParameters(reply, outputNumber);
+		}
 	}
 	return rslt;
 }
+
 
 GCodeResult AdditionalOutputSensor::ConfigurePort(const char* portName, const StringRef& reply) noexcept
 {
@@ -74,6 +85,15 @@ GCodeResult AdditionalOutputSensor::ConfigurePort(const char* portName, const St
 		{
 			reply.printf("Parent sensor %d does not exist", parentSensor);
 			return GCodeResult::error;
+		}
+
+		{
+			const CanAddress parentCanAddr = parent->GetBoardAddress();
+			if (parentCanAddr != CanInterface::GetCanAddress())
+			{
+				reply.printf("Specify parent sensor CAN address %u at the start of the port name", parentCanAddr);
+				return GCodeResult::error;
+			}
 		}
 
 		if (enforcePollOrder && parentSensor > GetSensorNumber())

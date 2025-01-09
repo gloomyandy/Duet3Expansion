@@ -21,6 +21,7 @@
 #include <Platform/Tasks.h>
 #include <AnalogIn.h>
 #include <Hardware/NonVolatileMemory.h>
+#include "CustomCommandHandler.h"
 
 #if !RP2040
 # include <hpl_user_area.h>
@@ -870,6 +871,11 @@ void CommandProcessor::Spin()
 			rslt = AccelerometerHandler::ProcessStartRequest(buf->msg.startAccelerometer, replyRef);
 			break;
 #endif
+		case CanMessageType::m655:
+			requestId = buf->msg.generic.requestId;
+			rslt = CustomCommandHandler::ProcessM655(buf->msg.generic, replyRef);
+			break;
+
 		default:
 			// We received a message type that we don't recognise. If it's a broadcast, ignore it. If it's addressed to us, send a reply.
 			if (buf->id.Src() != CanInterface::GetCanAddress())
