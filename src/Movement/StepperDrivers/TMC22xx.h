@@ -58,8 +58,7 @@ namespace SmartDrivers
 	GCodeResult GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept;
 	GCodeResult SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
 	StandardDriverStatus GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept;
-	GCodeResult SetStallEndstopReporting(RemoteDriversBitmap driversToReport) noexcept;
-	GCodeResult CancelStallEndstopReporting() noexcept;
+	GCodeResult SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept;
 #if SUPPORT_TMC2240 && !(SUPPORT_TMC2208 || SUPPORT_TMC2209)
 	float GetDriverTemperature(size_t driver) noexcept;
 #endif

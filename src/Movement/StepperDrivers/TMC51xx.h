@@ -51,8 +51,7 @@ namespace SmartDrivers
 	GCodeResult GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept;
 	GCodeResult SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
 	StandardDriverStatus GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept;
-	GCodeResult SetStallEndstopReporting(RemoteDriversBitmap driversToReport) noexcept;
-	GCodeResult CancelStallEndstopReporting() noexcept;
+	GCodeResult SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept;
 };
 
 #endif
