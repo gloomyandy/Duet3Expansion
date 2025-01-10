@@ -110,6 +110,7 @@ enum class DriversState : uint8_t
 };
 
 static DriversState driversState = DriversState::shutDown;
+static RemoteDriversBitmap stallEndstopsEnabled;
 
 #if TMC22xx_USE_SLAVEADDR && TMC22xx_HAS_MUX
 static bool currentMuxState;
@@ -559,6 +560,7 @@ public:
 	void SetStallDetectThreshold(int sgThreshold) noexcept;
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept;
 	void AppendStallConfig(const StringRef& reply) const noexcept;
+	bool CheckStallDetectionEnabled(float speed, const StringRef& errorMessage) noexcept;
 #endif
 	void AppendDriverStatus(const StringRef& reply) noexcept;
 	StandardDriverStatus GetStatus(bool accumulated, bool clearAccumulated) noexcept;
@@ -1268,6 +1270,22 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 	const int threshold = 127 - (int)writeRegisters[WriteSgthrs];
 	reply.catf("stall threshold %d, steps/sec %" PRIu32 ", coolstep %" PRIx32,
 				threshold, 12000000 / (256 * writeRegisters[WriteTcoolthrs]), writeRegisters[WriteCoolconf] & 0xFFFF);
+}
+
+// Check that stall detection can occur at the specified speed
+bool TmcDriverState::CheckStallDetectionEnabled(float speed, const StringRef& errorMessage) noexcept
+{
+	if (!IsStealthChop())
+	{
+		errorMessage.printf("driver %u is nt in stealthChop mode", driverNumber);
+		return false;
+	}
+	if (speed * (float)StepTimer::StepClockRate < ((12500000/256) << microstepShiftFactor) / writeRegisters[WriteTcoolthrs])
+	{
+		errorMessage.printf("move is too slow for driver %u to detect stall", driverNumber);
+		return false;
+	}
+	return true;
 }
 
 #endif
@@ -2542,9 +2560,20 @@ StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bo
 
 GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept
 {
-	//TODO
-	reply.copy("not implemented yet");
-	return GCodeResult::error;
+	if (driverNumber < GetNumTmcDrivers())
+	{
+		if (driverStates[driverNumber].CheckStallDetectionEnabled(speed, reply))
+		{
+			stallEndstopsEnabled.SetBit(driverNumber);
+			return GCodeResult::ok;
+		}
+		return GCodeResult::error;
+	}
+	else
+	{
+		stallEndstopsEnabled.Clear();
+		return GCodeResult::ok;
+	}
 }
 
 #if SUPPORT_TMC2240 && !(SUPPORT_TMC2208 || SUPPORT_TMC2209)

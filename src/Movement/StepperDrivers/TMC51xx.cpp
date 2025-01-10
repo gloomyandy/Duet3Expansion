@@ -339,6 +339,7 @@ enum class DriversState : uint8_t
 };
 
 static DriversState driversState = DriversState::shutDown;
+static RemoteDriversBitmap stallEndstopsEnabled;
 
 //----------------------------------------------------------------------------------------------------------------------------------
 // Private types and methods
@@ -376,6 +377,8 @@ public:
 
 	float GetStandstillCurrentPercent() const noexcept;
 	void SetStandstillCurrentPercent(float percent) noexcept;
+
+	bool CheckStallDetectionEnabled(float speed, const StringRef& reply) const noexcept;
 
 	int8_t GetCurrentScaler() const noexcept { return currentScaler; }
 	bool SetCurrentScaler(int8_t cs) noexcept;
@@ -445,8 +448,6 @@ private:
 
 	std::atomic<uint32_t> newRegistersToUpdate;				// bitmap of register indices whose values need to be sent to the driver chip
 	std::atomic<uint32_t> registersToUpdate;				// bitmap of register indices whose values need to be sent to the driver chip
-	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
-	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	uint32_t motorCurrent;									// the configured motor current in mA
 
 #if SUPPORT_CLOSED_LOOP || SUPPORT_PHASE_STEPPING
@@ -457,6 +458,9 @@ private:
 	uint16_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
 	uint16_t numReads, numWrites;							// how many successful reads and writes we had
 	static uint16_t numTimeouts;							// how many times a transfer timed out
+
+	uint8_t driverNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
+	uint8_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 
 	int8_t currentScaler = -1;								// CS if manually specified, otherwise -1 to indicate auto calculate
 	uint8_t iRun = 0;
@@ -504,7 +508,7 @@ uint16_t TmcDriverState::numTimeouts = 0;								// how many times a transfer ti
 void TmcDriverState::Init(uint32_t p_driverNumber) noexcept
 pre(!driversPowered)
 {
-	axisNumber = p_driverNumber;										// axes are mapped straight through to drivers initially
+	driverNumber = p_driverNumber;										// axes are mapped straight through to drivers initially
 	driverBit = LocalDriversBitmap::MakeFromBits(p_driverNumber);
 	enabled = false;
 	registersToUpdate.store(0);
@@ -615,6 +619,22 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const noexcep
 {
 	interpolation = (configuredChopConfReg & CHOPCONF_INTPOL) != 0;
 	return 1u << microstepShiftFactor;
+}
+
+// Check that stall detection can occur at the specified speed
+bool TmcDriverState::CheckStallDetectionEnabled(float speed, const StringRef& errorMessage) const noexcept
+{
+	if (GetDriverMode() > DriverMode::spreadCycle)			// if in stealthChop or direct mode
+	{
+		errorMessage.printf("driver %u is not in spreadCycle mode", driverNumber);
+		return false;
+	}
+	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor))
+	{
+		errorMessage.printf("move is too slow for driver %u to detect stall", driverNumber);
+		return false;
+	}
+	return true;
 }
 
 bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept
@@ -881,7 +901,7 @@ void TmcDriverState::UpdateCurrent() noexcept
 	const uint16_t desiredStandstillCurrentFraction =
 #if SUPPORT_CLOSED_LOOP
 # if SINGLE_DRIVER
-					(GetMoveInstance().IsClosedLoopEnabled(axisNumber)) ? 256 : standstillCurrentFraction;
+					(GetMoveInstance().IsClosedLoopEnabled(driverNumber)) ? 256 : standstillCurrentFraction;
 # else
 #  error Multiple closed loop drivers not supported here
 # endif
@@ -994,7 +1014,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 		threshold -= 128;
 	}
 	const uint32_t fullstepsPerSecond = StepTimer::StepClockRate/maxStallStepInterval;
-	const float stepsPerMm = GetMoveInstance().DriveStepsPerMm(axisNumber);
+	const float stepsPerMm = GetMoveInstance().DriveStepsPerMm(driverNumber);
 	const float speed1 = (float)(fullstepsPerSecond << microstepShiftFactor)/stepsPerMm;
 	const uint32_t tcoolthrs = writeRegisters[WriteTcoolthrs] & ((1ul << 20) - 1u);
 	bool bdummy;
@@ -1068,7 +1088,7 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 	}
 
 	// Get the full step interval, we will need it later
-	const uint32_t interval = GetMoveInstance().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
+	const uint32_t interval = GetMoveInstance().GetStepInterval(driverNumber, microstepShiftFactor);		// get the full step interval
 
 	// If we read a register, update our copy
 	if (previousRegIndexRequested <= NumReadRegisters)
@@ -1990,9 +2010,20 @@ StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bo
 
 GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept
 {
-	//TODO
-	reply.copy("not implemented yet");
-	return GCodeResult::error;
+	if (driverNumber < numTmc51xxDrivers)
+	{
+		if (driverStates[driverNumber].CheckStallDetectionEnabled(speed, reply))
+		{
+			stallEndstopsEnabled.SetBit(driverNumber);
+			return GCodeResult::ok;
+		}
+		return GCodeResult::error;
+	}
+	else
+	{
+		stallEndstopsEnabled.Clear();
+		return GCodeResult::ok;
+	}
 }
 
 #endif

@@ -813,11 +813,6 @@ void CommandProcessor::Spin()
 			rslt = InputMonitor::Change(buf->msg.changeInputMonitorNew, replyRef, extra);
 			break;
 
-		case CanMessageType::enableStallEndstop:
-			requestId = buf->msg.enableStallEndstop.requestId;
-			rslt = moveInstance->SetStallEndstopReporting(buf->msg.enableStallEndstop, replyRef);
-			break;
-
 		case CanMessageType::readInputsRequest:
 			// This one has its own reply message type
 			InputMonitor::ReadInputs(buf);
@@ -842,6 +837,11 @@ void CommandProcessor::Spin()
 			break;
 
 #if SUPPORT_DRIVERS
+		case CanMessageType::enableStallEndstop:
+			requestId = buf->msg.enableStallEndstop.requestId;
+			rslt = moveInstance->SetStallEndstopReporting(buf->msg.enableStallEndstop, replyRef);
+			break;
+
 		case CanMessageType::createFilamentMonitor:
 			requestId = buf->msg.createFilamentMonitor.requestId;
 			rslt = FilamentMonitor::Create(buf->msg.createFilamentMonitor, replyRef);
