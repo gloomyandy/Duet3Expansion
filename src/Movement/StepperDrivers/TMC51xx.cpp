@@ -2033,6 +2033,7 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 	else
 	{
 		stallEndstopsEnabled.Clear();
+		driverStallsToNotify = 0;
 		return GCodeResult::ok;
 	}
 }

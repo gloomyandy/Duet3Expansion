@@ -2609,6 +2609,7 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 		{
 			ds.DisableDiagInterrupt();
 		}
+		driverStallsToNotify = 0;
 		return GCodeResult::ok;
 	}
 }
