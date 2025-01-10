@@ -19,6 +19,10 @@
 #include <General/Portability.h>
 #include <AppNotifyIndices.h>
 
+#if HAS_STALL_DETECT
+# include <CAN/CanInterface.h>
+#endif
+
 #if defined(DUET3_MB6HC)
 
 #include <Platform/RepRap.h>
@@ -1147,6 +1151,11 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 	{
 		readRegisters[ReadDrvStat] |= TMC_RR_SG;
 		accumulatedDriveStatus |= TMC_RR_SG;
+		if (stallEndstopsEnabled.IsBitSet(driverNumber))
+		{
+			stallEndstopsEnabled.ClearBit(driverNumber);
+			CanInterface::NotifyStallEndstopTriggered(driverNumber);
+		}
 	}
 	else
 	{

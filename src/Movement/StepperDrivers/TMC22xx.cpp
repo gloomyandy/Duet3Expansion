@@ -50,6 +50,10 @@
 #include <Hardware/IoPorts.h>
 #include <AppNotifyIndices.h>
 
+#if HAS_STALL_DETECT
+# include <CAN/CanInterface.h>
+#endif
+
 #if SAME5x || SAMC21
 # include <DmacManager.h>
 # include <Serial.h>
@@ -561,6 +565,8 @@ public:
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept;
 	void AppendStallConfig(const StringRef& reply) const noexcept;
 	bool CheckStallDetectionEnabled(float speed, const StringRef& errorMessage) noexcept;
+	void EnableDiagInterrupt() noexcept;
+	void DisableDiagInterrupt() noexcept;
 #endif
 	void AppendDriverStatus(const StringRef& reply) noexcept;
 	StandardDriverStatus GetStatus(bool accumulated, bool clearAccumulated) noexcept;
@@ -905,6 +911,18 @@ inline uint8_t TmcDriverState::GetReadRegNumber(size_t regIndex) const noexcept
 // State structures for all drivers
 static TmcDriverState driverStates[MaxSmartDrivers];
 
+// ISR for Diag pins
+static void DiagPinInterruptEntry(CallbackParameter cp) noexcept
+{
+	uint8_t driverNumber = (uint8_t)cp.u32;
+	if (stallEndstopsEnabled.IsBitSet(driverNumber))
+	{
+		stallEndstopsEnabled.ClearBit(driverNumber);
+		driverStates[driverNumber].DisableDiagInterrupt();
+		CanInterface::NotifyStallEndstopTriggered(driverNumber);
+	}
+}
+
 inline bool TmcDriverState::UpdatePending() const noexcept
 {
 	return registersToUpdate != 0;
@@ -1169,6 +1187,8 @@ pre(!driversPowered)
 #if HAS_STALL_DETECT
 	diagPin = p_diagPin;
 	IoPort::SetPinMode(p_diagPin, INPUT_PULLUP);
+	AttachPinInterrupt(p_diagPin, DiagPinInterruptEntry, InterruptMode::rising, CallbackParameter(p_driverNumber), false);
+	// Leave the interrupt disabled until we enable a stall endstop on this driver
 #endif
 
 #if !TMC22xx_SINGLE_UART
@@ -1286,6 +1306,16 @@ bool TmcDriverState::CheckStallDetectionEnabled(float speed, const StringRef& er
 		return false;
 	}
 	return true;
+}
+
+void TmcDriverState::EnableDiagInterrupt() noexcept
+{
+	EnablePinInterrupt(diagPin);
+}
+
+void TmcDriverState::DisableDiagInterrupt() noexcept
+{
+	DisablePinInterrupt(diagPin);
 }
 
 #endif
@@ -2565,6 +2595,7 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 		if (driverStates[driverNumber].CheckStallDetectionEnabled(speed, reply))
 		{
 			stallEndstopsEnabled.SetBit(driverNumber);
+			driverStates[driverNumber].EnableDiagInterrupt();
 			return GCodeResult::ok;
 		}
 		return GCodeResult::error;
@@ -2572,6 +2603,10 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 	else
 	{
 		stallEndstopsEnabled.Clear();
+		for (TmcDriverState& ds : driverStates)
+		{
+			ds.DisableDiagInterrupt();
+		}
 		return GCodeResult::ok;
 	}
 }
