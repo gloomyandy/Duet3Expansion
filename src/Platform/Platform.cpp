@@ -11,8 +11,7 @@
 #include <AnalogIn.h>
 #include <AnalogOut.h>
 #include <Movement/Move.h>
-#include "Movement/StepperDrivers/TMC51xx.h"
-#include "Movement/StepperDrivers/TMC22xx.h"
+#include <Movement/StepperDrivers/SmartDrivers.h>
 #include "Movement/StepTimer.h"
 #include <CAN/CanInterface.h>
 #include <CanMessageBuffer.h>

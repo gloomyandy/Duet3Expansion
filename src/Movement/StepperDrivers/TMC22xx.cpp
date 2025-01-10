@@ -115,6 +115,7 @@ enum class DriversState : uint8_t
 
 static DriversState driversState = DriversState::shutDown;
 static RemoteDriversBitmap stallEndstopsEnabled;
+std::atomic<uint16_t> SmartDrivers::driverStallsToNotify(0);
 
 #if TMC22xx_USE_SLAVEADDR && TMC22xx_HAS_MUX
 static bool currentMuxState;
@@ -919,7 +920,8 @@ static void DiagPinInterruptEntry(CallbackParameter cp) noexcept
 	{
 		stallEndstopsEnabled.ClearBit(driverNumber);
 		driverStates[driverNumber].DisableDiagInterrupt();
-		CanInterface::NotifyStallEndstopTriggered(driverNumber);
+		SmartDrivers::driverStallsToNotify |= 1u << driverNumber;
+		CanInterface::WakeAsyncSender();
 	}
 }
 

@@ -13,6 +13,7 @@
 #if SUPPORT_TMC51xx
 
 #include "DriverMode.h"
+#include <atomic>
 
 namespace SmartDrivers
 {
@@ -30,7 +31,7 @@ namespace SmartDrivers
 	unsigned int GetMicrostepShift(size_t driver) noexcept;
 	uint16_t GetMicrostepPosition(size_t driver) noexcept;
 	void SetTmcExternalClock(uint32_t frequency) noexcept;
-	bool SetMotorCurrents(size_t driver, uint32_t regVal) noexcept;
+	bool SetMotorPhases(size_t driver, uint32_t regVal) noexcept;
 #endif
 	bool SetDriverMode(size_t driver, unsigned int mode) noexcept;
 	DriverMode GetDriverMode(size_t driver) noexcept;
@@ -52,6 +53,7 @@ namespace SmartDrivers
 	GCodeResult SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
 	StandardDriverStatus GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept;
 	GCodeResult SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept;
+	extern std::atomic<uint16_t> driverStallsToNotify;
 };
 
 #endif

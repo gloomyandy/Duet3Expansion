@@ -47,11 +47,7 @@
 #include <CanMessageBuffer.h>
 #include <Platform/TaskPriorities.h>
 #include <AppNotifyIndices.h>
-
-#if HAS_SMART_DRIVERS
-# include "StepperDrivers/TMC51xx.h"
-# include "StepperDrivers/TMC22xx.h"
-#endif
+#include "StepperDrivers/SmartDrivers.h"
 
 #if USE_TC_FOR_STEP
 # if SAME5x

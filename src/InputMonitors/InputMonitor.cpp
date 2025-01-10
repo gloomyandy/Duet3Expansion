@@ -229,7 +229,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 {
 	WriteLocker lock(listLock);
 
-	Delete(msg.handle.u.all);						// delete any existing monitor with the same handle
+	Delete(msg.handle.all);						// delete any existing monitor with the same handle
 
 	// Allocate a new one
 	InputMonitor *newMonitor;
@@ -243,7 +243,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 		freeList = newMonitor->next;
 	}
 
-	newMonitor->handle = msg.handle.u.all;
+	newMonitor->handle = msg.handle.all;
 	newMonitor->active = false;
 	newMonitor->state = false;
 	newMonitor->minInterval = msg.minInterval;
@@ -276,19 +276,19 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	{
 		WriteLocker lock(listLock);
 
-		if (Delete(msg.handle.u.all))
+		if (Delete(msg.handle.all))
 		{
 			return GCodeResult::ok;
 		}
 
-		reply.printf("Board %u does not have input handle %04x", CanInterface::GetCanAddress(), msg.handle.u.all);
+		reply.printf("Board %u does not have input handle %04x", CanInterface::GetCanAddress(), msg.handle.all);
 		return GCodeResult::warning;					// only a warning when deleting a non-existent handle
 	}
 
-	auto m = Find(msg.handle.u.all);
+	auto m = Find(msg.handle.all);
 	if (m.IsNull())
 	{
-		reply.printf("Board %u does not have input handle %04x", CanInterface::GetCanAddress(), msg.handle.u.all);
+		reply.printf("Board %u does not have input handle %04x", CanInterface::GetCanAddress(), msg.handle.all);
 		return GCodeResult::error;
 	}
 
@@ -388,8 +388,8 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	const CanMessageReadInputsRequest& req = buf->msg.readInputsRequest;
 	const CanAddress srcAddress = buf->id.Src();
 	const uint16_t rid = req.requestId;
-	const uint16_t mask = req.mask.u.all;
-	const uint16_t pattern = req.pattern.u.all & mask;
+	const uint16_t mask = req.mask.all;
+	const uint16_t pattern = req.pattern.all & mask;
 
 	// Construct the new message in the same buffer
 	auto reply = buf->SetupResponseMessage<CanMessageReadInputsReply>(rid, CanInterface::GetCanAddress(), srcAddress);
@@ -425,7 +425,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 		{
 			AnalogHandleData data;
 			data.reading = h->GetAnalogValue();
-			data.handle.u.all = h->handle;
+			data.handle.all = h->handle;
 			memcpy(buffer, &data, sizeof(AnalogHandleData));
 			buffer += sizeof(AnalogHandleData);
 			spaceLeft -= sizeof(AnalogHandleData);

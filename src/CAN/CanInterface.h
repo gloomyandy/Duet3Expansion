@@ -43,11 +43,6 @@ namespace CanInterface
 	bool SendAnnounce(CanMessageBuffer *buf) noexcept;
 	void RaiseEvent(EventType type, uint16_t param, uint8_t device, const char *format, va_list vargs) noexcept;
 
-#if SUPPORT_DRIVERS && HAS_STALL_DETECT
-	// Note, the following may be called either in an ISR or by the TMC drivers task
-	void NotifyStallEndstopTriggered(uint8_t driverNumber) noexcept;
-#endif
-
 	void WakeAsyncSender() noexcept;
 }
 

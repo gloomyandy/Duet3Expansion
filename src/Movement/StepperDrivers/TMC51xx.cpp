@@ -65,7 +65,7 @@ constexpr bool DefaultStallDetectFiltered = false;
 constexpr unsigned int DefaultMinimumStepsPerSecond = 200;	// for stall detection: 1 rev per second assuming 1.8deg/step, as per the TMC5160 datasheet
 constexpr uint32_t DefaultTcoolthrs = 2000;					// max interval between 1/256 microsteps for stall detection to be enabled
 constexpr uint32_t DefaultThigh = 200;
-constexpr uint32_t DefaultHighestTmcClockSpeed = 12500000;	// the maximum rate at which the TMC driver is clocked internally
+constexpr uint32_t DefaultHighestTmcClockSpeed = 12500000;	// the highest speed at which the TMC driver is clocked internally
 
 #if SUPPORT_CLOSED_LOOP
 constexpr size_t TmcTaskStackWords = 430;					// we need extra stack to handle closed loop tuning and writing to NVM
@@ -344,6 +344,7 @@ enum class DriversState : uint8_t
 
 static DriversState driversState = DriversState::shutDown;
 static RemoteDriversBitmap stallEndstopsEnabled;
+std::atomic<uint16_t> SmartDrivers::driverStallsToNotify(0);
 
 //----------------------------------------------------------------------------------------------------------------------------------
 // Private types and methods
@@ -382,7 +383,7 @@ public:
 	float GetStandstillCurrentPercent() const noexcept;
 	void SetStandstillCurrentPercent(float percent) noexcept;
 
-	bool CheckStallDetectionEnabled(float speed, const StringRef& reply) const noexcept;
+	bool CheckStallDetectionEnabled(float speed, const StringRef& errorMessage) const noexcept;
 
 	int8_t GetCurrentScaler() const noexcept { return currentScaler; }
 	bool SetCurrentScaler(int8_t cs) noexcept;
@@ -453,6 +454,7 @@ private:
 	std::atomic<uint32_t> newRegistersToUpdate;				// bitmap of register indices whose values need to be sent to the driver chip
 	std::atomic<uint32_t> registersToUpdate;				// bitmap of register indices whose values need to be sent to the driver chip
 	uint32_t motorCurrent;									// the configured motor current in mA
+	uint32_t globalScaler = 0;
 
 #if SUPPORT_CLOSED_LOOP || SUPPORT_PHASE_STEPPING
 	uint32_t phaseToSet;									// phase value to be written to the XDIRECT register, only read/written by the TMC task
@@ -469,7 +471,6 @@ private:
 	int8_t currentScaler = -1;								// CS if manually specified, otherwise -1 to indicate auto calculate
 	uint8_t iRun = 0;
 	uint8_t iHold = 0;
-	uint32_t globalScaler = 0;
 	uint16_t standstillCurrentFraction;						// divide this by 256 to get the motor current standstill fraction
 	uint8_t regIndexBeingUpdated;							// which register we are sending
 	uint8_t regIndexRequested;								// the register we asked to read in the previous transaction, or 0xFF
@@ -1154,7 +1155,8 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 		if (stallEndstopsEnabled.IsBitSet(driverNumber))
 		{
 			stallEndstopsEnabled.ClearBit(driverNumber);
-			CanInterface::NotifyStallEndstopTriggered(driverNumber);
+			SmartDrivers::driverStallsToNotify |= 1u << driverNumber;
+			CanInterface::WakeAsyncSender();
 		}
 	}
 	else
@@ -1823,7 +1825,7 @@ uint16_t SmartDrivers::GetMicrostepPosition(size_t driver) noexcept
 
 // Schedules a request to update the motor phases using XDIRECT register.
 // Returns true if request is scheduled. Will not schedule a request if it is equal to the current value.
-bool SmartDrivers::SetMotorCurrents(size_t driver, uint32_t regVal) noexcept
+bool SmartDrivers::SetMotorPhases(size_t driver, uint32_t regVal) noexcept
 {
 	return driverStates[driver].SetXdirect(regVal);
 }
