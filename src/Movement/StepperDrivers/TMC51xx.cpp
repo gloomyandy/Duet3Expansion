@@ -383,7 +383,7 @@ public:
 	float GetStandstillCurrentPercent() const noexcept;
 	void SetStandstillCurrentPercent(float percent) noexcept;
 
-	bool CheckStallDetectionEnabled(float speed, const StringRef& errorMessage) const noexcept;
+	const char *_ecv_array _ecv_null CheckStallDetectionEnabled(float speed) const noexcept;
 
 	int8_t GetCurrentScaler() const noexcept { return currentScaler; }
 	bool SetCurrentScaler(int8_t cs) noexcept;
@@ -627,19 +627,17 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const noexcep
 }
 
 // Check that stall detection can occur at the specified speed
-bool TmcDriverState::CheckStallDetectionEnabled(float speed, const StringRef& errorMessage) const noexcept
+const char *_ecv_array _ecv_null  TmcDriverState::CheckStallDetectionEnabled(float speed) const noexcept
 {
 	if (GetDriverMode() > DriverMode::spreadCycle)			// if in stealthChop or direct mode
 	{
-		errorMessage.printf("driver %u is not in spreadCycle mode", driverNumber);
-		return false;
+		return "driver %u is not in spreadCycle mode";
 	}
 	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor))
 	{
-		errorMessage.printf("move is too slow for driver %u to detect stall", driverNumber);
-		return false;
+		return "move is too slow for driver %u to detect stall";
 	}
-	return true;
+	return nullptr;
 }
 
 bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept
@@ -2023,11 +2021,13 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 {
 	if (driverNumber < numTmc51xxDrivers)
 	{
-		if (driverStates[driverNumber].CheckStallDetectionEnabled(speed, reply))
+		const char *_ecv_array _ecv_null const msg = driverStates[driverNumber].CheckStallDetectionEnabled(speed);
+		if (msg == nullptr)
 		{
 			stallEndstopsEnabled.SetBit(driverNumber);
 			return GCodeResult::ok;
 		}
+		reply.printf(msg, driverNumber);
 		return GCodeResult::error;
 	}
 	else

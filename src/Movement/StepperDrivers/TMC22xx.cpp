@@ -565,7 +565,7 @@ public:
 	void SetStallDetectThreshold(int sgThreshold) noexcept;
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept;
 	void AppendStallConfig(const StringRef& reply) const noexcept;
-	bool CheckStallDetectionEnabled(float speed, const StringRef& errorMessage) noexcept;
+	const char *_ecv_array _ecv_null  CheckStallDetectionEnabled(float speed) noexcept;
 	void EnableDiagInterrupt() noexcept;
 	void DisableDiagInterrupt() noexcept;
 #endif
@@ -1295,19 +1295,17 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 }
 
 // Check that stall detection can occur at the specified speed
-bool TmcDriverState::CheckStallDetectionEnabled(float speed, const StringRef& errorMessage) noexcept
+const char *_ecv_array _ecv_null  TmcDriverState::CheckStallDetectionEnabled(float speed) noexcept
 {
 	if (!IsStealthChop())
 	{
-		errorMessage.printf("driver %u is nt in stealthChop mode", driverNumber);
-		return false;
+		return "driver %u is not in stealthChop mode";
 	}
 	if (speed * (float)StepTimer::StepClockRate < ((12500000/256) << microstepShiftFactor) / writeRegisters[WriteTcoolthrs])
 	{
-		errorMessage.printf("move is too slow for driver %u to detect stall", driverNumber);
-		return false;
+		return "move is too slow for driver %u to detect stall";
 	}
-	return true;
+	return nullptr;
 }
 
 void TmcDriverState::EnableDiagInterrupt() noexcept
@@ -2594,12 +2592,13 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 {
 	if (driverNumber < GetNumTmcDrivers())
 	{
-		if (driverStates[driverNumber].CheckStallDetectionEnabled(speed, reply))
+		const char *_ecv_array _ecv_null const msg = driverStates[driverNumber].CheckStallDetectionEnabled(speed);
+		if (msg == nullptr)
 		{
 			stallEndstopsEnabled.SetBit(driverNumber);
-			driverStates[driverNumber].EnableDiagInterrupt();
 			return GCodeResult::ok;
 		}
+		reply.printf(msg, driverNumber);
 		return GCodeResult::error;
 	}
 	else
