@@ -2339,7 +2339,7 @@ GCodeResult Move::SetStallEndstopReporting(const CanMessageEnableStallEndstop& m
 #if HAS_SMART_DRIVERS
 	return SmartDrivers::SetStallEndstopReporting(msg.driverNumber, msg.speed, reply);
 #else
-	reply.printf("stall detection not supported on board %u", CanInterface::GetCanAddress());
+	reply.printf("stall detection not supported on board %u.%u", CanInterface::GetCanAddress(), msg.driverNumber);
 	return GCodeResult::error;
 #endif
 }

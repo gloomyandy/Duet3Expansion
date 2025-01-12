@@ -631,11 +631,11 @@ const char *_ecv_array _ecv_null  TmcDriverState::CheckStallDetectionEnabled(flo
 {
 	if (GetDriverMode() > DriverMode::spreadCycle)			// if in stealthChop or direct mode
 	{
-		return "driver %u is not in spreadCycle mode";
+		return "driver %u.%u is not in spreadCycle mode";
 	}
 	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor))
 	{
-		return "move is too slow for driver %u to detect stall";
+		return "move is too slow for driver %u.%u to detect stall";
 	}
 	return nullptr;
 }
@@ -2027,7 +2027,7 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 			stallEndstopsEnabled.SetBit(driverNumber);
 			return GCodeResult::ok;
 		}
-		reply.printf(msg, driverNumber);
+		reply.printf(msg, CanInterface::GetCanAddress(), driverNumber);
 		return GCodeResult::error;
 	}
 	else
