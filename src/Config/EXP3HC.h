@@ -82,6 +82,8 @@ constexpr GpioPinFunction TMC51xxMisoPinPeriphMode = GpioPinFunction::C;
 PortGroup * const StepPio = &(PORT->Group[0]);		// the PIO that all the step pins are on
 constexpr Pin StepPins[NumDrivers] = { PortAPin(25), PortAPin(27), PortAPin(1) };
 constexpr Pin DirectionPins[NumDrivers] = { PortAPin(23), PortCPin(28), PortAPin(0) };
+constexpr Pin Diag0Pins[NumDrivers] = { PortAPin(9), PortCPin(27), PortBPin(30) };
+constexpr Pin Diag1Pins[NumDrivers] = { PortAPin(22), PortCPin(26), PortBPin(0) };
 
 constexpr Pin BoardTypePins[NumBoardTypeBits] = { PortBPin(18), PortCPin(18), PortCPin(13) };
 

@@ -47,11 +47,7 @@
 #include <CanMessageBuffer.h>
 #include <Platform/TaskPriorities.h>
 #include <AppNotifyIndices.h>
-
-#if HAS_SMART_DRIVERS
-# include "StepperDrivers/TMC51xx.h"
-# include "StepperDrivers/TMC22xx.h"
-#endif
+#include "StepperDrivers/SmartDrivers.h"
 
 #if USE_TC_FOR_STEP
 # if SAME5x
@@ -2336,6 +2332,17 @@ void Move::ResetPhaseStepMonitoringVariables() noexcept
 }
 
 #endif
+
+// Stall endstops
+GCodeResult Move::SetStallEndstopReporting(const CanMessageEnableStallEndstop& msg, const StringRef& reply) noexcept
+{
+#if HAS_SMART_DRIVERS
+	return SmartDrivers::SetStallEndstopReporting(msg.driverNumber, msg.speed, reply);
+#else
+	reply.printf("stall detection not supported on board %u.%u", CanInterface::GetCanAddress(), msg.driverNumber);
+	return GCodeResult::error;
+#endif
+}
 
 #endif	//SUPPORT_DRIVERS
 

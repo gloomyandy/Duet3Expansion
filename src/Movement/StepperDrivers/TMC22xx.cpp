@@ -50,6 +50,10 @@
 #include <Hardware/IoPorts.h>
 #include <AppNotifyIndices.h>
 
+#if HAS_STALL_DETECT
+# include <CAN/CanInterface.h>
+#endif
+
 #if SAME5x || SAMC21
 # include <DmacManager.h>
 # include <Serial.h>
@@ -110,6 +114,8 @@ enum class DriversState : uint8_t
 };
 
 static DriversState driversState = DriversState::shutDown;
+static RemoteDriversBitmap stallEndstopsEnabled;
+std::atomic<uint16_t> SmartDrivers::driverStallsToNotify(0);
 
 #if TMC22xx_USE_SLAVEADDR && TMC22xx_HAS_MUX
 static bool currentMuxState;
@@ -559,6 +565,9 @@ public:
 	void SetStallDetectThreshold(int sgThreshold) noexcept;
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept;
 	void AppendStallConfig(const StringRef& reply) const noexcept;
+	const char *_ecv_array _ecv_null  CheckStallDetectionEnabled(float speed) noexcept;
+	void EnableDiagInterrupt() noexcept;
+	void DisableDiagInterrupt() noexcept;
 #endif
 	void AppendDriverStatus(const StringRef& reply) noexcept;
 	StandardDriverStatus GetStatus(bool accumulated, bool clearAccumulated) noexcept;
@@ -903,6 +912,19 @@ inline uint8_t TmcDriverState::GetReadRegNumber(size_t regIndex) const noexcept
 // State structures for all drivers
 static TmcDriverState driverStates[MaxSmartDrivers];
 
+// ISR for Diag pins
+static void DiagPinInterruptEntry(CallbackParameter cp) noexcept
+{
+	uint8_t driverNumber = (uint8_t)cp.u32;
+	if (stallEndstopsEnabled.IsBitSet(driverNumber))
+	{
+		stallEndstopsEnabled.ClearBit(driverNumber);
+		driverStates[driverNumber].DisableDiagInterrupt();
+		SmartDrivers::driverStallsToNotify |= 1u << driverNumber;
+		CanInterface::WakeAsyncSender();
+	}
+}
+
 inline bool TmcDriverState::UpdatePending() const noexcept
 {
 	return registersToUpdate != 0;
@@ -1167,6 +1189,8 @@ pre(!driversPowered)
 #if HAS_STALL_DETECT
 	diagPin = p_diagPin;
 	IoPort::SetPinMode(p_diagPin, INPUT_PULLUP);
+	AttachPinInterrupt(p_diagPin, DiagPinInterruptEntry, InterruptMode::rising, CallbackParameter(p_driverNumber), false);
+	// Leave the interrupt disabled until we enable a stall endstop on this driver
 #endif
 
 #if !TMC22xx_SINGLE_UART
@@ -1268,6 +1292,30 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 	const int threshold = 127 - (int)writeRegisters[WriteSgthrs];
 	reply.catf("stall threshold %d, steps/sec %" PRIu32 ", coolstep %" PRIx32,
 				threshold, 12000000 / (256 * writeRegisters[WriteTcoolthrs]), writeRegisters[WriteCoolconf] & 0xFFFF);
+}
+
+// Check that stall detection can occur at the specified speed
+const char *_ecv_array _ecv_null  TmcDriverState::CheckStallDetectionEnabled(float speed) noexcept
+{
+	if (!IsStealthChop())
+	{
+		return "driver %u.%u is not in stealthChop mode";
+	}
+	if (speed * (float)StepTimer::StepClockRate < ((12500000/256) << microstepShiftFactor) / writeRegisters[WriteTcoolthrs])
+	{
+		return "move is too slow for driver %u.%u to detect stall";
+	}
+	return nullptr;
+}
+
+void TmcDriverState::EnableDiagInterrupt() noexcept
+{
+	EnablePinInterrupt(diagPin);
+}
+
+void TmcDriverState::DisableDiagInterrupt() noexcept
+{
+	DisablePinInterrupt(diagPin);
 }
 
 #endif
@@ -2538,6 +2586,31 @@ StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bo
 	StandardDriverStatus rslt;
 	rslt.all = 0;
 	return rslt;
+}
+
+GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept
+{
+	if (driverNumber < GetNumTmcDrivers())
+	{
+		const char *_ecv_array _ecv_null const msg = driverStates[driverNumber].CheckStallDetectionEnabled(speed);
+		if (msg == nullptr)
+		{
+			stallEndstopsEnabled.SetBit(driverNumber);
+			return GCodeResult::ok;
+		}
+		reply.printf(msg, CanInterface::GetCanAddress(), driverNumber);
+		return GCodeResult::error;
+	}
+	else
+	{
+		stallEndstopsEnabled.Clear();
+		for (TmcDriverState& ds : driverStates)
+		{
+			ds.DisableDiagInterrupt();
+		}
+		driverStallsToNotify = 0;
+		return GCodeResult::ok;
+	}
 }
 
 #if SUPPORT_TMC2240 && !(SUPPORT_TMC2208 || SUPPORT_TMC2209)

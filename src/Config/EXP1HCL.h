@@ -167,7 +167,7 @@ constexpr uint8_t ClockGenGclkNumber = 5;
 constexpr Pin ClockGenPin = PortBPin(11);
 constexpr GpioPinFunction ClockGenPinPeriphMode = GpioPinFunction::M;
 
-// Brake On pin for version 2.0 board. If the BrakwPwmPort is configured as the brake pin in M569.7 then the BrakeOnPin is used implicitly as well.
+// Brake On pin for version 2.0 board. If the BrakePwmPort is configured as the brake pin in M569.7 then the BrakeOnPin is used implicitly as well.
 constexpr Pin BrakePwmPin = PortBPin(10);
 constexpr Pin BrakeOnPin = PortAPin(20);
 
@@ -223,7 +223,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB07 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_2,	SercomIo::none,		SercomIo::none,		Nx,	"temp0"			},	// PB08 TEMP0
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_3,	SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB09 VSSA monitor
-	{ TcOutput::none,	TccOutput::tcc0_4F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out1,brake,brake.neg"	},	// PB10 OUT1
+	{ TcOutput::none,	TccOutput::tcc0_4F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out1,brake,brake.neg"	},	// PB10 OUT1 (version 1.x boards), Brake Negative (version 2.x boards)
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB11 CLKOUT
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB12 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB13 not on chip

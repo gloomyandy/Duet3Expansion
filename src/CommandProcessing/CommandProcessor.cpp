@@ -30,12 +30,8 @@
 #include <cctype>				// for tolower()
 
 #if SUPPORT_DRIVERS
-# if SUPPORT_TMC22xx
-#  include "Movement/StepperDrivers/TMC22xx.h"
-# endif
-# if SUPPORT_TMC51xx
-#  include "Movement/StepperDrivers/TMC51xx.h"
-# endif
+# include <Movement/StepperDrivers/SmartDrivers.h>
+
 # if SUPPORT_CLOSED_LOOP
 #  include <ClosedLoop/ClosedLoop.h>
 # endif
@@ -837,6 +833,11 @@ void CommandProcessor::Spin()
 			break;
 
 #if SUPPORT_DRIVERS
+		case CanMessageType::enableStallEndstop:
+			requestId = buf->msg.enableStallEndstop.requestId;
+			rslt = moveInstance->SetStallEndstopReporting(buf->msg.enableStallEndstop, replyRef);
+			break;
+
 		case CanMessageType::createFilamentMonitor:
 			requestId = buf->msg.createFilamentMonitor.requestId;
 			rslt = FilamentMonitor::Create(buf->msg.createFilamentMonitor, replyRef);

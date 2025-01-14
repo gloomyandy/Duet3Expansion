@@ -120,7 +120,7 @@ void ClosedLoop::SetMotorPhase(uint16_t phase, float magnitude) noexcept
 	coilB = (int16_t)lrintf(sine * magnitude);
 
 # if SUPPORT_TMC51xx && SINGLE_DRIVER
-	SmartDrivers::SetMotorCurrents(0, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF);
+	SmartDrivers::SetMotorPhases(0, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF);
 # else
 #  error Multi driver code not implemented
 # endif

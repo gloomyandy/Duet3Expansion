@@ -26,6 +26,10 @@
 #include <General/RingBuffer.h>
 #include <Version.h>
 
+#if SUPPORT_DRIVERS && HAS_STALL_DETECT
+# include <Movement/StepperDrivers/SmartDrivers.h>			// for extern declaration of driverStallsToNotify
+#endif
+
 #if RP2040
 # include <Hardware/NonVolatileMemory.h>
 #else
@@ -674,7 +678,7 @@ bool CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
 	return true;
 }
 
-// Wake the CAN sender task, either from an ISR or form a task
+// Wake the CAN sender task, either from an ISR or from a task
 void CanInterface::WakeAsyncSender() noexcept
 {
 	if (inInterrupt())
@@ -874,6 +878,15 @@ extern "C" [[noreturn]] void CanAsyncSenderLoop(void *) noexcept
 		msg->states = 0;
 		msg->numHandles = 0;
 
+#if SUPPORT_DRIVERS && HAS_STALL_DETECT
+			// Start by adding any stall detect endstops pending. Do this first so that it must succeed.
+			const uint16_t stallNotifications = SmartDrivers::driverStallsToNotify.exchange(0);
+			if (stallNotifications != 0)
+			{
+				constexpr RemoteInputHandle h(RemoteInputHandle::typeStallEndstop, 0, 0);
+				(void)msg->AddEntry(h.asU16(), (uint32_t)stallNotifications, true);
+			}
+#endif
 		const uint32_t timeToWait = InputMonitor::AddStateChanges(msg);
 		if (msg->numHandles != 0)
 		{
