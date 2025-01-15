@@ -362,8 +362,7 @@ static GCodeResult ProcessM915(const CanMessageGeneric& msg, const StringRef& re
 									{
 										reply.lcatf("Driver %u.%u: ", CanInterface::GetCanAddress(), drive);
 										SmartDrivers::AppendStallConfig(drive, reply);
-										reply.cat(", event on stall: ");
-										reply.cat((moveInstance->GetEventOnStall(drive)) ? "yes" : "no");
+										reply.catf(", event on stall: %s", moveInstance->GetEventOnStallText(drive));
 									}
 					   );
 	}

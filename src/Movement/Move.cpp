@@ -1515,9 +1515,15 @@ void Move::SetOrResetEventOnStall(LocalDriversBitmap drivers, bool enable) noexc
 	}
 }
 
-bool Move::GetEventOnStall(unsigned int driver) noexcept
+const char *_ecv_array Move::GetEventOnStallText(unsigned int driver) noexcept
 {
-	return eventOnStallDrivers.IsBitSet(driver);
+	return (eventOnStallDrivers.IsBitSet(driver)) ?
+# if SUPPORT_CLOSED_LOOP
+				((dms[driver].closedLoopControl.IsClosedLoopEnabled()) ? "no (driver not in open loop mode)" : "yes")
+# else
+				"yes"
+# endif
+				: "no";
 }
 
 # endif

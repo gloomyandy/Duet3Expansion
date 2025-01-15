@@ -86,7 +86,7 @@ public:
 	float GetTmcDriversTemperature() noexcept;
 #  if HAS_STALL_DETECT
 	void SetOrResetEventOnStall(LocalDriversBitmap drivers, bool enable) noexcept;
-	bool GetEventOnStall(unsigned int driver) noexcept;
+	const char *_ecv_array GetEventOnStallText(unsigned int driver) noexcept;
 #  endif
 # else
 	StandardDriverStatus GetStandardDriverStatus(size_t driver);
