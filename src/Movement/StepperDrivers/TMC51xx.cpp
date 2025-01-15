@@ -659,10 +659,12 @@ const char *_ecv_array _ecv_null  TmcDriverState::CheckStallDetectionEnabled(flo
 	{
 		return "move is too slow for driver %u.%u to detect stall (increase speed or Tcoolthrs)";
 	}
+#if 0	// the Tpwmthrs setting affects the DIAG pin output but not the stall detection that we read over SPI, so we must not check the following
 	if (speed * (float)StepTimer::StepClockRate * (float)writeRegisters[WriteTpwmthrs] > (float)((GetLowestTmcClockSpeed()/256) << microstepShiftFactor))
 	{
 		return "move is too fast for driver %u.%u to detect stall (reduce speed or Tpwmthrs)";
 	}
+#endif
 	return nullptr;
 }
 
