@@ -26,7 +26,7 @@ namespace SmartDrivers
 	void EnableDrive(size_t driver, bool en) noexcept;
 	bool SetMicrostepping(size_t drive, unsigned int microsteps, bool interpolation) noexcept;
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation) noexcept;
-#if SUPPORT_CLOSED_LOOP
+#if SUPPORT_CLOSED_LOOP || SUPPORT_PHASE_STEPPING
 	float GetCurrent(size_t driver) noexcept;
 	unsigned int GetMicrostepShift(size_t driver) noexcept;
 	uint16_t GetMicrostepPosition(size_t driver) noexcept;
@@ -52,6 +52,8 @@ namespace SmartDrivers
 	GCodeResult GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept;
 	GCodeResult SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
 	StandardDriverStatus GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept;
+	uint32_t GetDriverClockFrequency() noexcept;
+
 	GCodeResult SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept;
 	extern std::atomic<uint16_t> driverStallsToNotify;
 };

@@ -65,7 +65,9 @@ constexpr bool DefaultStallDetectFiltered = false;
 constexpr unsigned int DefaultMinimumStepsPerSecond = 200;	// for stall detection: 1 rev per second assuming 1.8deg/step, as per the TMC5160 datasheet
 constexpr uint32_t DefaultTcoolthrs = 2000;					// max interval between 1/256 microsteps for stall detection to be enabled
 constexpr uint32_t DefaultThigh = 200;
-constexpr uint32_t DefaultHighestTmcClockSpeed = 12500000;	// the highest speed at which the TMC driver is clocked internally
+constexpr uint32_t LowestTmcClockSpeed = 11500000;			// the lowest speed at which the TMC driver is clocked internally
+constexpr uint32_t NominalTmcClockSpeed = 120000000;		// the nominal speed at which the TMC driver is clocked internally
+constexpr uint32_t HighestTmcClockSpeed = 12600000;			// the highest speed at which the TMC driver is clocked internally
 
 #if SUPPORT_CLOSED_LOOP
 constexpr size_t TmcTaskStackWords = 430;					// we need extra stack to handle closed loop tuning and writing to NVM
@@ -311,9 +313,19 @@ static constexpr uint32_t InvalidSgLoadRegister = 1024;
 
 #if defined(EXP1HCL) || defined(M23CL)
 
-static uint32_t tmcClockSpeed = DefaultHighestTmcClockSpeed;	// the (highest) rate at which the TMC driver is clocked, internally or externally
+static uint32_t tmcClockSpeed = HighestTmcClockSpeed;		// the (highest) rate at which the TMC driver is clocked, internally or externally
 
 inline uint32_t GetHighestTmcClockSpeed() noexcept
+{
+	return tmcClockSpeed;
+}
+
+inline uint32_t GetLowestTmcClockSpeed() noexcept
+{
+	return tmcClockSpeed;
+}
+
+uint32_t SmartDrivers::GetDriverClockFrequency() noexcept
 {
 	return tmcClockSpeed;
 }
@@ -328,7 +340,17 @@ void SmartDrivers::SetTmcExternalClock(uint32_t frequency) noexcept
 
 inline uint32_t GetHighestTmcClockSpeed() noexcept
 {
-	return DefaultHighestTmcClockSpeed;
+	return HighestTmcClockSpeed;
+}
+
+inline uint32_t GetLowestTmcClockSpeed() noexcept
+{
+	return LowestTmcClockSpeed;
+}
+
+uint32_t SmartDrivers::GetDriverClockFrequency() noexcept
+{
+	return NominalTmcClockSpeed;
 }
 
 #endif
@@ -343,7 +365,7 @@ enum class DriversState : uint8_t
 };
 
 static DriversState driversState = DriversState::shutDown;
-static RemoteDriversBitmap stallEndstopsEnabled;
+static LocalDriversBitmap stallEndstopsEnabled;
 std::atomic<uint16_t> SmartDrivers::driverStallsToNotify(0);
 
 //----------------------------------------------------------------------------------------------------------------------------------
@@ -635,7 +657,11 @@ const char *_ecv_array _ecv_null  TmcDriverState::CheckStallDetectionEnabled(flo
 	}
 	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor))
 	{
-		return "move is too slow for driver %u.%u to detect stall";
+		return "move is too slow for driver %u.%u to detect stall (increase speed or Tcoolthrs)";
+	}
+	if (speed * (float)StepTimer::StepClockRate * (float)writeRegisters[WriteTpwmthrs] > (float)((GetLowestTmcClockSpeed()/256) << microstepShiftFactor))
+	{
+		return "move is too fast for driver %u.%u to detect stall (reduce speed or Tpwmthrs)";
 	}
 	return nullptr;
 }
@@ -697,7 +723,10 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 		return (configuredChopConfReg & CHOPCONF_HEND_MASK) >> CHOPCONF_HEND_SHIFT;
 
 	case SmartDriverRegister::tpwmthrs:
-		return writeRegisters[WriteTpwmthrs];
+		return writeRegisters[WriteTpwmthrs] & 0x000FFFFF;
+
+	case SmartDriverRegister::tcoolthrs:
+		return writeRegisters[WriteTcoolthrs] & 0x000FFFFF;
 
 	case SmartDriverRegister::thigh:
 		return writeRegisters[WriteThigh];
