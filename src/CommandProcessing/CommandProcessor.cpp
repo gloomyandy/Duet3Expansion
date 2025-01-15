@@ -321,6 +321,15 @@ static GCodeResult ProcessM915(const CanMessageGeneric& msg, const StringRef& re
 	}
 
 	{
+		uint8_t sgFilter;
+		if (parser.GetUintParam('F', sgFilter))
+		{
+			seen = true;
+			drivers.Iterate([sgFilter](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallFilter(drive, sgFilter); });
+		}
+	}
+
+	{
 		uint16_t stepsPerSecond;
 		if (parser.GetUintParam('H', stepsPerSecond))
 		{
