@@ -12,6 +12,7 @@
 
 #include <Config/BoardDef.h>
 #include <Config/Configuration.h>
+#include <Duet3Common.h>
 #include <General/String.h>
 #include <General/StringFunctions.h>
 #include <General/Bitmap.h>
@@ -198,12 +199,5 @@ enum class Module : uint8_t
 extern const char * const moduleName[];
 
 #include "Config/BoardDef.h"
-
-typedef Bitmap<uint16_t> LocalDriversBitmap;		// Type of a bitmap representing a set of driver numbers
-typedef Bitmap<uint32_t> FansBitmap;				// Type of a bitmap representing a set of fan numbers
-typedef Bitmap<uint64_t> SensorsBitmap;				// Type of a bitmap representing sensors
-
-static_assert(MaxFans <= FansBitmap::MaxBits());
-static_assert(MaxSensors <= SensorsBitmap::MaxBits());
 
 #endif /* SRC_REPRAPFIRMWARE_H_ */

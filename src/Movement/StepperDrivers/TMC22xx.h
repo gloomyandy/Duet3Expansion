@@ -25,6 +25,7 @@
 #endif
 
 #include "DriverMode.h"
+
 #include <atomic>
 
 namespace SmartDrivers
@@ -59,8 +60,12 @@ namespace SmartDrivers
 	GCodeResult GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept;
 	GCodeResult SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
 	StandardDriverStatus GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept;
+	uint32_t GetDriverClockFrequency() noexcept;
+
+#if HAS_STALL_DETECT
 	GCodeResult SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept;
 	extern std::atomic<uint16_t> driverStallsToNotify;
+#endif
 
 #if SUPPORT_TMC2240 && !(SUPPORT_TMC2208 || SUPPORT_TMC2209)
 	float GetDriverTemperature(size_t driver) noexcept;

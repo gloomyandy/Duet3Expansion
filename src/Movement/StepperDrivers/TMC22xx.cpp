@@ -75,8 +75,11 @@ constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA fo
 constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
 constexpr bool DefaultInterpolation = true;					// interpolation enabled
 constexpr uint32_t DefaultTpwmthrsReg = 2000;				// low values (high changeover speed) give horrible jerk at the changeover from stealthChop to spreadCycle
-constexpr size_t TmcTaskStackWords = 100;					// 100 is sufficient unless we use debugPrintf in the code executed by the TMC task
+constexpr uint32_t LowestTmcClockSpeed = 11500000;			// the lowest speed at which the TMC driver is clocked internally
+constexpr uint32_t NominalTmcClockSpeed = 12000000;			// the nominal speed at which the TMC driver is clocked internally
+constexpr uint32_t HighestTmcClockSpeed = 12600000;			// the highest speed at which the TMC driver is clocked internally
 
+constexpr size_t TmcTaskStackWords = 100;					// 100 is sufficient unless we use debugPrintf in the code executed by the TMC task
 constexpr uint16_t DriverNotPresentTimeouts = 20;
 
 #if HAS_STALL_DETECT
@@ -114,7 +117,7 @@ enum class DriversState : uint8_t
 };
 
 static DriversState driversState = DriversState::shutDown;
-static RemoteDriversBitmap stallEndstopsEnabled;
+static LocalDriversBitmap stallEndstopsEnabled;
 std::atomic<uint16_t> SmartDrivers::driverStallsToNotify(0);
 
 #if TMC22xx_USE_SLAVEADDR && TMC22xx_HAS_MUX
@@ -843,7 +846,7 @@ constexpr size_t SendDataCRCIndex0 = 7;
 constexpr size_t SendDataCRCIndex1 = 11;
 
 // Buffer for the message we receive when reading data, dword-aligned so that we can use 32-bit mode on the SAME5x. The first 4 or 12 bytes bytes are our own transmitted data.
-// Align on a 16-bit boundary to make sure it covers only 2 cache lines not 3
+// Align on a 16-byte boundary to make sure it covers only 2 cache lines not 3
 alignas(16) volatile uint8_t TmcDriverState::receiveData[20];
 
 constexpr uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
@@ -1290,7 +1293,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 {
 	// Map stall sensitivity value 0..255 to 128..-128
 	const int threshold = 127 - (int)writeRegisters[WriteSgthrs];
-	reply.catf("stall threshold %d, steps/sec %" PRIu32 ", coolstep %" PRIx32,
+	reply.catf("stall threshold %d, min. steps/sec %" PRIu32 ", coolstep %" PRIx32,
 				threshold, 12000000 / (256 * writeRegisters[WriteTcoolthrs]), writeRegisters[WriteCoolconf] & 0xFFFF);
 }
 
@@ -1301,9 +1304,13 @@ const char *_ecv_array _ecv_null  TmcDriverState::CheckStallDetectionEnabled(flo
 	{
 		return "driver %u.%u is not in stealthChop mode";
 	}
-	if (speed * (float)StepTimer::StepClockRate < ((12500000/256) << microstepShiftFactor) / writeRegisters[WriteTcoolthrs])
+	if (speed * (float)StepTimer::StepClockRate * (float)writeRegisters[WriteTcoolthrs] < (float)((HighestTmcClockSpeed/256) << microstepShiftFactor))
 	{
-		return "move is too slow for driver %u.%u to detect stall";
+		return "move is too slow for driver %u.%u to detect stall (increase speed or Tcoolthrs)";
+	}
+	if (speed * (float)StepTimer::StepClockRate * (float)writeRegisters[WriteTpwmthrs] > (float)((LowestTmcClockSpeed/256) << microstepShiftFactor))
+	{
+		return "move is too fast for driver %u.%u to detect stall (reduce speed or Tpwmthrs)";
 	}
 	return nullptr;
 }
@@ -1418,6 +1425,9 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 
 	case SmartDriverRegister::tpwmthrs:
 		return writeRegisters[WriteTpwmthrs] & 0x000FFFFF;
+
+	case SmartDriverRegister::tcoolthrs:
+		return writeRegisters[WriteTcoolthrs] & 0x000FFFFF;
 
 	case SmartDriverRegister::mstepPos:
 		return readRegisters[ReadMsCnt];
@@ -2611,6 +2621,11 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 		driverStallsToNotify = 0;
 		return GCodeResult::ok;
 	}
+}
+
+uint32_t SmartDrivers::GetDriverClockFrequency() noexcept
+{
+	return NominalTmcClockSpeed;
 }
 
 #if SUPPORT_TMC2240 && !(SUPPORT_TMC2208 || SUPPORT_TMC2209)

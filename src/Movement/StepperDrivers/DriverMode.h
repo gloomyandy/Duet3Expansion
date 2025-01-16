@@ -39,6 +39,7 @@ enum class SmartDriverRegister : unsigned int
 	chopperControl,
 	coolStep,
 	tpwmthrs,
+	tcoolthrs,
 	thigh,
 	mstepPos,
 	pwmScale,

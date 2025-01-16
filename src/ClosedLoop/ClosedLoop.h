@@ -236,6 +236,7 @@ private:
 	bool Step(bool firstIteration) noexcept;
 };
 
+// Return true if the driver is in closed loop or assisted open loop mode
 inline bool ClosedLoop::IsClosedLoopEnabled() const noexcept
 {
 	return currentMode != ClosedLoopMode::open;

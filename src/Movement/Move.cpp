@@ -1515,9 +1515,15 @@ void Move::SetOrResetEventOnStall(LocalDriversBitmap drivers, bool enable) noexc
 	}
 }
 
-bool Move::GetEventOnStall(unsigned int driver) noexcept
+const char *_ecv_array Move::GetEventOnStallText(unsigned int driver) noexcept
 {
-	return eventOnStallDrivers.IsBitSet(driver);
+	return (eventOnStallDrivers.IsBitSet(driver)) ?
+# if SUPPORT_CLOSED_LOOP
+				((dms[driver].closedLoopControl.IsClosedLoopEnabled()) ? "no (driver not in open loop mode)" : "yes")
+# else
+				"yes"
+# endif
+				: "no";
 }
 
 # endif
@@ -1780,16 +1786,19 @@ GCodeResult Move::ProcessM569(const CanMessageGeneric& msg, const StringRef& rep
 		if (SmartDrivers::GetDriverMode(drive) == DriverMode::stealthChop)
 		{
 			const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
+			const uint32_t tcoolthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tcoolthrs);
 			bool bdummy;
-			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * DriveStepsPerMm(drive));
+			const unsigned int microsteppingTimesClockRate = SmartDrivers::GetMicrostepping(drive, bdummy) * SmartDrivers::GetDriverClockFrequency();
+			const float tpwmMmPerSec = microsteppingTimesClockRate/(256 * tpwmthrs * DriveStepsPerMm(drive));
+			const float tcoolMmPerSec = microsteppingTimesClockRate/(256 * tcoolthrs * DriveStepsPerMm(drive));
 			const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
 			const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
 			const unsigned int pwmScaleSum = pwmScale & 0xFF;
 			const int pwmScaleAuto = (int)((((pwmScale >> 16) & 0x01FF) ^ 0x0100) - 0x0100);
 			const unsigned int pwmOfsAuto = pwmAuto & 0xFF;
 			const unsigned int pwmGradAuto = (pwmAuto >> 16) & 0xFF;
-			reply.catf(", tpwmthrs %" PRIu32 " (%.1f mm/sec), pwmScaleSum %u, pwmScaleAuto %d, pwmOfsAuto %u, pwmGradAuto %u",
-						tpwmthrs, (double)mmPerSec, pwmScaleSum, pwmScaleAuto, pwmOfsAuto, pwmGradAuto);
+			reply.catf(", tpwmthrs %" PRIu32 " (%.1f mm/sec), tcoolthrs %" PRIu32 " (%.1f mm/sec), pwmScaleSum %u, pwmScaleAuto %d, pwmOfsAuto %u, pwmGradAuto %u",
+						tpwmthrs, (double)tpwmMmPerSec, tcoolthrs, (double)tcoolMmPerSec, pwmScaleSum, pwmScaleAuto, pwmOfsAuto, pwmGradAuto);
 		}
 # endif
 		// Finally, print the microstep position
@@ -2336,7 +2345,7 @@ void Move::ResetPhaseStepMonitoringVariables() noexcept
 // Stall endstops
 GCodeResult Move::SetStallEndstopReporting(const CanMessageEnableStallEndstop& msg, const StringRef& reply) noexcept
 {
-#if HAS_SMART_DRIVERS
+#if HAS_SMART_DRIVERS && HAS_STALL_DETECT
 	return SmartDrivers::SetStallEndstopReporting(msg.driverNumber, msg.speed, reply);
 #else
 	reply.printf("stall detection not supported on board %u.%u", CanInterface::GetCanAddress(), msg.driverNumber);
