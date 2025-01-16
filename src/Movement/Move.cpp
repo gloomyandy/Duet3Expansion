@@ -2345,7 +2345,7 @@ void Move::ResetPhaseStepMonitoringVariables() noexcept
 // Stall endstops
 GCodeResult Move::SetStallEndstopReporting(const CanMessageEnableStallEndstop& msg, const StringRef& reply) noexcept
 {
-#if HAS_SMART_DRIVERS
+#if HAS_SMART_DRIVERS && HAS_STALL_DETECT
 	return SmartDrivers::SetStallEndstopReporting(msg.driverNumber, msg.speed, reply);
 #else
 	reply.printf("stall detection not supported on board %u.%u", CanInterface::GetCanAddress(), msg.driverNumber);
