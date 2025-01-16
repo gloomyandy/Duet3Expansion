@@ -301,6 +301,13 @@ static GCodeResult ProcessM915(const CanMessageGeneric& msg, const StringRef& re
 {
 #if HAS_SMART_DRIVERS && HAS_STALL_DETECT
 	CanMessageGenericParser parser(msg, M915Params);
+#if SUPPORT_TMC22xx && SINGLE_DRIVER
+	if (DriverDiagPins[0] == NoPin)
+	{
+		reply.copy("stall detection not supported by this board");
+		return GCodeResult::error;
+	}
+#endif
 	uint16_t driverBits;
 	if (!parser.GetUintParam('d', driverBits))
 	{
