@@ -75,7 +75,7 @@ constexpr Pin Tmc22xxUartPin = GpioPin(8);
 
 constexpr Pin StepPins[NumDrivers] = { GpioPin(9) };
 constexpr Pin DirectionPins[NumDrivers] = { GpioPin(10) };
-//constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(NoPin) };
+constexpr Pin DriverDiagPins[NumDrivers] = { NoPin };
 
 #define ACTIVE_HIGH_STEP		1		// 1 = active high, 0 = active low
 #define ACTIVE_HIGH_DIR			1		// 1 = active high, 0 = active low
