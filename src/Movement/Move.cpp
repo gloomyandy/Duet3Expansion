@@ -556,7 +556,7 @@ bool Move::AddMove(const CanMessageMovementLinearShaped& msg) noexcept
 				const float extrusionRequested = msg.perDrive[drive].extrusion;
 				if (extrusionRequested != 0.0)
 				{
-					AddLinearSegments(drive, msg.whenToExecute, params, extrusionRequested, segFlags, msg.usePressureAdvance);
+					AddLinearSegments(drive, msg.whenToExecute, params, extrusionRequested, segFlags.AddIsExtruder(), msg.usePressureAdvance);
 				}
 			}
 			else

@@ -315,6 +315,56 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 	uint32_t shiftFactor = 0;										// assume single stepping
 	{
 		int32_t stepsToLimit = segmentStepLimit - nextStep;
+		if (stepsToLimit == 1 && currentSegment->GetNext() == nullptr && !currentSegment->GetFlags().isExtruder && reverseStartStep != nextStep)
+		{
+			// It's an axis and we are soon to stop movement, so we should end on an exact microstep.
+			// Check whether taking the last step would end up going a little too far or not quite far enough
+			const motioncalc_t provisionalDistanceCarriedForwards = distanceCarriedForwards + currentSegment->GetLength() - (motioncalc_t)netStepsThisSegment;
+			if (fabsm(provisionalDistanceCarriedForwards) < 0.05)
+			{
+				currentSegment->AdjustLength(-provisionalDistanceCarriedForwards);				// just correct the segment length
+			}
+			else if (provisionalDistanceCarriedForwards > (motioncalc_t)0.95)
+			{
+				currentSegment->AdjustLength((motioncalc_t)1.0 - provisionalDistanceCarriedForwards);	// adjust the segment length slightly
+				if (direction)
+				{
+					// Take 1 more step
+					++netStepsThisSegment;														// add 1 step to it
+					const int32_t oldSsl = segmentStepLimit;
+					segmentStepLimit = oldSsl + 1;												// increase the number of steps due
+					if (reverseStartStep == oldSsl) { reverseStartStep = oldSsl + 1; }			// if we didn't reverse already, make sure we don't reverse when we take the extra step
+					++stepsToLimit;																// we can take 1 more step
+				}
+				else
+				{
+					// Take 1 less step
+					--segmentStepLimit;
+					--netStepsThisSegment;
+					stepsToLimit = 0;
+				}
+			}
+			else if (provisionalDistanceCarriedForwards < -(motioncalc_t)0.95)
+			{
+				currentSegment->AdjustLength(-(motioncalc_t)1.0 - provisionalDistanceCarriedForwards);	// adjust the segment length slightly
+				if (direction)
+				{
+					// Take 1 less step
+					--segmentStepLimit;
+					--netStepsThisSegment;
+					stepsToLimit = 0;
+				}
+				else
+				{
+					--netStepsThisSegment;														// add 1 step to it in the backwards direction
+					const int32_t oldSsl = segmentStepLimit;
+					segmentStepLimit = oldSsl + 1;												// increase the number of steps due
+					if (reverseStartStep == oldSsl) { reverseStartStep = oldSsl + 1; }			// if we didn't reverse already, make sure we don't reverse now
+					++stepsToLimit;
+				}
+			}
+		}
+
 		// If there are no more steps left in this segment, skip to the next segment and use single stepping
 		if (stepsToLimit <= 0)
 		{

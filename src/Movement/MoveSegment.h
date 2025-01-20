@@ -36,7 +36,7 @@ union MovementFlags
 	struct
 	{
 		uint32_t nonPrintingMove : 1,							// true if the move that generated this segment does not have both forwards extrusion and associated axis movement; used for filament monitoring
-							: 1,								// on main board this is checkEndstops - not required on expansion boards
+				 isExtruder	: 1,								// on main board this is checkEndstops - not required on expansion boards, so we use it to flag that this segment is for an extruder instead
 				 noShaping : 1,									// true if input shaping should be disabled for this move
 				 executing : 1;									// normally clear, set in a MoveSegment when the move starts to be executed
 	};
@@ -57,6 +57,14 @@ union MovementFlags
 	{
 		all |= other.all;
 		return *this;
+	}
+
+	MovementFlags AddIsExtruder() const noexcept
+	{
+		MovementFlags ret;
+		ret.all = all;
+		ret.isExtruder = true;
+		return ret;
 	}
 };
 
@@ -102,6 +110,9 @@ public:
 
 	// Get the length
 	motioncalc_t GetLength() const noexcept { return distance; }
+
+	// Make a small correction to the length. Only ever called on the last segment in a list.
+	void AdjustLength(motioncalc_t adjustment) noexcept { distance += adjustment; }
 
 	// Set the parameters of this segment
 	void SetParameters(uint32_t p_startTime, uint32_t p_duration, motioncalc_t p_distance, motioncalc_t p_a, MovementFlags p_flags) noexcept;
