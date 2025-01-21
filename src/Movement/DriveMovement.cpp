@@ -230,14 +230,17 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 			driversCurrentlyUsed = driversNormallyUsed;
 
 			// Update variables used by filament monitoring
-			if (segmentFlags.nonPrintingMove)
+			if (segmentFlags.isExtruder)
 			{
-				extruderPrinting = false;
-			}
-			else if (!extruderPrinting)
-			{
-				extruderPrintingSince = millis();
-				extruderPrinting = true;
+				if (segmentFlags.nonPrintingMove)
+				{
+					extruderPrinting = false;
+				}
+				else if (!extruderPrinting)
+				{
+					extruderPrintingSince = millis();
+					extruderPrinting = true;
+				}
 			}
 
 #if 0	//DEBUG

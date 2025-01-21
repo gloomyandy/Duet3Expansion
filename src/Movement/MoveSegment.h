@@ -36,9 +36,10 @@ union MovementFlags
 	struct
 	{
 		uint32_t nonPrintingMove : 1,							// true if the move that generated this segment does not have both forwards extrusion and associated axis movement; used for filament monitoring
-				 isExtruder	: 1,								// on main board this is checkEndstops - not required on expansion boards, so we use it to flag that this segment is for an extruder instead
+				 	 	 	 : 1,								// on main board this is checkEndstops - not required on expansion boards
 				 noShaping : 1,									// true if input shaping should be disabled for this move
-				 executing : 1;									// normally clear, set in a MoveSegment when the move starts to be executed
+				 executing : 1,									// normally clear, set in a MoveSegment when the move starts to be executed
+				 isExtruder	: 1;								// true if this segment is for an extruder
 	};
 
 	constexpr void Clear() noexcept { all = 0; }
