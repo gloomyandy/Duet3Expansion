@@ -33,10 +33,6 @@
 # error HAS_STALL_DETECT not defined
 #endif
 
-#if SUPPORT_TMC2240 && !HAS_STALL_DETECT
-# error Must set HAS_STALL_DETECT with SUPPORT_TMC2240
-#endif
-
 #define TMC22xx_SINGLE_UART		(TMC22xx_SINGLE_DRIVER || TMC22xx_HAS_MUX || TMC22xx_USE_SLAVEADDR)
 
 #define RESET_MICROSTEP_COUNTERS_AT_INIT	0		// Duets use pulldown resistors on the step pins, so we don't get phantom microsteps at power up
@@ -117,8 +113,11 @@ enum class DriversState : uint8_t
 };
 
 static DriversState driversState = DriversState::shutDown;
+
+#if HAS_STALL_DETECT
 static LocalDriversBitmap stallEndstopsEnabled;
 std::atomic<uint16_t> SmartDrivers::driverStallsToNotify(0);
+#endif
 
 #if TMC22xx_USE_SLAVEADDR && TMC22xx_HAS_MUX
 static bool currentMuxState;
@@ -641,7 +640,7 @@ private:
 	uint8_t GetReadRegNumber(size_t regIndex) const noexcept;
 	uint8_t GetWriteRegNumber(size_t regIndex) const noexcept;
 
-#if HAS_STALL_DETECT
+#if SUPPORT_TMC2209 || SUPPORT_TMC2240
 	void ResetLoadRegisters() noexcept
 	{
 		minSgLoadRegister = InvalidSgLoadRegister;					// value InvalidSgLoadRegister indicates that it hasn't been read
@@ -674,7 +673,7 @@ private:
 
 #if SUPPORT_TMC2240
 	static constexpr unsigned int NumWriteRegisters = 10;		// the number of registers that we write to on a TMC2240
-#elif HAS_STALL_DETECT
+#elif SUPPORT_TMC2209
 	static constexpr unsigned int NumWriteRegisters = 9;		// the number of registers that we write to on a TMC2209
 #else
 	static constexpr unsigned int NumWriteRegisters = 6;		// the number of registers that we write to on a TMC2208/2224
@@ -688,7 +687,7 @@ private:
 	static constexpr unsigned int WriteIholdIrun = 3;			// current setting
 	static constexpr unsigned int WritePwmConf = 4;				// read register select, sense voltage high/low sensitivity
 	static constexpr unsigned int WriteTpwmthrs = 5;			// upper step rate limit for stealthchop
-#if HAS_STALL_DETECT
+#if SUPPORT_TMC2209 || SUPPORT_TMC2240
 	static constexpr unsigned int WriteTcoolthrs = 6;			// coolstep and stall DIAG output lower speed threshold
 	static constexpr unsigned int WriteSgthrs = 7;				// stallguard threshold
 	static constexpr unsigned int WriteCoolconf = 8;			// coolstep configuration
@@ -700,7 +699,7 @@ private:
 
 #if SUPPORT_TMC2240
 	static constexpr unsigned int NumReadRegisters = 8;			// the number of registers that we read from on a TMC2240
-#elif HAS_STALL_DETECT
+#elif SUPPORT_TMC2209
 	static constexpr unsigned int NumReadRegisters = 7;			// the number of registers that we read from on a TMC2209
 #else
 	static constexpr unsigned int NumReadRegisters = 6;			// the number of registers that we read from on a TMC2208/2224
@@ -714,7 +713,7 @@ private:
 	static constexpr unsigned int ReadChopConf = 3;			// chopper control register - we read it to detect the VSENSE bit getting cleared
 	static constexpr unsigned int ReadPwmScale = 4;			// PWM scaling
 	static constexpr unsigned int ReadPwmAuto = 5;			// PWM scaling
-#if HAS_STALL_DETECT
+#if SUPPORT_TMC2209 || SUPPORT_TMC2240
 	static constexpr unsigned int ReadSgResult = 6;			// stallguard result
 #endif
 #if SUPPORT_TMC2240
@@ -732,7 +731,7 @@ private:
 
 	volatile uint16_t registersToUpdate;					// bitmap of register indices whose values need to be sent to the driver chip
 
-#if HAS_STALL_DETECT
+#if SUPPORT_TMC2209 || SUPPORT_TMC2240
 	uint16_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
 #endif
 
@@ -857,7 +856,7 @@ constexpr uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 	REGNUM_IHOLDIRUN,
 	REGNUM_PWMCONF,
 	REGNUM_TPWMTHRS,
-#if HAS_STALL_DETECT
+#if SUPPORT_TMC2209 || SUPPORT_TMC2240
 	// The rest are on TMC2209 and TMC2240 only
 	REGNUM_TCOOLTHRS,
 # if SUPPORT_TMC2240 && !SUPPORT_TMC2209
@@ -891,7 +890,7 @@ constexpr uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 	REGNUM_CHOPCONF,
 	REGNUM_PWM_SCALE,
 	REGNUM_PWM_AUTO,
-#if HAS_STALL_DETECT
+#if SUPPORT_TMC2209 || SUPPORT_TMC2240
 # if SUPPORT_TMC2240 && !SUPPORT_TMC2209
 	REGNUM_SG4_RESULT,
 # else
@@ -915,10 +914,12 @@ inline uint8_t TmcDriverState::GetReadRegNumber(size_t regIndex) const noexcept
 // State structures for all drivers
 static TmcDriverState driverStates[MaxSmartDrivers];
 
+#if HAS_STALL_DETECT
+
 // ISR for Diag pins
 static void DiagPinInterruptEntry(CallbackParameter cp) noexcept
 {
-	uint8_t driverNumber = (uint8_t)cp.u32;
+	const uint8_t driverNumber = (uint8_t)cp.u32;
 	if (stallEndstopsEnabled.IsBitSet(driverNumber))
 	{
 		stallEndstopsEnabled.ClearBit(driverNumber);
@@ -927,6 +928,8 @@ static void DiagPinInterruptEntry(CallbackParameter cp) noexcept
 		CanInterface::WakeAsyncSender();
 	}
 }
+
+#endif
 
 inline bool TmcDriverState::UpdatePending() const noexcept
 {
@@ -1125,7 +1128,7 @@ void TmcDriverState::UpdateMaxOpenLoadStepInterval() noexcept
 		// tpwmthrs is the 20-bit interval between 1/256 microsteps threshold, in clock cycles @ 12MHz.
 		// We need to convert it to the interval between full steps, measured in our step clocks, less about 20% to allow some margin.
 		// So multiply by the step clock rate divided by 12MHz, also multiply by 256 less 20%.
-		constexpr uint32_t conversionFactor = ((256 - 51) * (StepTimer::StepClockRate/1000000))/12;
+		constexpr uint32_t conversionFactor = ((256 - 51) * StepTimer::StepClockRate)/NominalTmcClockSpeed;
 		const uint32_t fullStepClocks = tpwmthrs * conversionFactor;
 		maxOpenLoadStepInterval = min<uint32_t>(fullStepClocks, defaultMaxInterval);
 	}
@@ -1269,7 +1272,7 @@ pre(!driversPowered)
 #if SUPPORT_TMC2208 || SUPPORT_TMC2209
 	badChopConfErrors = 0;
 #endif
-#if HAS_STALL_DETECT
+#if SUPPORT_TMC2209 || SUPPORT_TMC2240
 	ResetLoadRegisters();
 #endif
 }
@@ -1293,8 +1296,8 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 {
 	// Map stall sensitivity value 0..255 to 128..-128
 	const int threshold = 127 - (int)writeRegisters[WriteSgthrs];
-	reply.catf("stall threshold %d, min. steps/sec %" PRIu32 ", coolstep %" PRIx32,
-				threshold, 12000000 / (256 * writeRegisters[WriteTcoolthrs]), writeRegisters[WriteCoolconf] & 0xFFFF);
+	const uint32_t fullstepsPerSecond = (HighestTmcClockSpeed/256) / writeRegisters[WriteTcoolthrs];
+	reply.catf("stall threshold %d, full steps/sec %" PRIu32 ", coolstep %" PRIx32, threshold, fullstepsPerSecond, writeRegisters[WriteCoolconf] & 0xFFFF);
 }
 
 // Check that stall detection can occur at the specified speed
@@ -1325,7 +1328,7 @@ void TmcDriverState::DisableDiagInterrupt() noexcept
 	DisablePinInterrupt(diagPin);
 }
 
-#endif
+#endif	// HAS_STALL_DETECT
 
 inline void TmcDriverState::SetAxisNumber(size_t p_axisNumber) noexcept
 {
@@ -1392,7 +1395,7 @@ bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal) noexc
 		UpdateRegister(WriteTpwmthrs, regVal & ((1u << 20) - 1));
 		return true;
 
-#if HAS_STALL_DETECT
+#if SUPPORT_TMC2209 || SUPPORT_TMC2240
 	case SmartDriverRegister::coolStep:
 		UpdateRegister(WriteCoolconf, regVal & ((1u << 16) - 1));
 		return true;
@@ -1438,7 +1441,7 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 	case SmartDriverRegister::pwmAuto:
 		return readRegisters[ReadPwmAuto];
 
-#if HAS_STALL_DETECT
+#if SUPPORT_TMC2209 || SUPPORT_TMC2240
 	case SmartDriverRegister::coolStep:
 		return writeRegisters[WriteCoolconf];
 #endif
@@ -1640,6 +1643,8 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 		{
 			rslt.stall = true;
 		}
+#endif
+#if SUPPORT_TMC2209 || SUPPORT_TMC2240
 		rslt.sgresultMin = minSgLoadRegister;
 #endif
 	}
@@ -1655,7 +1660,15 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 
 float TmcDriverState::GetDriverTemperature() const noexcept
 {
-	return (float)(((readRegisters[ReadAdcTemp] & ADC_TEMP_MASK) >> ADC_TEMP_SHIFT) - 2038) * (1.0/7.7);
+	return
+# if SUPPORT_TMC2208 || SUPPORT_TMC2209
+		(isTmc2240) ?
+# endif
+						(float)(((readRegisters[ReadAdcTemp] & ADC_TEMP_MASK) >> ADC_TEMP_SHIFT) - 2038) * (1.0/7.7)
+# if SUPPORT_TMC2208 || SUPPORT_TMC2209
+						: 0.0
+# endif
+		;
 }
 
 #endif
@@ -1670,7 +1683,7 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 	}
 #endif
 
-#if HAS_STALL_DETECT
+#if SUPPORT_TMC2209 || SUPPORT_TMC2240
 	if (minSgLoadRegister <= MaxValidSgLoadRegister)
 	{
 		reply.catf(", SG min %u", minSgLoadRegister);
@@ -1772,17 +1785,20 @@ inline void TmcDriverState::TransferDone() noexcept
 #else
 								~(TMC_RR_OLA_2209 | TMC_RR_OLB_2209)
 #endif
-								;				// open load bits are unreliable at standstill and low speeds
+								;								// open load bits are unreliable at standstill and low speeds
 				}
 #if SUPPORT_TMC2240
 # if SUPPORT_TMC2208 || SUPPORT_TMC2209
 				if (isTmc2240)
 # endif
 				{
-					const uint16_t sgResult = regVal & TMC_RR_SGRESULT_MASK_2240;
-					if (sgResult < minSgLoadRegister)
+					if ((regVal & TMC_RR_STST) == 0)			// SG_RESULT is only valid when not standstill
 					{
-						minSgLoadRegister = sgResult;
+						const uint16_t sgResult = regVal & TMC_RR_SGRESULT_MASK_2240;
+						if (sgResult < minSgLoadRegister)
+						{
+							minSgLoadRegister = sgResult;
+						}
 					}
 				}
 #endif
@@ -1803,9 +1819,9 @@ inline void TmcDriverState::TransferDone() noexcept
 				}
 			}
 #endif
-#if HAS_STALL_DETECT && SUPPORT_TMC2209
+#if SUPPORT_TMC2209 || SUPPORT_TMC2240
 			else if (registerToRead == ReadSgResult
-# if SUPPORT_TMC2240
+# if SUPPORT_TMC2240 && (SUPPORT_TMC2208 || SUPPORT_TMC2209)
 					&& !isTmc2240
 # endif
 					)
@@ -2000,7 +2016,7 @@ void TMC22xx_UART_Handler() noexcept
 {
 	UART_TMC22xx->UART_IDR = UART_IDR_ENDRX;				// disable the interrupt
 	dmaFinished = true;
-	tmcTask.GiveFromISR();
+	tmcTask.GiveFromISR(NotifyIndices::Tmc);
 }
 
 # endif
@@ -2598,6 +2614,8 @@ StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bo
 	return rslt;
 }
 
+#if HAS_STALL_DETECT
+
 GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept
 {
 	if (driverNumber < GetNumTmcDrivers())
@@ -2623,12 +2641,14 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 	}
 }
 
+#endif
+
 uint32_t SmartDrivers::GetDriverClockFrequency() noexcept
 {
 	return NominalTmcClockSpeed;
 }
 
-#if SUPPORT_TMC2240 && !(SUPPORT_TMC2208 || SUPPORT_TMC2209)
+#if SUPPORT_TMC2240
 
 float SmartDrivers::GetDriverTemperature(size_t driver) noexcept
 {
