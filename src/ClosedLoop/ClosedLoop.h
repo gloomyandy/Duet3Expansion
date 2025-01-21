@@ -111,6 +111,8 @@ private:
 
 	static constexpr float PIDIlimit = 80.0;
 
+	static constexpr size_t driverNumber = 0;						// the driver number of this instance, can be changed to a variable if we ever support more than one closed loop driver on a board
+
 	// Methods used only by closed loop and by the tuning module
 	void SetMotorPhase(uint16_t phase, float magnitude) noexcept;
 	void FinishedBasicTuning() noexcept;
