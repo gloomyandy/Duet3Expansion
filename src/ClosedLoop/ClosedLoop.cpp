@@ -104,7 +104,7 @@ void ClosedLoop::ReportTuningErrors(TuningErrors tuningErrorBitmask, const Strin
 void ClosedLoop::SetTargetToCurrentPosition() noexcept
 {
 	mParams.position = (float)encoder->GetCurrentCount() / encoder->GetCountsPerStep();
-	moveInstance->SetCurrentMotorSteps(0, mParams.position);
+	moveInstance->SetCurrentMotorSteps(driverNumber, mParams.position);
 }
 
 // Set the motor currents and update desiredStepPhase
@@ -120,7 +120,7 @@ void ClosedLoop::SetMotorPhase(uint16_t phase, float magnitude) noexcept
 	coilB = (int16_t)lrintf(sine * magnitude);
 
 # if SUPPORT_TMC51xx && SINGLE_DRIVER
-	SmartDrivers::SetMotorPhases(0, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF);
+	SmartDrivers::SetMotorPhases(driverNumber, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF);
 # else
 #  error Multi driver code not implemented
 # endif
@@ -345,7 +345,7 @@ GCodeResult ClosedLoop::ProcessM569Point4(CanMessageGenericParser& parser, const
 	{
 		TaskCriticalSectionLocker lock;
 
-		if (requestedTorque == 0.0)					// if asking to exit torque mode
+		if (requestedTorque == 0.0)								// if asking to exit torque mode
 		{
 			if (inTorqueMode)
 			{
@@ -356,8 +356,9 @@ GCodeResult ClosedLoop::ProcessM569Point4(CanMessageGenericParser& parser, const
 
 		if (!hasMovementCommand)
 		{
-			torqueModeDirection = (moveInstance->GetDirectionValueNoCheck(0) == (requestedTorque > 0.0));
-			torqueModeCommandedCurrentFraction = min<float>(fabsf(requestedTorque)/(torquePerAmp * SmartDrivers::GetCurrent(0) * 0.001), 1.0);
+			moveInstance->EnableDrive(driverNumber);			// enable the drive if it isn't already enabled
+			torqueModeDirection = (moveInstance->GetDirectionValueNoCheck(driverNumber) == (requestedTorque > 0.0));
+			torqueModeCommandedCurrentFraction = min<float>(fabsf(requestedTorque)/(torquePerAmp * SmartDrivers::GetCurrent(driverNumber) * 0.001), 1.0);
 			torqueModeMaxSpeed = maxSpeed;
 			inTorqueMode = true;
 			return GCodeResult::ok;
@@ -480,13 +481,13 @@ GCodeResult ClosedLoop::ProcessM569Point6(CanMessageGenericParser& parser, const
 
 	// Here if this is a new command to start a tuning move
 	// Check we are in direct drive mode
-	if (SmartDrivers::GetDriverMode(0) != DriverMode::direct)
+	if (SmartDrivers::GetDriverMode(driverNumber) != DriverMode::direct)
 	{
 		reply.copy("Driver is not in direct mode");
 		return GCodeResult::error;
 	}
 
-	if (!moveInstance->EnableIfIdle(0))
+	if (!moveInstance->EnableIfIdle(driverNumber))
 	{
 		reply.copy("Driver is not enabled");
 		return GCodeResult::error;
@@ -506,7 +507,7 @@ bool ClosedLoop::OkayToSetDriverIdle() const noexcept
 void ClosedLoop::UpdateStandstillCurrent() noexcept
 {
 #if SINGLE_DRIVER
-	holdCurrentFraction = SmartDrivers::GetStandstillCurrentPercent(0) * 0.01;
+	holdCurrentFraction = SmartDrivers::GetStandstillCurrentPercent(driverNumber) * 0.01;
 #else
 # error Multi driver code not implemented
 #endif
@@ -703,7 +704,7 @@ void ClosedLoop::ReadyToCalibrate(bool store) noexcept
 void ClosedLoop::AdjustTargetMotorSteps(float amount) noexcept
 {
 	mParams.position += amount;
-	moveInstance->SetCurrentMotorSteps(0, lrintf(mParams.position));
+	moveInstance->SetCurrentMotorSteps(driverNumber, lrintf(mParams.position));
 }
 
 void ClosedLoop::InstanceControlLoop(StepTimer::Ticks now, StepTimer::Ticks timeElapsed) noexcept
@@ -712,7 +713,7 @@ void ClosedLoop::InstanceControlLoop(StepTimer::Ticks now, StepTimer::Ticks time
 	if (encoder != nullptr && !encoder->TakeReading())
 	{
 		// Calculate and store the current error in full steps
-		hasMovementCommand = moveInstance->GetCurrentMotion(0, now, mParams);
+		hasMovementCommand = moveInstance->GetCurrentMotion(driverNumber, now, mParams);
 		if (hasMovementCommand)
 		{
 			if (inTorqueMode)
@@ -1111,7 +1112,7 @@ bool ClosedLoop::SetClosedLoopEnabled(ClosedLoopMode mode, const StringRef &repl
 		{
 			// Switching from open to closed loop mode, so set the motor phase to match the current microstep position
 			delay(10);													// delay long enough for the TMC driver to have read the microstep counter since the end of the last movement
-			const uint16_t initialStepPhase = SmartDrivers::GetMicrostepPosition(0) * 4;	// get the current coil A microstep position as 0..4095
+			const uint16_t initialStepPhase = SmartDrivers::GetMicrostepPosition(driverNumber) * 4;	// get the current coil A microstep position as 0..4095
 
 			// Temporarily calibrate the encoder zero position
 			// We assume that the motor is at the position given by its microstep counter. This may not be true e.g. if it has a brake that has not been disengaged.
@@ -1159,7 +1160,7 @@ void ClosedLoop::DriverSwitchedToClosedLoop() noexcept
 		phaseOffset = (currentPhasePosition - stepPhase) & 4095;
 	}
 	desiredStepPhase = currentPhasePosition;
-	SetMotorPhase(currentPhasePosition, SmartDrivers::GetStandstillCurrentPercent(0) * 0.01);	// set the motor currents to match the initial position using the open loop standstill current
+	SetMotorPhase(currentPhasePosition, SmartDrivers::GetStandstillCurrentPercent(driverNumber) * 0.01);	// set the motor currents to match the initial position using the open loop standstill current
 	PIDITerm = 0.0;													// clear the integral term accumulator
 	errorDerivativeFilter.Reset();
 	speedFilter.Reset();

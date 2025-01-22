@@ -879,13 +879,13 @@ extern "C" [[noreturn]] void CanAsyncSenderLoop(void *) noexcept
 		msg->numHandles = 0;
 
 #if SUPPORT_DRIVERS && HAS_STALL_DETECT
-			// Start by adding any stall detect endstops pending. Do this first so that it must succeed.
-			const uint16_t stallNotifications = SmartDrivers::driverStallsToNotify.exchange(0);
-			if (stallNotifications != 0)
-			{
-				constexpr RemoteInputHandle h(RemoteInputHandle::typeStallEndstop, 0, 0);
-				(void)msg->AddEntry(h.asU16(), (uint32_t)stallNotifications, true);
-			}
+		// Start by adding any stall detect endstops pending. Do this first so that it must succeed.
+		const uint16_t stallNotifications = SmartDrivers::driverStallsToNotify.exchange(0);
+		if (stallNotifications != 0)
+		{
+			constexpr RemoteInputHandle h(RemoteInputHandle::typeStallEndstop, 0, 0);
+			(void)msg->AddEntry(h.asU16(), (uint32_t)stallNotifications, true);
+		}
 #endif
 		const uint32_t timeToWait = InputMonitor::AddStateChanges(msg);
 		if (msg->numHandles != 0)
