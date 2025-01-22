@@ -33,7 +33,7 @@
 #if SUPPORT_DRIVERS
 
 #define HAS_SMART_DRIVERS		1
-#define HAS_STALL_DETECT		1
+#define HAS_STALL_DETECT		0
 #define SINGLE_DRIVER			1
 #define SUPPORT_SLOW_DRIVERS	0
 #define SUPPORT_DELTA_MOVEMENT	0
@@ -75,7 +75,9 @@ constexpr Pin Tmc22xxUartPin = GpioPin(8);
 
 constexpr Pin StepPins[NumDrivers] = { GpioPin(9) };
 constexpr Pin DirectionPins[NumDrivers] = { GpioPin(10) };
+#if HAS_STALL_DETECT
 constexpr Pin DriverDiagPins[NumDrivers] = { NoPin };
+#endif
 
 #define ACTIVE_HIGH_STEP		1		// 1 = active high, 0 = active low
 #define ACTIVE_HIGH_DIR			1		// 1 = active high, 0 = active low
