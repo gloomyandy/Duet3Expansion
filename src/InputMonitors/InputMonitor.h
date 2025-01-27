@@ -53,7 +53,11 @@ private:
 	void DigitalInterrupt() noexcept;
 	void AnalogInterrupt(uint32_t reading) noexcept;
 	uint32_t GetAnalogValue() const noexcept;
+
+#if SUPPORT_LDC1612
 	GCodeResult SetDriveLevel(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept;
+	GCodeResult SelectTouchMode(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept;
+#endif
 
 	static bool Delete(uint16_t hndl) noexcept;
 	static ReadLockedPointer<InputMonitor> Find(uint16_t hndl) noexcept;

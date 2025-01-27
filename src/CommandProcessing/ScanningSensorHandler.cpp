@@ -12,6 +12,7 @@
 #include <Hardware/LDC1612.h>
 #include <CanMessageFormats.h>
 #include <AnalogIn.h>
+#include <Movement/StepTimer.h>
 
 constexpr unsigned int ResultBitsDropped = 8;		// we drop this number of least significant bits in the result
 
@@ -23,6 +24,30 @@ static uint32_t lastReadingTakenAt = 0;
 static uint32_t offset = 0;
 static volatile AnalogInCallbackFunction callbackFunction = nullptr;
 static CallbackParameter callbackParameter;
+static bool useTouchMode = false;
+static uint32_t touchModeSensitivity;
+static uint32_t touchModeStartTime;					// the time we started taking touch mode readings, in step clocks
+static uint32_t touchModeLastReadingTime;			// the last reading time of the sensor, in step clocks
+static uint32_t touchModeLastReading;
+static int32_t touchModeLastSpeed;
+
+// Process a sensor reading when we are in touch mode
+// A typical probing speed is 5mm/sec. At this speed, a processing interval of 1ms will give us a probing resolution of 5um.
+void ProcessReadingInTouchMode(uint32_t reading) noexcept
+{
+	const uint32_t now = StepTimer::GetTimerTicks();
+	const uint32_t interval = now - touchModeLastReadingTime;
+	const uint32_t newSpeed = (((int32_t)reading - (int32_t)touchModeLastReading) * 65536)/(int32_t)interval;
+
+	if (now - touchModeStartTime >= StepTimer::StepClockRate/20)		// if we've been probing for at least 50ms
+	{
+		qq;	//TODO
+	}
+
+	touchModeLastReading = reading;
+	touchModeLastSpeed = newSpeed;
+	touchModeLastReadingTime = now;
+}
 
 // This hook function is called by the AnalogIn task
 static void LDC1612TaskHook() noexcept
@@ -35,11 +60,18 @@ static void LDC1612TaskHook() noexcept
 		{
 			lastReading = val;						// save all 28 bits of data + 4 error bits
 			lastReadingTakenAt = millis();			// record when we took it
-			TaskCriticalSectionLocker lock;
-			const AnalogInCallbackFunction fn = callbackFunction;
-			if (fn != nullptr)
+			if (useTouchMode)
 			{
-				fn(callbackParameter, ScanningSensorHandler::GetReading());
+				ProcessReadingInTouchMode(val);
+			}
+			else
+			{
+				TaskCriticalSectionLocker lock;
+				const AnalogInCallbackFunction fn = callbackFunction;
+				if (fn != nullptr)
+				{
+					fn(callbackParameter, ScanningSensorHandler::GetReading());
+				}
 			}
 		}
 		else if (millis() - lastReadingTakenAt > 5)	// we get occasional reading errors, so don't report a bad reading unless it's 5ms since we had a good reading
@@ -118,7 +150,11 @@ uint32_t ScanningSensorHandler::GetReading() noexcept
 
 GCodeResult ScanningSensorHandler::SetOrCalibrateCurrent(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept
 {
-	if (sensor != nullptr)
+	if (sensor == nullptr)
+	{
+		reply.copy("scanning probe not present");
+	}
+	else
 	{
 		if (param == CanMessageChangeInputMonitorNew::paramAutoCalibrateDriveLevelAndReport)
 		{
@@ -166,6 +202,29 @@ GCodeResult ScanningSensorHandler::SetOrCalibrateCurrent(uint32_t param, const S
 	}
 	extra = 0xFF;
 	return GCodeResult::error;
+}
+
+GCodeResult ScanningSensorHandler::SelectTouchMode(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept
+{
+	if (sensor == nullptr)
+	{
+		reply.copy("scanning probe not present");
+	}
+	else
+	{
+		touchModeSensitivity = param;
+		touchModeLastReading = 0;
+		touchModeStartTime = StepTimer::GetTimerTicks();
+		useTouchMode = true;
+		return GCodeResult::ok;
+	}
+	extra = 0xFF;
+	return GCodeResult::error;
+}
+
+void ScanningSensorHandler::ClearTouchMode() noexcept
+{
+	useTouchMode = false;
 }
 
 bool ScanningSensorHandler::SetCallback(AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall) noexcept
