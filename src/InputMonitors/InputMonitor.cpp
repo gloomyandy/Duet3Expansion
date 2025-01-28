@@ -21,8 +21,17 @@
 #endif
 
 InputMonitor * volatile InputMonitor::monitorsList = nullptr;
-InputMonitor * volatile InputMonitor::freeList = nullptr;
 ReadWriteLock InputMonitor::listLock;
+
+InputMonitor::~InputMonitor()
+{
+#if SUPPORT_LDC1612
+	if (port.IsLdc1612())
+	{
+		ScanningSensorHandler::ClearTouchMode();		// make sure that the scanning sensor doesn't retain a pointer to this object
+	}
+#endif
+}
 
 bool InputMonitor::Activate() noexcept
 {
@@ -124,10 +133,23 @@ GCodeResult InputMonitor::SelectTouchMode(uint32_t param, const StringRef& reply
 {
 	if (port.IsLdc1612())
 	{
-		return ScanningSensorHandler::SelectTouchMode(param, reply, extra);
+		const GCodeResult ret = ScanningSensorHandler::SelectTouchMode(*this, param, reply, extra);
+		if (ret < GCodeResult::error)
+		{
+			isLdcInTouchMode = true;
+		}
+		return ret;
 	}
 	reply.copy("touch mode not applicable to this port");
 	return GCodeResult::error;
+}
+
+// Set the state of this monitor to triggered and report it to the main board. Used when the probe is in touch mode.
+void InputMonitor::SetTriggered() noexcept
+{
+	state = true;
+	sendDue = true;
+	CanInterface::WakeAsyncSender();
 }
 
 #endif
@@ -226,8 +248,8 @@ void InputMonitor::UpdateState(bool newState) noexcept
 			{
 				prev->next = current->next;
 			}
-			current->next = freeList;
-			freeList = current;
+
+			delete current;
 			return true;
 		}
 		prev = current;
@@ -244,23 +266,16 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	Delete(msg.handle.all);						// delete any existing monitor with the same handle
 
 	// Allocate a new one
-	InputMonitor *newMonitor;
-	if (freeList == nullptr)
-	{
-		newMonitor = new InputMonitor;
-	}
-	else
-	{
-		newMonitor = freeList;
-		freeList = newMonitor->next;
-	}
-
+	InputMonitor *newMonitor = new InputMonitor;
 	newMonitor->handle = msg.handle.all;
 	newMonitor->active = false;
 	newMonitor->state = false;
 	newMonitor->minInterval = msg.minInterval;
 	newMonitor->threshold = msg.threshold;
 	newMonitor->sendDue = false;
+#if SUPPORT_LDC1612
+	newMonitor->isLdcInTouchMode = false;
+#endif
 	String<StringLength50> pinName;
 	pinName.copy(msg.pinName, msg.GetMaxPinNameLength(dataLength));
 	if (newMonitor->port.AssignPort(pinName.c_str(), reply, PinUsedBy::endstop, (msg.threshold == 0) ? PinAccess::read : PinAccess::readAnalog))
@@ -277,8 +292,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 		return GCodeResult::ok;
 	}
 
-	newMonitor->next = freeList;
-	freeList = newMonitor;
+	delete newMonitor;
 	return GCodeResult::error;
 }
 

@@ -12,6 +12,7 @@
 #include <Platform/Tasks.h>
 #include <Hardware/IoPorts.h>
 #include <RTOSIface/RTOSIface.h>
+#include <General/FreelistManager.h>
 
 struct CanMessageCreateInputMonitorNew;
 struct CanMessageChangeInputMonitorNew;
@@ -21,15 +22,17 @@ class CanMessageBuffer;
 class InputMonitor
 {
 public:
-	void* operator new(size_t count) noexcept { return Tasks::AllocPermanent(count); }
-	void* operator new(size_t count, std::align_val_t align) noexcept { return Tasks::AllocPermanent(count, align); }
-	void operator delete(void* ptr) noexcept {}
-	void operator delete(void* ptr, std::align_val_t align) noexcept {}
+	DECLARE_FREELIST_NEW_DELETE(InputMonitor)
 
 	InputMonitor() noexcept { }
+	~InputMonitor();
 
 #if SUPPORT_AS5601
 	void UpdateState(bool newState) noexcept;
+#endif
+
+#if SUPPORT_LDC1612
+	void SetTriggered() noexcept;
 #endif
 
 	static void Init() noexcept;
@@ -71,10 +74,11 @@ private:
 	bool active;
 	volatile bool state;
 	volatile bool sendDue;
+#if SUPPORT_LDC1612
+	bool isLdcInTouchMode;
+#endif
 
 	static InputMonitor * volatile monitorsList;
-	static InputMonitor * volatile freeList;
-
 	static ReadWriteLock listLock;
 };
 

@@ -9,10 +9,14 @@
 
 #if SUPPORT_LDC1612
 
+#include <InputMonitors/InputMonitor.h>
+#include <Hardware/SharedI2CMaster.h>
 #include <Hardware/LDC1612.h>
 #include <CanMessageFormats.h>
 #include <AnalogIn.h>
 #include <Movement/StepTimer.h>
+#include <Platform/TaskPriorities.h>
+#include <Platform/AveragingFilter.h>
 
 constexpr unsigned int ResultBitsDropped = 8;		// we drop this number of least significant bits in the result
 
@@ -24,29 +28,83 @@ static uint32_t lastReadingTakenAt = 0;
 static uint32_t offset = 0;
 static volatile AnalogInCallbackFunction callbackFunction = nullptr;
 static CallbackParameter callbackParameter;
-static bool useTouchMode = false;
-static uint32_t touchModeSensitivity;
-static uint32_t touchModeStartTime;					// the time we started taking touch mode readings, in step clocks
-static uint32_t touchModeLastReadingTime;			// the last reading time of the sensor, in step clocks
-static uint32_t touchModeLastReading;
-static int32_t touchModeLastSpeed;
+
+namespace TouchMode
+{
+//private:
+	static bool enabled = false;
+	static uint16_t sensitivity;
+	static uint32_t startTime;					// the time we started taking touch mode readings, in step clocks
+	static uint32_t lastReadingTime;			// the last reading time of the sensor, in step clocks
+	static uint32_t lastReading;
+	static unsigned int numBadReadings;
+	static InputMonitor *inputMonitor = nullptr;
+	static AveragingFilter<16> speedFilter;
+
+//public:
+	static void Start(InputMonitor& p_monitor, uint32_t sens) noexcept;
+	static void Stop() noexcept;
+	static void ProcessReading(uint32_t reading) noexcept;
+	static bool IsEnabled() noexcept { return enabled; }
+};
+
+void TouchMode::Start(InputMonitor& p_monitor, uint32_t sens) noexcept
+{
+	inputMonitor = &p_monitor;
+	sensitivity = (uint16_t)sens;
+	lastReading = 0;
+	numBadReadings = 0;
+	startTime = StepTimer::GetTimerTicks();
+	speedFilter.Init(0);
+	enabled = true;
+}
+
+void TouchMode::Stop() noexcept
+{
+	enabled = false;
+	inputMonitor = nullptr;
+}
 
 // Process a sensor reading when we are in touch mode
 // A typical probing speed is 5mm/sec. At this speed, a processing interval of 1ms will give us a probing resolution of 5um.
-void ProcessReadingInTouchMode(uint32_t reading) noexcept
+void TouchMode::ProcessReading(uint32_t reading) noexcept
 {
-	const uint32_t now = StepTimer::GetTimerTicks();
-	const uint32_t interval = now - touchModeLastReadingTime;
-	const uint32_t newSpeed = (((int32_t)reading - (int32_t)touchModeLastReading) * 65536)/(int32_t)interval;
-
-	if (now - touchModeStartTime >= StepTimer::StepClockRate/20)		// if we've been probing for at least 50ms
+	if ((lastReading & 0xF0000000) != 0)			// if it's a bad reading
 	{
-		qq;	//TODO
+		++numBadReadings;
+		if (numBadReadings == 3)					// if we get 3 bad readings in a row, give up
+		{
+			if (inputMonitor != nullptr)
+			{
+				inputMonitor->SetTriggered();
+			}
+			Stop();
+		}
 	}
+	else
+	{
+		numBadReadings = 0;
+		const uint32_t now = StepTimer::GetTimerTicks();
+		const uint32_t interval = now - lastReadingTime;
 
-	touchModeLastReading = reading;
-	touchModeLastSpeed = newSpeed;
-	touchModeLastReadingTime = now;
+		// We expect the speed to fit in 16 bits normally
+		const uint16_t newSpeed = (uint16_t)constrain<int32_t>((((int32_t)reading - (int32_t)lastReading) * 16)/(int32_t)interval, 0, 65535);
+
+		if (now - startTime >= StepTimer::StepClockRate/20)		// if we've been probing for at least 50ms
+		{
+			const uint32_t speedSum = speedFilter.GetSum();
+			if (((uint32_t)newSpeed * (65536 * speedFilter.NumAveraged())) < speedSum * sensitivity)
+			{
+				inputMonitor->SetTriggered();
+				Stop();
+			}
+			debugPrintf("Speed %u/%u\n", newSpeed, (unsigned int)(speedSum/speedFilter.NumAveraged()));
+		}
+
+		speedFilter.ProcessReading(newSpeed);
+		lastReading = reading;
+		lastReadingTime = now;
+	}
 }
 
 // This hook function is called by the AnalogIn task
@@ -55,14 +113,16 @@ static void LDC1612TaskHook() noexcept
 	// Read the sensor status at most once every millisecond, otherwise the AnalogIn task tends to hog the I2C bus and the accelerometer can't be read
 	if (!isCalibrating && !digitalRead(LDC1612InterruptPin) && millis() != lastReadingTakenAt)
 	{
+		PriorityBoost booster(TaskPriority::LDC1612Reading);
+
 		uint32_t val;
 		if (sensor->GetChannelResult(0, val))		// if no error
 		{
 			lastReading = val;						// save all 28 bits of data + 4 error bits
 			lastReadingTakenAt = millis();			// record when we took it
-			if (useTouchMode)
+			if (TouchMode::IsEnabled())
 			{
-				ProcessReadingInTouchMode(val);
+				TouchMode::ProcessReading(val);
 			}
 			else
 			{
@@ -204,7 +264,7 @@ GCodeResult ScanningSensorHandler::SetOrCalibrateCurrent(uint32_t param, const S
 	return GCodeResult::error;
 }
 
-GCodeResult ScanningSensorHandler::SelectTouchMode(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept
+GCodeResult ScanningSensorHandler::SelectTouchMode(InputMonitor& monitor, uint32_t param, const StringRef& reply, uint8_t& extra) noexcept
 {
 	if (sensor == nullptr)
 	{
@@ -212,10 +272,7 @@ GCodeResult ScanningSensorHandler::SelectTouchMode(uint32_t param, const StringR
 	}
 	else
 	{
-		touchModeSensitivity = param;
-		touchModeLastReading = 0;
-		touchModeStartTime = StepTimer::GetTimerTicks();
-		useTouchMode = true;
+		TouchMode::Start(monitor, param);
 		return GCodeResult::ok;
 	}
 	extra = 0xFF;
@@ -224,7 +281,7 @@ GCodeResult ScanningSensorHandler::SelectTouchMode(uint32_t param, const StringR
 
 void ScanningSensorHandler::ClearTouchMode() noexcept
 {
-	useTouchMode = false;
+	TouchMode::Stop();
 }
 
 bool ScanningSensorHandler::SetCallback(AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall) noexcept

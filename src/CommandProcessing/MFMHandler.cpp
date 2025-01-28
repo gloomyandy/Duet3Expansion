@@ -225,7 +225,7 @@ void MFMHandler::MfmTaskCode(void *) noexcept
 
 		if (encoder != nullptr)
 		{
-			TaskBase::SetCurrentTaskPriority(TaskPriority::MfmHigh);
+			PriorityBoost booster(TaskPriority::MfmHigh);
 			uint16_t tempAngle;
 			if (encoder->Read(tempAngle, lastStatus, lastAgc))
 			{
@@ -237,7 +237,6 @@ void MFMHandler::MfmTaskCode(void *) noexcept
 					readingAvailable = true;
 				}
 			}
-			TaskBase::SetCurrentTaskPriority(TaskPriority::MfmNormal);
 		}
 
 #if SUPPORT_TCA6408A
