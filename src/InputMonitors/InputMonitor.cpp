@@ -137,6 +137,7 @@ GCodeResult InputMonitor::SelectTouchMode(uint32_t param, const StringRef& reply
 		if (ret < GCodeResult::error)
 		{
 			isLdcInTouchMode = true;
+			state = false;						// not triggered
 		}
 		return ret;
 	}

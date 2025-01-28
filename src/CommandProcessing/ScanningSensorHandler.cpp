@@ -97,8 +97,9 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 			{
 				inputMonitor->SetTriggered();
 				Stop();
+//				delay(2);		// to ensure the async sender gets woken before we print the debug
+//				debugPrintf("Speed %u/%u\n", newSpeed, (unsigned int)(speedSum/speedFilter.NumAveraged()));
 			}
-			debugPrintf("Speed %u/%u\n", newSpeed, (unsigned int)(speedSum/speedFilter.NumAveraged()));
 		}
 
 		speedFilter.ProcessReading(newSpeed);
