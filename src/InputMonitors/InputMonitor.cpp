@@ -28,11 +28,12 @@ InputMonitor::~InputMonitor()
 #if SUPPORT_LDC1612
 	if (port.IsLdc1612())
 	{
-		ScanningSensorHandler::ClearTouchMode();		// make sure that the scanning sensor doesn't retain a pointer to this object
+		ScanningSensorHandler::Deactivate();		// make sure that the scanning sensor doesn't retain a pointer to this object
 	}
 #endif
 }
 
+// Activate the monitor returning true if successful
 bool InputMonitor::Activate() noexcept
 {
 	bool ok = true;
@@ -58,17 +59,26 @@ bool InputMonitor::Activate() noexcept
 		else
 		{
 			// Analog port
-			state = port.ReadAnalog() >= threshold;
-#ifdef ATEIO
-			// We can't set an interrupt on the extended analog channels
-			if (IsExtendedAnalogPin(port.GetPin()))
+#if SUPPORT_LDC1612
+			if (port.IsLdc1612())
 			{
-				ok = true;
+				ok = ScanningSensorHandler::Activate(*this);
 			}
 			else
-#endif
 			{
-				ok = port.SetAnalogCallback(CommonAnalogPortInterrupt, CallbackParameter(this), 1);
+#endif
+				state = port.ReadAnalog() >= threshold;
+#ifdef ATEIO
+				// We can't set an interrupt on the extended analog channels
+				if (IsExtendedAnalogPin(port.GetPin()))
+				{
+					ok = true;
+				}
+				else
+#endif
+				{
+					ok = port.SetAnalogCallback(CommonAnalogPortInterrupt, CallbackParameter(this), 1);
+				}
 			}
 		}
 		active = true;
@@ -101,7 +111,16 @@ void InputMonitor::Deactivate() noexcept
 		}
 		else
 		{
-			port.ClearAnalogCallback();
+#if SUPPORT_LDC1612
+			if (port.IsLdc1612())
+			{
+				ScanningSensorHandler::Deactivate();
+			}
+			else
+#endif
+			{
+				port.ClearAnalogCallback();
+			}
 		}
 	}
 	active = false;
@@ -133,7 +152,7 @@ GCodeResult InputMonitor::SelectTouchMode(uint32_t param, const StringRef& reply
 {
 	if (port.IsLdc1612())
 	{
-		const GCodeResult ret = ScanningSensorHandler::SelectTouchMode(*this, param, reply, extra);
+		const GCodeResult ret = ScanningSensorHandler::SelectTouchMode(param, reply, extra);
 		if (ret < GCodeResult::error)
 		{
 			isLdcInTouchMode = true;

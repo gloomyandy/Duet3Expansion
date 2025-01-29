@@ -21,11 +21,12 @@ namespace ScanningSensorHandler
 {
 	void Init(SharedI2CMaster& i2cDevice) noexcept;
 	bool IsPresent() noexcept;
+	bool Activate(InputMonitor& monitor) noexcept;
+	void Deactivate();
 	uint32_t GetReading() noexcept;
 	GCodeResult SetOrCalibrateCurrent(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept;
-	GCodeResult SelectTouchMode(InputMonitor& monitor, uint32_t param, const StringRef& reply, uint8_t& extra) noexcept;
+	GCodeResult SelectTouchMode(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept;
 	void ClearTouchMode() noexcept;
-	bool SetCallback(AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall) noexcept;
 	float GetFrequency() noexcept;
 	void AppendDiagnostics(const StringRef& reply) noexcept;
 }

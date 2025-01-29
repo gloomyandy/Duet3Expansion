@@ -78,13 +78,9 @@ void IoPort::DetachInterrupt() const noexcept
 
 bool IoPort::SetAnalogCallback(AnalogInCallbackFunction fn, CallbackParameter cbp, uint32_t ticksPerCall) noexcept
 {
-	return IsValid() && !isSharedInput &&
-			(
-#if SUPPORT_LDC1612
-				(PinTable[pin].adc == AdcInput::ldc1612) ? ScanningSensorHandler::SetCallback(fn, cbp, ticksPerCall) :
-#endif
-					AnalogIn::SetCallback(PinToAdcChannel(pin), fn, cbp, ticksPerCall)
-			);
+	return IsValid()
+			&& !isSharedInput
+			&& AnalogIn::SetCallback(PinToAdcChannel(pin), fn, cbp, ticksPerCall);
 }
 
 void IoPort::ClearAnalogCallback() noexcept

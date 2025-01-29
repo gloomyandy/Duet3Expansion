@@ -23,9 +23,9 @@ namespace TaskPriority
 	constexpr unsigned int ClosedLoopDataTransmission = 3;
 	constexpr unsigned int TmcClosedLoop = 4;						// priority of the TMC task when in closed loop mode
 	constexpr unsigned int MfmHigh = 5;								// priority of the MFM task if we have an embedded AS5601 while it is simulating an interrupt
-	constexpr unsigned int LDC1612Reading = 5;						// priority of the AnalogIn task when it is reading the LDC1612
 	constexpr unsigned int CanAsyncSenderPriority = 5;
 	constexpr unsigned int CanClockPriority = 5;
+	constexpr unsigned int LdcTask = 6;								// priority of the AnalogIn task when it is reading the LDC1612
 
 	// Assert that the highest priority one isn't too high
 	static_assert(CanClockPriority < configMAX_PRIORITIES);
