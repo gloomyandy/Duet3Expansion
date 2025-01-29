@@ -65,8 +65,8 @@ bool InputMonitor::Activate() noexcept
 				ok = ScanningSensorHandler::Activate(*this);
 			}
 			else
-			{
 #endif
+			{
 				state = port.ReadAnalog() >= threshold;
 #ifdef ATEIO
 				// We can't set an interrupt on the extended analog channels
