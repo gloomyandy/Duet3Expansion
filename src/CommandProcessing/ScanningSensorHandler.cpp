@@ -9,53 +9,174 @@
 
 #if SUPPORT_LDC1612
 
+#include <InputMonitors/InputMonitor.h>
+#include <Hardware/SharedI2CMaster.h>
 #include <Hardware/LDC1612.h>
 #include <CanMessageFormats.h>
 #include <AnalogIn.h>
+#include <Movement/StepTimer.h>
+#include <Platform/TaskPriorities.h>
+#include <Platform/AveragingFilter.h>
+#include <AppNotifyIndices.h>
+#include <Interrupts.h>
 
 constexpr unsigned int ResultBitsDropped = 8;		// we drop this number of least significant bits in the result
 
+constexpr unsigned int LdcTaskStackWords = 150;		// 100 was too little
+
+static Task<LdcTaskStackWords> *ldcTask = nullptr;
+
 static LDC1612 *sensor = nullptr;
-static AnalogIn::AdcTaskHookFunction *oldHookFunction = nullptr;
 static volatile uint32_t lastReading = 0;
 static volatile bool isCalibrating = false;
 static uint32_t lastReadingTakenAt = 0;
 static uint32_t offset = 0;
-static volatile AnalogInCallbackFunction callbackFunction = nullptr;
-static CallbackParameter callbackParameter;
+static InputMonitor *inputMonitor = nullptr;		// when the sensor is active this point to the associated input monitor; when inactive it is null
 
-// This hook function is called by the AnalogIn task
-static void LDC1612TaskHook() noexcept
+namespace TouchMode
 {
-#if defined(SHT36) || defined(FLYSB2040V3_0) || defined(FYSETCSB2040V2)
-	// There is no interrupt pin available so sample every 2ms
-	if (!isCalibrating && millis() - lastReadingTakenAt > 1)
-#else
-	// Read the sensor status at most once every millisecond, otherwise the AnalogIn task tends to hog the I2C bus and the accelerometer can't be read
-	if (!isCalibrating && !digitalRead(LDC1612InterruptPin) && millis() != lastReadingTakenAt)
-#endif
+//private:
+	static bool enabled = false;
+	static uint16_t sensitivity;
+	static uint32_t startTime;					// the time we started taking touch mode readings, in step clocks
+	static uint32_t lastReadingTime;			// the last reading time of the sensor, in step clocks
+	static uint32_t lastReading;
+	static unsigned int numBadReadings;
+	static AveragingFilter<16> speedFilter;
+
+//public:
+	static void Start(uint32_t sens) noexcept;
+	static void Stop() noexcept;
+	static void ProcessReading(uint32_t reading) noexcept;
+	static bool IsEnabled() noexcept { return enabled; }
+};
+
+void TouchMode::Start(uint32_t sens) noexcept
+{
+	sensitivity = (uint16_t)sens;
+	lastReading = 0;
+	numBadReadings = 0;
+	startTime = StepTimer::GetTimerTicks();
+	speedFilter.Init(0);
+	enabled = true;
+}
+
+void TouchMode::Stop() noexcept
+{
+	enabled = false;
+}
+
+// Process a sensor reading when we are in touch mode
+// A typical probing speed is 5mm/sec. At this speed, a processing interval of 1ms will give us a probing resolution of 5um.
+void TouchMode::ProcessReading(uint32_t reading) noexcept
+{
+	if ((lastReading & 0xF0000000) != 0)			// if it's a bad reading
 	{
-		uint32_t val;
-		if (sensor->GetChannelResult(0, val))		// if no error
+		++numBadReadings;
+		if (numBadReadings == 3)					// if we get 3 bad readings in a row, give up
 		{
-			lastReading = val;						// save all 28 bits of data + 4 error bits
-			lastReadingTakenAt = millis();			// record when we took it
-			TaskCriticalSectionLocker lock;
-			const AnalogInCallbackFunction fn = callbackFunction;
-			if (fn != nullptr)
+			if (inputMonitor != nullptr)
 			{
-				fn(callbackParameter, ScanningSensorHandler::GetReading());
+				inputMonitor->SetTriggered();
 			}
-		}
-		else if (millis() - lastReadingTakenAt > 5)	// we get occasional reading errors, so don't report a bad reading unless it's 5ms since we had a good reading
-		{
-			lastReading = 0;
+			Stop();
 		}
 	}
-
-	if (oldHookFunction != nullptr)
+	else
 	{
-		oldHookFunction();
+		numBadReadings = 0;
+		const uint32_t now = StepTimer::GetTimerTicks();
+		const uint32_t interval = now - lastReadingTime;
+
+		// We expect the speed to fit in 16 bits normally
+		const uint16_t newSpeed = (uint16_t)constrain<int32_t>((((int32_t)reading - (int32_t)lastReading) * 16)/(int32_t)interval, 0, 65535);
+
+		if (now - startTime >= StepTimer::StepClockRate/20)		// if we've been probing for at least 50ms
+		{
+			const uint32_t speedSum = speedFilter.GetSum();
+			if (((uint32_t)newSpeed * (65536 * speedFilter.NumAveraged())) < speedSum * sensitivity)
+			{
+				inputMonitor->SetTriggered();
+				Stop();
+//				delay(2);		// to ensure the async sender gets woken before we print the debug
+//				debugPrintf("Speed %u/%u\n", newSpeed, (unsigned int)(speedSum/speedFilter.NumAveraged()));
+			}
+		}
+
+		speedFilter.ProcessReading(newSpeed);
+		lastReading = reading;
+		lastReadingTime = now;
+	}
+}
+
+[[noreturn]] static void LdcTaskLoop(void* param) noexcept;
+
+// Activate the scanning sensor returning true if successful
+bool ScanningSensorHandler::Activate(InputMonitor& monitor) noexcept
+{
+	if (sensor == nullptr)
+	{
+		return false;
+	}
+
+	if (ldcTask == nullptr)
+	{
+		ldcTask = new Task<LdcTaskStackWords>;
+		ldcTask->Create(LdcTaskLoop, "ScanSens", nullptr, TaskPriority::LdcTask);
+	}
+	inputMonitor = &monitor;
+	return true;
+}
+
+void ScanningSensorHandler::Deactivate()
+{
+	inputMonitor = nullptr;
+}
+
+// Align this on a cache line boundary for SAMC21
+__attribute__ ((aligned (8))) static void Ldc1612Interrupt(CallbackParameter) noexcept
+{
+	TaskBase::GiveFromISR(ldcTask, NotifyIndices::LDC1612);
+	DisablePinInterrupt(LDC1612InterruptPin);
+}
+
+// Function executed by the LDC task
+[[noreturn]] static void LdcTaskLoop(void* param) noexcept
+{
+	AttachPinInterrupt(LDC1612InterruptPin, Ldc1612Interrupt, InterruptMode::low, CallbackParameter(), false);
+	for (;;)
+	{
+		if (inputMonitor == nullptr || isCalibrating)
+		{
+			delay(5);
+		}
+		else
+		{
+			if (sensor->IsChannelReady(0))					// this also clears the interrupt
+			{
+				uint32_t val;
+				if (sensor->GetChannelResult(0, val))		// if no error
+				{
+					lastReading = val;						// save all 28 bits of data + 4 error bits
+					lastReadingTakenAt = millis();			// record when we took it
+					if (TouchMode::IsEnabled())
+					{
+						TouchMode::ProcessReading(val);
+					}
+					else
+					{
+						inputMonitor->AnalogInterrupt(ScanningSensorHandler::GetReading());
+					}
+				}
+				else if (millis() - lastReadingTakenAt > 5)	// we get occasional reading errors, so don't report a bad reading unless it's 5ms since we had a good reading
+				{
+					lastReading = 0;
+				}
+			}
+
+			EnablePinInterrupt(LDC1612InterruptPin);
+			TaskBase::TakeIndexed(NotifyIndices::LDC1612, 5);
+		}
 	}
 }
 
@@ -97,14 +218,8 @@ void ScanningSensorHandler::Init(SharedI2CMaster& i2cDevice) noexcept
 	if (sensor->CheckPresent())
 	{
 		sensor->SetDefaultConfiguration(0, false);
-#if defined(SHT36) && (BOARD_REV == 300)
-		// we don't have the INT pin hooked up on this board, so we just use a time based poll
-		lastReadingTakenAt = millis();
-#else
 		lastReadingTakenAt = millis();
 		pinMode(LDC1612InterruptPin, PinMode::INPUT);
-#endif
-		oldHookFunction = AnalogIn::SetTaskHook(LDC1612TaskHook);
 	}
 	else
 	{
@@ -129,11 +244,16 @@ uint32_t ScanningSensorHandler::GetReading() noexcept
 
 GCodeResult ScanningSensorHandler::SetOrCalibrateCurrent(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept
 {
-	if (sensor != nullptr)
+	if (sensor == nullptr)
+	{
+		reply.copy("scanning probe not present");
+	}
+	else
 	{
 		if (param == CanMessageChangeInputMonitorNew::paramAutoCalibrateDriveLevelAndReport)
 		{
 			isCalibrating = true;
+			delay(2);												// avoid race with LDC task
 			bool ok = sensor->CalibrateDriveCurrent(0);
 			if (ok)
 			{
@@ -164,6 +284,7 @@ GCodeResult ScanningSensorHandler::SetOrCalibrateCurrent(uint32_t param, const S
 			const uint16_t driveCurrent = param & CanMessageChangeInputMonitorNew::paramDriveLevelMask;
 			const uint32_t newOffset = param >> CanMessageChangeInputMonitorNew::paramOffsetShift;
 			isCalibrating = true;
+			delay(2);												// avoid race with LDC task
 			const bool ok = sensor->SetDriveCurrent(0, driveCurrent);
 			isCalibrating = false;
 			if (ok)
@@ -179,12 +300,24 @@ GCodeResult ScanningSensorHandler::SetOrCalibrateCurrent(uint32_t param, const S
 	return GCodeResult::error;
 }
 
-bool ScanningSensorHandler::SetCallback(AnalogInCallbackFunction fn, CallbackParameter param, uint32_t ticksPerCall) noexcept
+GCodeResult ScanningSensorHandler::SelectTouchMode(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept
 {
-	callbackParameter = param;
-	callbackFunction = fn;
-	// We ignore the ticksPerCall parameter
-	return true;
+	if (sensor == nullptr)
+	{
+		reply.copy("scanning probe not present");
+	}
+	else
+	{
+		TouchMode::Start(param);
+		return GCodeResult::ok;
+	}
+	extra = 0xFF;
+	return GCodeResult::error;
+}
+
+void ScanningSensorHandler::ClearTouchMode() noexcept
+{
+	TouchMode::Stop();
 }
 
 // Return the oscillation frequency in MHz
@@ -198,38 +331,49 @@ void ScanningSensorHandler::AppendDiagnostics(const StringRef& reply) noexcept
 	reply.lcat("Inductive sensor: ");
 	if (IsPresent())
 	{
-		// Append diagnostic data to string
-		const uint32_t val = lastReading;
-		if (val != 0)
+		if (ldcTask == nullptr)
 		{
-			reply.catf("raw value %" PRIu32 ", frequency %.2fMHz, current setting %u", val & 0x0FFFFFFF, (double)GetFrequency(), sensor->GetDriveCurrent(0));
-			if ((val >> 28) == 0)
-			{
-				reply.cat(", ok");
-			}
-			else
-			{
-				if ((val >> 28) & LDC1612::ERR_UR0)
-				{
-					reply.cat(", under-range error");
-				}
-				if ((val >> 28) & LDC1612::ERR_OR0)
-				{
-					reply.cat(", over-range error");
-				}
-				if ((val >> 28) & LDC1612::ERR_WD0)
-				{
-					reply.cat(", watchdog error");
-				}
-				if ((val >> 28) & LDC1612::ERR_AE0)
-				{
-					reply.cat(", amplitude error");
-				}
-			}
+			reply.cat("never activated");
+		}
+		else if (inputMonitor == nullptr)
+		{
+			reply.cat("not currently active");
 		}
 		else
 		{
-			reply.cat("error retrieving data from LDC1612");
+			// Append diagnostic data to string
+			const uint32_t val = lastReading;
+			if (val != 0)
+			{
+				reply.catf("raw value %" PRIu32 ", frequency %.2fMHz, current setting %u", val & 0x0FFFFFFF, (double)GetFrequency(), sensor->GetDriveCurrent(0));
+				if ((val >> 28) == 0)
+				{
+					reply.cat(", ok");
+				}
+				else
+				{
+					if ((val >> 28) & LDC1612::ERR_UR0)
+					{
+						reply.cat(", under-range error");
+					}
+					if ((val >> 28) & LDC1612::ERR_OR0)
+					{
+						reply.cat(", over-range error");
+					}
+					if ((val >> 28) & LDC1612::ERR_WD0)
+					{
+						reply.cat(", watchdog error");
+					}
+					if ((val >> 28) & LDC1612::ERR_AE0)
+					{
+						reply.cat(", amplitude error");
+					}
+				}
+			}
+			else
+			{
+				reply.cat("error retrieving data from LDC1612");
+			}
 		}
 	}
 	else

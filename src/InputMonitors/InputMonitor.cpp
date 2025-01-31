@@ -21,9 +21,19 @@
 #endif
 
 InputMonitor * volatile InputMonitor::monitorsList = nullptr;
-InputMonitor * volatile InputMonitor::freeList = nullptr;
 ReadWriteLock InputMonitor::listLock;
 
+InputMonitor::~InputMonitor()
+{
+#if SUPPORT_LDC1612
+	if (port.IsLdc1612())
+	{
+		ScanningSensorHandler::Deactivate();		// make sure that the scanning sensor doesn't retain a pointer to this object
+	}
+#endif
+}
+
+// Activate the monitor returning true if successful
 bool InputMonitor::Activate() noexcept
 {
 	bool ok = true;
@@ -49,17 +59,26 @@ bool InputMonitor::Activate() noexcept
 		else
 		{
 			// Analog port
-			state = port.ReadAnalog() >= threshold;
-#ifdef ATEIO
-			// We can't set an interrupt on the extended analog channels
-			if (IsExtendedAnalogPin(port.GetPin()))
+#if SUPPORT_LDC1612
+			if (port.IsLdc1612())
 			{
-				ok = true;
+				ok = ScanningSensorHandler::Activate(*this);
 			}
 			else
 #endif
 			{
-				ok = port.SetAnalogCallback(CommonAnalogPortInterrupt, CallbackParameter(this), 1);
+				state = port.ReadAnalog() >= threshold;
+#ifdef ATEIO
+				// We can't set an interrupt on the extended analog channels
+				if (IsExtendedAnalogPin(port.GetPin()))
+				{
+					ok = true;
+				}
+				else
+#endif
+				{
+					ok = port.SetAnalogCallback(CommonAnalogPortInterrupt, CallbackParameter(this), 1);
+				}
 			}
 		}
 		active = true;
@@ -92,7 +111,16 @@ void InputMonitor::Deactivate() noexcept
 		}
 		else
 		{
-			port.ClearAnalogCallback();
+#if SUPPORT_LDC1612
+			if (port.IsLdc1612())
+			{
+				ScanningSensorHandler::Deactivate();
+			}
+			else
+#endif
+			{
+				port.ClearAnalogCallback();
+			}
 		}
 	}
 	active = false;
@@ -106,19 +134,45 @@ uint32_t InputMonitor::GetAnalogValue() const noexcept
 				: 0;
 }
 
+#if SUPPORT_LDC1612
+
 // Set the sensor drive current
 GCodeResult InputMonitor::SetDriveLevel(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept
 {
-#if SUPPORT_LDC1612
 	if (port.IsLdc1612())
 	{
 		return ScanningSensorHandler::SetOrCalibrateCurrent(param, reply, extra);
 	}
-#endif
-
 	reply.copy("drive level not applicable to this port");
 	return GCodeResult::error;
 }
+
+// Select touch mode and set the sensitivity
+GCodeResult InputMonitor::SelectTouchMode(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept
+{
+	if (port.IsLdc1612())
+	{
+		const GCodeResult ret = ScanningSensorHandler::SelectTouchMode(param, reply, extra);
+		if (ret < GCodeResult::error)
+		{
+			isLdcInTouchMode = true;
+			state = false;						// not triggered
+		}
+		return ret;
+	}
+	reply.copy("touch mode not applicable to this port");
+	return GCodeResult::error;
+}
+
+// Set the state of this monitor to triggered and report it to the main board. Used when the probe is in touch mode.
+void InputMonitor::SetTriggered() noexcept
+{
+	state = true;
+	sendDue = true;
+	CanInterface::WakeAsyncSender();
+}
+
+#endif
 
 void InputMonitor::DigitalInterrupt() noexcept
 {
@@ -214,8 +268,8 @@ void InputMonitor::UpdateState(bool newState) noexcept
 			{
 				prev->next = current->next;
 			}
-			current->next = freeList;
-			freeList = current;
+
+			delete current;
 			return true;
 		}
 		prev = current;
@@ -232,23 +286,16 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	Delete(msg.handle.all);						// delete any existing monitor with the same handle
 
 	// Allocate a new one
-	InputMonitor *newMonitor;
-	if (freeList == nullptr)
-	{
-		newMonitor = new InputMonitor;
-	}
-	else
-	{
-		newMonitor = freeList;
-		freeList = newMonitor->next;
-	}
-
+	InputMonitor *newMonitor = new InputMonitor;
 	newMonitor->handle = msg.handle.all;
 	newMonitor->active = false;
 	newMonitor->state = false;
 	newMonitor->minInterval = msg.minInterval;
 	newMonitor->threshold = msg.threshold;
 	newMonitor->sendDue = false;
+#if SUPPORT_LDC1612
+	newMonitor->isLdcInTouchMode = false;
+#endif
 	String<StringLength50> pinName;
 	pinName.copy(msg.pinName, msg.GetMaxPinNameLength(dataLength));
 	if (newMonitor->port.AssignPort(pinName.c_str(), reply, PinUsedBy::endstop, (msg.threshold == 0) ? PinAccess::read : PinAccess::readAnalog))
@@ -265,8 +312,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 		return GCodeResult::ok;
 	}
 
-	newMonitor->next = freeList;
-	freeList = newMonitor;
+	delete newMonitor;
 	return GCodeResult::error;
 }
 
@@ -301,6 +347,12 @@ void InputMonitor::UpdateState(bool newState) noexcept
 
 	case CanMessageChangeInputMonitorNew::actionDontMonitor:
 		m->Deactivate();
+#if SUPPORT_LDC1612
+		if (m->port.IsLdc1612())
+		{
+			ScanningSensorHandler::ClearTouchMode();
+		}
+#endif
 		rslt = GCodeResult::ok;
 		break;
 
@@ -313,17 +365,35 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	case CanMessageChangeInputMonitorNew::actionChangeThreshold:
 		m->threshold = msg.param;
 		m->state = m->port.ReadAnalog() >= m->threshold;
+#if SUPPORT_LDC1612
+		if (m->port.IsLdc1612())
+		{
+			ScanningSensorHandler::ClearTouchMode();
+		}
+#endif
 		rslt = GCodeResult::ok;
 		break;
 
 	case CanMessageChangeInputMonitorNew::actionChangeMinInterval:
 		m->minInterval = msg.param;
+#if SUPPORT_LDC1612
+		if (m->port.IsLdc1612())
+		{
+			ScanningSensorHandler::ClearTouchMode();
+		}
+#endif
 		rslt = GCodeResult::ok;
 		break;
 
+#if SUPPORT_LDC1612
 	case CanMessageChangeInputMonitorNew::actionSetDriveLevel:
 		rslt = m->SetDriveLevel(msg.param, reply, extra);
 		break;
+
+	case CanMessageChangeInputMonitorNew::actionSelectTouchMode:
+		rslt = m->SelectTouchMode(msg.param, reply, extra);
+		break;
+#endif
 
 	default:
 		reply.printf("ChangeInputMonitor action #%u not implemented", msg.action);

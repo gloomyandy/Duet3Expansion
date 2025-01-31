@@ -68,8 +68,14 @@ static bool enabled = false;
 constexpr CanDevice::Config Can0Config =
 {
 	.dataSize = 64,									// must be one of: 8, 12, 16, 20, 24, 32, 48, 64
+#if RP2040
 	.numTxBuffers = 0,
+	.txFifo0Size = 16,
+	.txFifo1Size = 2,
+#else
+	.numTxBuffers = 2,
 	.txFifoSize = 16,								// enough to send a 512-byte response broken into 60-byte fragments, plus status messages
+#endif
 #if RP2040
 	.numRxBuffers = 0,								// RP2040 implementation doesn't support receive buffers
 #else
@@ -332,10 +338,25 @@ bool CanInterface::Send(CanMessageBuffer *buf) noexcept
 	return true;
 }
 
+// Send a high-priority message. Called only from the CansAsyncSender task, so we don't need to use a mutex.
+// We reserve two buffers for sending these messages.
 bool CanInterface::SendAsync(CanMessageBuffer *buf) noexcept
 {
-	//TODO use a dedicated buffer to send these high-priority messages
-	return Send(buf);
+#if RP2040
+	// RP2040 doesn't support dedicated buffers but it can support more than one fifo. We prioritise fifo1 over fifo.
+	const CanDevice::TxBufferNumber bufferNumber = CanDevice::TxBufferNumber::fifo1;
+#else
+	const CanDevice::TxBufferNumber bufferNumber = (can0dev->IsSpaceAvailable(CanDevice::TxBufferNumber::buffer0, 0))
+													? CanDevice::TxBufferNumber::buffer0
+														: CanDevice::TxBufferNumber::buffer1;
+#endif
+	const uint32_t cancelledId = can0dev->SendMessage(bufferNumber, 1000, buf);
+	if (cancelledId != 0)
+	{
+		lastCancelledId = cancelledId;
+		++txTimeouts;
+	}
+	return true;
 }
 
 bool CanInterface::SendAndFree(CanMessageBuffer *buf) noexcept
