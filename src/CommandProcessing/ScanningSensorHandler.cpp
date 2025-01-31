@@ -40,7 +40,7 @@ namespace TouchMode
 	static uint16_t sensitivity;
 	static uint32_t startTime;					// the time we started taking touch mode readings, in step clocks
 	static uint32_t lastReadingTime;			// the last reading time of the sensor, in step clocks
-	static uint32_t lastReading;
+	static uint32_t lastReading, lastMinus1Reading, lastMinus2Reading;
 	static unsigned int numBadReadings;
 	static AveragingFilter<16> speedFilter;
 
@@ -53,7 +53,7 @@ namespace TouchMode
 
 void TouchMode::Start(uint32_t sens) noexcept
 {
-	sensitivity = (uint16_t)sens;
+	sensitivity = (uint16_t)sens;				// we only send a 16-bit sensitivity
 	lastReading = 0;
 	numBadReadings = 0;
 	startTime = StepTimer::GetTimerTicks();
@@ -89,11 +89,12 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 		const uint32_t interval = now - lastReadingTime;
 
 		// We expect the speed to fit in 16 bits normally
-		const uint16_t newSpeed = (uint16_t)constrain<int32_t>((((int32_t)reading - (int32_t)lastReading) * 16)/(int32_t)interval, 0, 65535);
+		const uint16_t newSpeed = (uint16_t)constrain<int32_t>((((int32_t)reading - (int32_t)lastMinus2Reading) * 256)/(int32_t)interval, 0, 65535);
 
-		if (now - startTime >= StepTimer::StepClockRate/20)		// if we've been probing for at least 50ms
+		if (now - startTime >= StepTimer::StepClockRate/10)		// allow for the movement start delay and some more
 		{
 			const uint32_t speedSum = speedFilter.GetSum();
+			debugPrintf("R %u I%u S %u/%u\n", (unsigned int)reading, (unsigned int)interval, newSpeed, (unsigned int)(speedSum/speedFilter.NumAveraged()));
 			if (((uint32_t)newSpeed * (65536 * speedFilter.NumAveraged())) < speedSum * sensitivity)
 			{
 				inputMonitor->SetTriggered();
@@ -104,6 +105,8 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 		}
 
 		speedFilter.ProcessReading(newSpeed);
+		lastMinus2Reading = lastMinus1Reading;
+		lastMinus1Reading = lastReading;
 		lastReading = reading;
 		lastReadingTime = now;
 	}
