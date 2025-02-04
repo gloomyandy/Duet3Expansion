@@ -861,7 +861,7 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 
 #if !USE_SERIAL_DEBUG
 
-// Debugging support. We maintain a ring buffer of debug buffers, written by debugPrintf, read by the CAN Async Sender task.
+// Debugging support. We maintain a ring buffer for debugging text, written by debugPrintf via DebugPutc, read by the CAN Async Sender task.
 static RingBuffer<char> debugBuffer;
 constexpr size_t DebugBufferSize = 512;
 static_assert((DebugBufferSize & (DebugBufferSize - 1)) == 0);		// DebugBufferSize must be a power of 2
@@ -908,7 +908,7 @@ extern "C" [[noreturn]] void CanAsyncSenderLoop(void *) noexcept
 			(void)msg->AddEntry(h.asU16(), (uint32_t)stallNotifications, true);
 		}
 #endif
-		const uint32_t timeToWait = InputMonitor::AddStateChanges(msg);
+		uint32_t timeToWait = InputMonitor::AddStateChanges(msg);
 		if (msg->numHandles != 0)
 		{
 			buf.dataLength = msg->GetActualDataLength();
@@ -918,7 +918,7 @@ extern "C" [[noreturn]] void CanAsyncSenderLoop(void *) noexcept
 
 #if !USE_SERIAL_DEBUG
 		size_t numChars;
-		while (!debugBufferBeingWritten && (numChars = debugBuffer.ItemsPresent()) != 0)
+		if (!debugBufferBeingWritten && (numChars = debugBuffer.ItemsPresent()) != 0)
 		{
 			auto debugMsg = buf.SetupRequestMessageNoRid<CanMessageDebugText>(CanInterface::GetCanAddress(), currentMasterAddress);
 			size_t numToSend = min<size_t>(numChars, ARRAY_SIZE(debugMsg->text));
@@ -932,7 +932,11 @@ extern "C" [[noreturn]] void CanAsyncSenderLoop(void *) noexcept
 				debugMsg->text[numToSend++] = 0;
 			}
 			buf.dataLength = numToSend;
-			CanInterface::Send(&buf);
+			CanInterface::SendAsync(&buf);
+			if (debugBuffer.ItemsPresent() != 0 && timeToWait > 10)
+			{
+				timeToWait = 10;
+			}
 		}
 #endif
 

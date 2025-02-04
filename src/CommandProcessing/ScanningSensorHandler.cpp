@@ -71,7 +71,7 @@ void TouchMode::Stop() noexcept
 // A typical probing speed is 5mm/sec. At this speed, a processing interval of 1ms will give us a probing resolution of 5um.
 void TouchMode::ProcessReading(uint32_t reading) noexcept
 {
-	if ((lastReading & 0xF0000000) != 0)			// if it's a bad reading
+	if ((reading & 0xF0000000) != 0)			// if it's a bad reading
 	{
 		++numBadReadings;
 		if (numBadReadings == 3)					// if we get 3 bad readings in a row, give up
@@ -80,6 +80,7 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 			{
 				inputMonitor->SetTriggered();
 			}
+//			debugPrintf("Bad reading %08" PRIx32 "\n", reading);
 			Stop();
 		}
 	}
@@ -96,13 +97,12 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 			// Average the most recent 4 readings
 			const uint32_t recentSpeed = (uint32_t)currentSpeed + lastSpeed + lastSpeedMinus1 + lastSpeedMinus2;
 			const uint32_t speedSum = speedFilter.GetSum();
-			debugPrintf("R %u I%u S %u/%u\n", (unsigned int)reading, (unsigned int)interval, currentSpeed, (unsigned int)(speedSum/speedFilter.NumAveraged()));
+//			debugPrintf("R %u I%u S %u/%u\n", (unsigned int)reading, (unsigned int)interval, currentSpeed, (unsigned int)(speedSum/speedFilter.NumAveraged()));
 			if ((recentSpeed * ((65536/4) * speedFilter.NumAveraged())) < speedSum * sensitivity)
 			{
 				inputMonitor->SetTriggered();
 				Stop();
-//				delay(2);		// to ensure the async sender gets woken before we print the debug
-//				debugPrintf("Speed %u/%u\n", newSpeed, (unsigned int)(speedSum/speedFilter.NumAveraged()));
+//				debugPrintf("Speed %u/%u\n", (unsigned int)(recentSpeed/4), (unsigned int)(speedSum/speedFilter.NumAveraged()));
 			}
 		}
 
