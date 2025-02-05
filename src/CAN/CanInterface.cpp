@@ -877,7 +877,14 @@ bool CanInterface::DebugPutc(char c) noexcept
 	}
 
 	debugBufferBeingWritten = false;
-	WakeAsyncSender();
+	// Notify sending task if we have anything to send.
+	// Note: if Sender task is not yet running debugBuffer will not have been
+	// initialised (and so will always be empty), which avoids an assertion fault
+	// if we try to output debug when we have no sender task.
+	if (debugBuffer.ItemsPresent() != 0) 
+	{
+		WakeAsyncSender();
+	}
 	return true;
 }
 
