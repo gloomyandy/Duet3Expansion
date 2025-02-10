@@ -266,12 +266,8 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		motioncalc_t newDcf = distanceCarriedForwards + seg->GetLength();
 		if (fabsm(newDcf) > 1.0)
 		{
-			if (Platform::Debug(Module::Move))
-			{
-				debugPrintf("newDcf=%.3e\n", (double)newDcf);
-			}
-			LogStepError(7);
-			newDcf = (motioncalc_t)0.0;							// to prevent the next segment erroring out
+			LogStepError(7, (float)newDcf, seg);
+			newDcf = constrain<motioncalc_t>(newDcf, -1.0, 1.0);	// to prevent the next segment erroring out
 		}
 		distanceCarriedForwards = newDcf;
 		MoveSegment *oldSeg = seg;
@@ -291,16 +287,16 @@ static inline motioncalc_t fastLimSqrtm(motioncalc_t f) noexcept
 }
 
 // Tell the Move class that we had a step error. This always returns false so that CalcNextStepTimeFull can tail-chain to it.
-bool DriveMovement::LogStepError(uint8_t type) noexcept
+bool DriveMovement::LogStepError(uint8_t type, float info, const MoveSegment *seg) noexcept
 {
 	state = DMState::stepError;
 	stepErrorType = type;
-	if (Platform::Debug(Module::Move))
+	debugPrintf("Code %u move error: info=%.3g, seg: ", type, (double)info);
+	if (seg != nullptr)
 	{
-		debugPrintf("Step err %u on ", type);
-		DebugPrint();
-		MoveSegment::DebugPrintList(segments);
+		seg->DebugPrint();
 	}
+	debugPrintf("\n");
 	moveInstance->LogStepError(type);
 	return false;
 }
@@ -375,12 +371,12 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 #if !(SAMC21 || RP2040)												// this check is expensive on these processors
 			if (fabsm(distanceCarriedForwards) > (motioncalc_t)1.0)
 			{
-				return LogStepError(5);
+				return LogStepError(5, (float)distanceCarriedForwards, currentSegment);
 			}
 #endif
 			if (currentMotorPosition - positionAtSegmentStart != netStepsThisSegment)
 			{
-				return LogStepError(6);
+				return LogStepError(6, 0.0, currentSegment);
 			}
 
 			movementAccumulator += netStepsThisSegment;				// update the amount of extrusion for filament monitors
@@ -400,7 +396,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 
 			if (unlikely((int32_t)(currentSegment->GetStartTime() - prevEndTime) < -10))
 			{
-				return LogStepError(1);
+				return LogStepError(1, (float)(int32_t)(currentSegment->GetStartTime() - prevEndTime), currentSegment);
 			}
 
 			// Leave shiftFactor set to 0 so that we compute a single step time, because the interval will have changed
@@ -482,26 +478,38 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 #if SEGMENT_DEBUG
 		debugPrintf("DMstate %u, quitting\n", (unsigned int)state);
 #endif
-		return LogStepError(4);
+		return LogStepError(4, (float)state, currentSegment);
 	}
 
 	nextCalcStepTime += t0;
+	uint32_t iNextCalcStepTime;
 
+	// Check that the next step time is reasonable
 #if (SAMC21 || RP2040) && !USE_DOUBLE_MOTIONCALC
 	// The FP library we use on Cortext-M0+ MCUs doesn't support NaNs so there is no point in testing for them
 	if (unlikely(std::signbit(nextCalcStepTime)))
 #else
-	if (unlikely(std::isnan(nextCalcStepTime) || nextCalcStepTime < (motioncalc_t)0.0))
-#endif
+	if (unlikely(std::isnan(nextCalcStepTime)))
 	{
-		if (Platform::Debug(Module::Move))
-		{
-			debugPrintf("nextCalcStepTime=%.3e\n", (double)nextCalcStepTime);
-		}
-		return LogStepError(2);
+		return LogStepError(2, (float)nextCalcStepTime, currentSegment);
 	}
 
-	uint32_t iNextCalcStepTime = (uint32_t)nextCalcStepTime;
+	if (unlikely(nextCalcStepTime < (motioncalc_t)0.0))
+#endif
+	{
+		// If we are carrying almost a whole step forward to this segment so that the first step is due almost immediately,
+		// then due to floating point rounding error we can get a slightly negative value here for nextCalcStepTime.
+		// The only value we have had reported so far is -0.00195 but we now allow up to two step clocks of error.
+		if (nextCalcStepTime < -(motioncalc_t)2.0)
+		{
+			return LogStepError(2, (float)nextCalcStepTime, currentSegment);
+		}
+		iNextCalcStepTime = 0;
+	}
+	else
+	{
+		iNextCalcStepTime = (uint32_t)nextCalcStepTime;
+	}
 
 	if (iNextCalcStepTime > currentSegment->GetDuration())
 	{

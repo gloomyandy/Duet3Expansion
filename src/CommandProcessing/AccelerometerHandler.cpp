@@ -24,7 +24,7 @@
 
 constexpr uint16_t DefaultSamplingRate = 1000;
 
-constexpr size_t AccelerometerTaskStackWords = 130;
+constexpr size_t AccelerometerTaskStackWords = 150;			// chrishamm needed at least 150 to avoid stack overflows on SZP
 static Task<AccelerometerTaskStackWords> *accelerometerTask;
 
 static LISAccelerometer *accelerometer = nullptr;
