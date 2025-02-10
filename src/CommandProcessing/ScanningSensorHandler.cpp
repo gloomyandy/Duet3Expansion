@@ -103,7 +103,7 @@ void TouchMode::Start(uint32_t sens) noexcept
 	lastValue = 0.0f;
 	startValue = 0.0f;
 	falling = false;
-	threshold = 1000.0f*(1 - ((float)sensitivity/65536));
+	threshold = 20000.0f * (1 - ((float)sensitivity/65536));
 	goodCnt = 0;
 #else
 	speedFilter.Init(0);
