@@ -3,6 +3,8 @@
  *
  *  Created on: 16 Jun 2023
  *      Author: David
+ *
+ *  This file may be distributed under the terms of the GNU GPLv3 license.
  */
 
 #include "ScanningSensorHandler.h"
@@ -20,6 +22,8 @@
 #include <AppNotifyIndices.h>
 #include <Interrupts.h>
 
+#define USE_BUTTERWORTH_FILTER		1
+
 constexpr unsigned int ResultBitsDropped = 8;		// we drop this number of least significant bits in the result
 
 constexpr unsigned int LdcTaskStackWords = 150;		// 100 was too little
@@ -36,14 +40,44 @@ static InputMonitor *inputMonitor = nullptr;		// when the sensor is active this 
 namespace TouchMode
 {
 //private:
+#if USE_BUTTERWORTH_FILTER
+	// Butterworth bandpass filter code and coefficients borrowed from https://github.com/vvuk/klipper/blob/vlad/eddy-ng/src/sensor_ldc1612_ng.c
+	static const size_t sosSections = 2;
+	static float sosState[sosSections][2];
+	static constexpr float sosButterworthFilter500[sosSections][6] =
+			{
+				{	0.013359200027856505,
+					0.02671840005571301,
+					0.013359200027856505,
+					1.0,
+					-1.686278256753083,
+					0.753714473246724
+				 },
+				 {	1.0,
+					-2.0,
+					1.0,
+					1.0,
+					-1.9250515947328444,
+					0.9299234737648037
+				 }
+			};
+	static float SosFilter(float value, const float filter[][6], float state[][2]) noexcept;
+	static float baseFreq;
+	static float lastValue;
+	static float startValue;
+	static bool falling;
+	static size_t goodCnt;						// for debug use
+	static float threshold;
+#else
+	static AveragingFilter<16> speedFilter;
+	static uint32_t lastReadingTime;			// the previous reading time of the sensor, in step clocks
+	static uint16_t lastSpeed, lastSpeedMinus1, lastSpeedMinus2;
+#endif
 	static bool enabled = false;
 	static uint16_t sensitivity;
 	static uint32_t startTime;					// the time we started taking touch mode readings, in step clocks
 	static uint32_t lastReading;				// the previous reading
-	static uint32_t lastReadingTime;			// the previous reading time of the sensor, in step clocks
-	static uint16_t lastSpeed, lastSpeedMinus1, lastSpeedMinus2;
 	static unsigned int numBadReadings;
-	static AveragingFilter<16> speedFilter;
 
 //public:
 	static void Start(uint32_t sens) noexcept;
@@ -58,7 +92,22 @@ void TouchMode::Start(uint32_t sens) noexcept
 	lastReading = 0;
 	numBadReadings = 0;
 	startTime = StepTimer::GetTimerTicks();
+#if USE_BUTTERWORTH_FILTER
+	enabled = true;
+	for(size_t i = 0; i < sosSections; i++)
+	{
+		sosState[i][0] = 0.0f;
+		sosState[i][1] = 0.0f;
+	}
+	baseFreq = 0.0f;
+	lastValue = 0.0f;
+	startValue = 0.0f;
+	falling = false;
+	threshold = 1000.0f*(1 - ((float)sensitivity/65536));
+	goodCnt = 0;
+#else
 	speedFilter.Init(0);
+#endif
 	enabled = true;
 }
 
@@ -67,11 +116,30 @@ void TouchMode::Stop() noexcept
 	enabled = false;
 }
 
+#if USE_BUTTERWORTH_FILTER
+
+// Butterworth bandpass filter code and coefficients borrowed from https://github.com/vvuk/klipper/blob/vlad/eddy-ng/src/sensor_ldc1612_ng.c
+float TouchMode::SosFilter(float value, const float filter[][6], float state[][2]) noexcept
+{
+	for (size_t i = 0; i < sosSections; i++)
+	{
+		const float w1 = state[i][0];
+		const float w2 = state[i][1];
+		const float w0 = value - filter[i][4]*w1 - filter[i][5]*w2;
+		value = filter[i][0]*w0 + filter[i][1]*w1 + filter[i][2]*w2;
+		state[i][0] = w0;
+		state[i][1] = w1;
+	}
+	return value;
+}
+
+#endif
+
 // Process a sensor reading when we are in touch mode
 // A typical probing speed is 5mm/sec. At this speed, a processing interval of 1ms will give us a probing resolution of 5um.
 void TouchMode::ProcessReading(uint32_t reading) noexcept
 {
-	if ((reading & 0xF0000000) != 0)			// if it's a bad reading
+	if ((reading & 0xE0000000) != 0)				// if it's a bad reading (ignoring amplitude errors)
 	{
 		++numBadReadings;
 		if (numBadReadings == 3)					// if we get 3 bad readings in a row, give up
@@ -87,6 +155,45 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 	else
 	{
 		const uint32_t now = StepTimer::GetTimerTicks();
+
+#if USE_BUTTERWORTH_FILTER
+		// Butterworth bandpass filter code and coefficients borrowed from see https://github.com/vvuk/klipper/blob/vlad/eddy-ng/src/sensor_ldc1612_ng.c
+		const float freq = (float)reading;							// no need to convert to an actual frequency here
+		if (now - startTime >= StepTimer::StepClockRate/10)			// allow for the movement start delay and some more
+		{
+			const float value = SosFilter(freq - baseFreq, sosButterworthFilter500, sosState);
+			//debugPrintf("%d F %f V %f\n", goodCnt++, (double)(freq - baseFreq), (double)value);
+			// allow filter to stabilise
+			if (now - startTime >= StepTimer::StepClockRate/5)
+			{
+				if (value < lastValue)
+				{
+					falling = true;
+				}
+				else if (value > lastValue)
+				{
+					if (falling)
+					{
+						if (startValue - lastValue >= threshold)
+						{
+							inputMonitor->SetTriggered();
+							Stop();
+							//delay(500);
+							//debugPrintf("%d Trig F %f V %f LV %f SV %f BV %f TH %f\n", goodCnt++, (double)freq, (double)value, (double)lastValue, (double)startValue, (double)baseFreq, (double)threshold);
+						}
+					}
+					falling = false;
+					startValue = value;
+				}
+				lastValue = value;
+			}
+		}
+		else
+		{
+			baseFreq = freq;
+		}
+		numBadReadings = 0;
+#else
 		const uint32_t interval = now - lastReadingTime;
 
 		// We expect the speed to fit in 16 bits normally
@@ -113,6 +220,7 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 		lastReading = reading;
 		lastReadingTime = now;
 		numBadReadings = 0;
+#endif
 	}
 }
 
@@ -199,24 +307,26 @@ void ScanningSensorHandler::Init(SharedI2CMaster& i2cDevice) noexcept
 	if constexpr(LDC1612::ClockFrequency == 25.0)
 	{
 		ConfigureGclk(GclkNumPA23, GclkSource::xosc, 1, true);
+		SetPinFunction(LDC1612ClockGenPin, GpioPinFunction::H);
 	}
 	else if constexpr(LDC1612::ClockFrequency == 32.0)
 	{
 		ConfigureGclk(GclkNumPA23, GclkSource::dpll, 3, true);
+		SetPinFunction(LDC1612ClockGenPin, GpioPinFunction::H);
 	}
-	SetPinFunction(LDC1612ClockGenPin, GpioPinFunction::H);
 #elif defined(TOOL1RR)
 	// We use the 120MHz DPLL output divided by 4 to get 30MHz. It might be better to use 25MHz from the crystal directly for better stability.
 	static_assert(LDC1612::ClockFrequency == 25.0 || LDC1612::ClockFrequency == 30.0);
 	if constexpr(LDC1612::ClockFrequency == 25.0)
 	{
 		ConfigureGclk(GclkNumPB11, GclkSource::xosc0, 1, true);
+		SetPinFunction(LDC1612ClockGenPin, GpioPinFunction::M);
 	}
 	else if constexpr(LDC1612::ClockFrequency == 30.0)
 	{
 		ConfigureGclk(GclkNumPB11, GclkSource::dpll0, 4, true);
+		SetPinFunction(LDC1612ClockGenPin, GpioPinFunction::M);
 	}
-	SetPinFunction(LDC1612ClockGenPin, GpioPinFunction::M);
 #else
 # error LDC support not implemented for this processor
 #endif
