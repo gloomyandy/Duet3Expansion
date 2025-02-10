@@ -2,6 +2,12 @@
 
 Firmware for Duet 3 expansion and tool boards
 
+## Releases
+
+Expansion board firmware is released as part of the main RepRapFirmware release, and are no longer released in this repo. See https://github.com/Duet3D/RepRapFirmware/releases
+
+## Build instructions
+
 Duet 3 expansion and tool board firmware is built from several Github projects. You need to use compatible branches of these projects. As at 20 May 2020, the latest source code is on these branches:
 
 - Duet3Expansion: master
