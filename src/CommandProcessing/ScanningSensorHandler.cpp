@@ -23,6 +23,7 @@
 #include <Interrupts.h>
 
 #define USE_BUTTERWORTH_FILTER		1
+#define USE_FAST_TRIGGER			1
 
 constexpr unsigned int ResultBitsDropped = 8;		// we drop this number of least significant bits in the result
 
@@ -168,10 +169,23 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 			{
 				if (value < lastValue)
 				{
+#if USE_FAST_TRIGGER
+					if (falling)
+					{
+						if (startValue - value >= threshold)
+						{
+							inputMonitor->SetTriggered();
+							Stop();
+							//delay(500);
+							//debugPrintf("%d Trig F %f V %f LV %f SV %f BV %f TH %f\n", goodCnt++, (double)freq, (double)value, (double)lastValue, (double)startValue, (double)baseFreq, (double)threshold);
+						}
+					}
+#endif
 					falling = true;
 				}
 				else if (value > lastValue)
 				{
+#if !USE_FAST_TRIGGER
 					if (falling)
 					{
 						if (startValue - lastValue >= threshold)
@@ -182,6 +196,7 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 							//debugPrintf("%d Trig F %f V %f LV %f SV %f BV %f TH %f\n", goodCnt++, (double)freq, (double)value, (double)lastValue, (double)startValue, (double)baseFreq, (double)threshold);
 						}
 					}
+#endif
 					falling = false;
 					startValue = value;
 				}
