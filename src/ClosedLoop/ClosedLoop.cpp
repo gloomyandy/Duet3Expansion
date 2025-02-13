@@ -545,7 +545,9 @@ GCodeResult ClosedLoop::ProcessBasicTuningResult(const StringRef& reply) noexcep
 
 	const float hyst = encoder->GetMeasuredHysteresis();
 	const unsigned int increaseFactor = (encoder->GetType() == EncoderType::linearComposite) ? LinearEncoderIncreaseFactor : 1;
-	if (hyst >= MaxSafeBacklash * increaseFactor)
+
+	// DC 2025-02-14: if it's linear composite encoder then the backlash measured by the quadrature encoder isn't critical because we're not using it for commutation
+	if (hyst >= MaxSafeBacklash * increaseFactor && encoder->GetType() != EncoderType::linearComposite)
 	{
 		tuningError = TuningError::HysteresisTooHigh;
 		reply.catf("failed, measured backlash (%.3f step) is too high", (double)hyst);
