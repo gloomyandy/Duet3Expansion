@@ -104,7 +104,7 @@ void TouchMode::Start(uint32_t sens) noexcept
 	lastValue = 0.0f;
 	startValue = 0.0f;
 	falling = false;
-	threshold = (LDC1612::ClockFrequency * 500.0) * (1.0 - ((float)sensitivity/65536.0));
+	threshold = (LDC1612::FRef * 500.0) * (1.0 - ((float)sensitivity/65536.0));
 	goodCnt = 0;
 #else
 	speedFilter.Init(0);
@@ -155,6 +155,7 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 	}
 	else
 	{
+		reading &= 0x0FFFFFFF;										// clear Amplitude Error bit
 		const uint32_t now = StepTimer::GetTimerTicks();
 
 #if USE_BUTTERWORTH_FILTER
