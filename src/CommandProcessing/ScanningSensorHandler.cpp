@@ -23,6 +23,7 @@
 #include <Interrupts.h>
 
 #define USE_BUTTERWORTH_FILTER		1
+#define USE_FAST_TRIGGER			1
 
 constexpr unsigned int ResultBitsDropped = 8;		// we drop this number of least significant bits in the result
 
@@ -103,7 +104,7 @@ void TouchMode::Start(uint32_t sens) noexcept
 	lastValue = 0.0f;
 	startValue = 0.0f;
 	falling = false;
-	threshold = (LDC1612::ClockFrequency * 500.0) * (1.0 - ((float)sensitivity/65536.0));
+	threshold = (LDC1612::FRef * 500.0) * (1.0 - ((float)sensitivity/65536.0));
 	goodCnt = 0;
 #else
 	speedFilter.Init(0);
@@ -154,6 +155,7 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 	}
 	else
 	{
+		reading &= 0x0FFFFFFF;										// clear Amplitude Error bit
 		const uint32_t now = StepTimer::GetTimerTicks();
 
 #if USE_BUTTERWORTH_FILTER
@@ -168,10 +170,23 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 			{
 				if (value < lastValue)
 				{
+#if USE_FAST_TRIGGER
+					if (falling)
+					{
+						if (startValue - value >= threshold)
+						{
+							inputMonitor->SetTriggered();
+							Stop();
+							//delay(500);
+							//debugPrintf("%d Trig F %f V %f LV %f SV %f BV %f TH %f\n", goodCnt++, (double)freq, (double)value, (double)lastValue, (double)startValue, (double)baseFreq, (double)threshold);
+						}
+					}
+#endif
 					falling = true;
 				}
 				else if (value > lastValue)
 				{
+#if !USE_FAST_TRIGGER
 					if (falling)
 					{
 						if (startValue - lastValue >= threshold)
@@ -182,6 +197,7 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 							//debugPrintf("%d Trig F %f V %f LV %f SV %f BV %f TH %f\n", goodCnt++, (double)freq, (double)value, (double)lastValue, (double)startValue, (double)baseFreq, (double)threshold);
 						}
 					}
+#endif
 					falling = false;
 					startValue = value;
 				}
