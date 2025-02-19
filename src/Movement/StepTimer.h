@@ -90,9 +90,7 @@ public:
 	// ISR called from StepTimer. May sometimes get called prematurely.
 	static void Interrupt() noexcept SPEED_CRITICAL;
 
-	static uint32_t GetLocalTimeOffset() noexcept { return localTimeOffset; }
 	static void ProcessTimeSyncMessage(const CanMessageTimeSync& msg, size_t msgLen, uint16_t timeStamp) noexcept;
-	static uint32_t ConvertToLocalTime(uint32_t masterTime) noexcept { return masterTime + localTimeOffset; }
 	static uint32_t ConvertToMasterTime(uint32_t localTime) noexcept { return localTime - localTimeOffset; }
 	static uint32_t GetMasterTime() noexcept { return ConvertToMasterTime(GetTimerTicks()); }
 
@@ -161,16 +159,16 @@ inline void StepTimer::IncreaseMovementDelay(uint32_t increase) noexcept
 	movementDelayIncreased = true;
 }
 
-// Get the current tick count for the motion system
-inline StepTimer::Ticks StepTimer::GetMovementTimerTicks() noexcept
-{
-	return GetTimerTicks() - (movementDelay + localTimeOffset);
-}
-
 // Convert local time to movement time
 inline StepTimer::Ticks StepTimer::ConvertLocalToMovementTime(Ticks localTime) noexcept
 {
 	return localTime - (movementDelay + localTimeOffset);
+}
+
+// Get the current tick count for the motion system
+inline StepTimer::Ticks StepTimer::GetMovementTimerTicks() noexcept
+{
+	return ConvertLocalToMovementTime(GetTimerTicks());
 }
 
 // Check whether the movement delay has increased since we last called this. If yes, return the movement delay; else return zero.
