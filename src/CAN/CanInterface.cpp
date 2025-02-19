@@ -468,6 +468,7 @@ CanMessageBuffer *CanInterface::ProcessReceivedMessage(CanMessageBuffer *buf) no
 		case CanMessageType::revertPosition:
 			{
 				// Generate a regular movement message from this revert message. First, extract the data so that we can use the same buffer, in case we are short of buffers.
+				static_assert(NumDrivers < MaxLinearDriversPerCanSlave);			// the code assumes that we can build a movement message describing all our drivers
 				int32_t stepsToTake[NumDrivers];
 				size_t index = 0;
 				bool needSteps = false;
