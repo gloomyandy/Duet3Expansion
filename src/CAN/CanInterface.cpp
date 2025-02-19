@@ -36,8 +36,6 @@
 # include <hpl_user_area.h>
 #endif
 
-#define OOS_DEBUG		0				// debug for out-of-sequence errors
-
 #if SAME5x
 constexpr uint32_t CanUserAreaDataOffset = 512 - sizeof(CanUserAreaData);
 #elif SAMC21
@@ -125,12 +123,11 @@ static bool mainBoardAcknowledgedAnnounce = false;	// true after the main board 
 static bool isProgrammed = false;					// true after the main board has sent us any configuration commands
 
 #if SUPPORT_DRIVERS
+static uint8_t expectedSeq = 0xFF;
 static uint32_t lastMotionMessageScheduledTime = 0;
 static uint32_t lastMotionMessageReceivedAt = 0;
 static unsigned int duplicateMotionMessages = 0;
 static unsigned int oosMessages1Ahead = 0, oosMessages2Ahead = 0, oosMessages2Behind = 0, oosMessagesOther = 0;
-static unsigned int badMoveCommands = 0;
-static uint32_t worstBadMove = 0;
 static int32_t minAdvance, maxAdvance;
 static uint32_t maxMotionProcessingDelay = 0;
 
@@ -142,8 +139,6 @@ static void ResetAdvance() noexcept
 
 #endif
 
-uint8_t expectedSeq = 0xFF;
-
 //DEBUG
 //static int32_t accumulatedMotion = 0;
 
@@ -151,20 +146,6 @@ static CanMessageQueue PendingMoves;
 static CanMessageQueue PendingCommands;
 
 static Mutex txFifoMutex;
-
-#if OOS_DEBUG
-
-struct OosInfo
-{
-	uint8_t seq;
-	uint32_t startTime;
-};
-
-OosInfo oosBuffer[16];
-
-size_t oosCount = 0;
-
-#endif
 
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept;
@@ -399,13 +380,6 @@ CanMessageBuffer *CanInterface::ProcessReceivedMessage(CanMessageBuffer *buf) no
 				if (((seq + 1) & CanMessageMovementLinearShaped::SeqMask) == expectedSeq)
 				{
 					++duplicateMotionMessages;
-#if OOS_DEBUG
-					if (oosCount != 0)
-					{
-						oosBuffer[oosCount].seq = buf->msg.moveLinear.seq;
-						oosBuffer[oosCount].startTime = buf->msg.moveLinear.whenToExecute;
-					}
-#endif
 					break;
 				}
 
@@ -432,46 +406,14 @@ CanMessageBuffer *CanInterface::ProcessReceivedMessage(CanMessageBuffer *buf) no
 						++oosMessagesOther;
 						break;
 					}
-#if OOS_DEBUG
-					if (oosCount == 0)
-					{
-						qq;
-						oosCount = 1;
-					}
-#endif
 				}
 
-#if OOS_DEBUG
-				if (oosCount != 0)
-				{
-					oosBuffer[oosCount].seq = seq;
-					oosBuffer[oosCount].startTime = buf->msg.moveLinear.whenToExecute;
-				}
-#endif
 				expectedSeq = (seq + 1) & CanMessageMovementLinearShaped::SeqMask;
 			}
 
 			// If we are not synced then don't accept any movement messages, because they are likely just to get queued and not executed within a reasonable time
 			if (StepTimer::IsSynced())
 			{
-# if 0
-				//DEBUG
-				static uint32_t lastMoveEndedAt = 0;
-				if (lastMoveEndedAt != 0)
-				{
-					const int32_t gap = (int32_t)(buf->msg.moveLinear.whenToExecute - lastMoveEndedAt);
-					if (gap < 0)
-					{
-						++badMoveCommands;
-						if ((uint32_t)(-gap) > worstBadMove)
-						{
-							worstBadMove = (uint32_t)(-gap);
-						}
-					}
-				}
-				lastMoveEndedAt = buf->msg.moveLinear.whenToExecute + buf->msg.moveLinear.accelerationClocks + buf->msg.moveLinear.steadyClocks + buf->msg.moveLinear.decelClocks;
-# endif
-
 				// Track how much processing delay there was
 				{
 #if RP2040 && !USE_SPICAN
@@ -658,10 +600,10 @@ void CanInterface::Diagnostics(const StringRef& reply) noexcept
 	}
 
 #if SUPPORT_DRIVERS
-	reply.lcatf("dup %u, oos %u/%u/%u/%u, bm %u, wbm %" PRIu32 ", rxMotionDelay %" PRIu32,
-					duplicateMotionMessages, oosMessages1Ahead, oosMessages2Ahead, oosMessages2Behind, oosMessagesOther, badMoveCommands, worstBadMove, maxMotionProcessingDelay);
-	duplicateMotionMessages = oosMessages1Ahead = oosMessages2Ahead = oosMessages2Behind = oosMessagesOther = badMoveCommands = 0;
-	worstBadMove = maxMotionProcessingDelay = 0;
+	reply.lcatf("dup %u, oos %u/%u/%u/%u, rxMotionDelay %" PRIu32,
+					duplicateMotionMessages, oosMessages1Ahead, oosMessages2Ahead, oosMessages2Behind, oosMessagesOther, maxMotionProcessingDelay);
+	duplicateMotionMessages = oosMessages1Ahead = oosMessages2Ahead = oosMessages2Behind = oosMessagesOther = 0;
+	maxMotionProcessingDelay = 0;
 	if (minAdvance <= maxAdvance)
 	{
 		reply.catf( ", adv %" PRIi32 "/%" PRIi32, minAdvance, maxAdvance);
