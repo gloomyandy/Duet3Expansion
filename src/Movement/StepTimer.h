@@ -65,7 +65,7 @@ public:
 	// Get the tick rate (can also access it directly as StepClockRate)
 	static uint32_t GetTickRate() noexcept { return StepClockRate; }
 
-	// Add more movement delay
+	// Add more movement delay. Called from our step ISR when we can't keep up.
 	static void IncreaseMovementDelay(uint32_t increase) noexcept;
 
 	// Return the current movement delay
@@ -109,7 +109,7 @@ private:
 
 	static uint32_t movementDelay;												// how many timer ticks the move timer is behind the raw timer
 	static uint32_t ownMovementDelay;											// the total amount of movement delay that this board has requested
-	static bool movementDelayIncreased;											// true if we have more movement delay than the main board
+	static bool ownMovementDelayIncreased;										// true if we may have more movement delay than the main board
 
 	StepTimer *next;
 	Ticks whenDue;
@@ -156,7 +156,7 @@ inline void StepTimer::IncreaseMovementDelay(uint32_t increase) noexcept
 	AtomicCriticalSectionLocker lock;
 	movementDelay += increase;
 	ownMovementDelay += increase;
-	movementDelayIncreased = true;
+	ownMovementDelayIncreased = true;
 }
 
 // Convert local time to movement time
@@ -175,7 +175,7 @@ inline StepTimer::Ticks StepTimer::GetMovementTimerTicks() noexcept
 // We leave the movementDelayIncreased flag set until the main board acknowledges the increased movement delay.
 inline StepTimer::Ticks StepTimer::CheckMovementDelayIncreasedNoClear() noexcept
 {
-	return (movementDelayIncreased) ? movementDelay : 0;
+	return (ownMovementDelayIncreased) ? movementDelay : 0;
 }
 
 #endif /* SRC_MOVEMENT_STEPTIMER_H_ */
