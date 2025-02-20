@@ -27,8 +27,8 @@
 
 StepTimer * volatile StepTimer::pendingList = nullptr;
 uint32_t StepTimer::movementDelay = 0;											// how many timer ticks the move timer is behind the raw timer
-uint32_t StepTimer::ownMovementDelay = 0;											// how many timer ticks the move timer is behind the raw timer
-bool StepTimer::movementDelayIncreased = false;									// true if we added movement delay and the master is using less than we are
+uint32_t StepTimer::ownMovementDelay = 0;										// how many timer ticks the move timer is behind the raw timer
+bool StepTimer::ownMovementDelayIncreased = false;								// true if we added movement delay and we haven't broadcast it or requested it
 
 volatile uint32_t StepTimer::localTimeOffset = 0;
 volatile uint32_t StepTimer::whenLastSynced;
@@ -201,7 +201,7 @@ void StepTimer::Init() noexcept
 						if (msg.movementDelay >= movementDelay)
 						{
 							movementDelay = msg.movementDelay;
-							movementDelayIncreased = false;
+							ownMovementDelayIncreased = false;
 						}
 					}
 				}
