@@ -233,8 +233,8 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PC31 not on 100-pin chip
 };
 
-static constexpr size_t NumPins = ARRAY_SIZE(PinTable);
-static constexpr size_t NumRealPins = 3 * 32;			// 32 pins on each of ports A, B, C
+constexpr size_t NumPins = ARRAY_SIZE(PinTable);
+constexpr size_t NumRealPins = 3 * 32;					// 32 pins on each of ports A, B, C
 static_assert(NumPins == NumRealPins);					// no virtual pins in this table
 
 // Timer/counter used to generate step pulses and other sub-millisecond timings
