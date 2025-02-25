@@ -90,7 +90,11 @@ Move::Move() noexcept
 void Move::Init() noexcept
 {
 #if HAS_SMART_DRIVERS
+# if TMC22xx_VARIABLE_NUM_DRIVERS
+	SmartDrivers::Init(NumDrivers);
+# else
 	SmartDrivers::Init();
+# endif
 	temperatureShutdownDrivers.Clear();
 	temperatureWarningDrivers.Clear();
 #endif

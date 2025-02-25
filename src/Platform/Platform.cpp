@@ -323,7 +323,11 @@ namespace Platform
 #  endif
 # endif
 # if SUPPORT_TMC22xx
+#  if TMC22xx_HAS_ENABLE_PINS && TMC22xx_VARIABLE_NUM_DRIVERS
+		SmartDrivers::TurnDriversOff();
+#  else
 		IoPort::WriteDigital(GlobalTmc22xxEnablePin, true);
+#  endif
 # endif
 		moveInstance->DisableAllDrives();
 #endif

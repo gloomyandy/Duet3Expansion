@@ -25,6 +25,10 @@
 # error TMC22xx_VARIABLE_NUM_DRIVERS not defined
 #endif
 
+#if TMC22xx_VARIABLE_NUM_DRIVERS && !defined(TMC22xx_MULTIPLE_UART_PINS)
+# error TMC22xx_MULTIPLE_UART_PINS not defined
+#endif
+
 #ifndef TMC22xx_USE_SLAVEADDR
 # error TMC22xx_USE_SLAVEADDR not defined
 #endif
@@ -33,7 +37,7 @@
 # error HAS_STALL_DETECT not defined
 #endif
 
-#define TMC22xx_SINGLE_UART		(TMC22xx_SINGLE_DRIVER || TMC22xx_HAS_MUX || TMC22xx_USE_SLAVEADDR)
+#define TMC22xx_SINGLE_UART		(TMC22xx_SINGLE_DRIVER || TMC22xx_HAS_MUX || TMC22xx_USE_SLAVEADDR || RP2040)
 
 #define RESET_MICROSTEP_COUNTERS_AT_INIT	0		// Duets use pulldown resistors on the step pins, so we don't get phantom microsteps at power up
 
@@ -547,6 +551,9 @@ public:
 #if TMC22xx_HAS_ENABLE_PINS
 							, Pin p_enablePin
 #endif
+#if TMC22xx_MULTIPLE_UART_PINS
+							, Pin p_uartPin
+#endif
 #if HAS_STALL_DETECT
 							, Pin p_diagPin
 #endif
@@ -775,6 +782,9 @@ private:
 
 #if TMC22xx_HAS_ENABLE_PINS
 	Pin enablePin;											// the enable pin of this driver, if it has its own
+#endif
+#if TMC22xx_MULTIPLE_UART_PINS
+	Pin uartPin;
 #endif
 #if HAS_STALL_DETECT
 	Pin diagPin;
@@ -1173,6 +1183,9 @@ void TmcDriverState::Init(uint8_t p_driverNumber
 #if TMC22xx_HAS_ENABLE_PINS
 							, Pin p_enablePin
 #endif
+#if TMC22xx_MULTIPLE_UART_PINS
+							, Pin p_uartPin
+#endif
 #if HAS_STALL_DETECT
 							, Pin p_diagPin
 #endif
@@ -1190,6 +1203,9 @@ pre(!driversPowered)
 #if TMC22xx_HAS_ENABLE_PINS
 	enablePin = p_enablePin;											// this is NoPin for the built-in drivers
 	IoPort::SetPinMode(p_enablePin, OUTPUT_HIGH);
+#endif
+#if TMC22xx_MULTIPLE_UART_PINS
+	uartPin = p_uartPin;
 #endif
 
 #if HAS_STALL_DETECT
@@ -1929,7 +1945,11 @@ inline void TmcDriverState::StartTransfer() noexcept
 
 		regnumBeingUpdated = regNum;
 #if RP2040
+# if TMC22xx_MULTIPLE_UART_PINS
+		TmcUartInterface::ResetUart(uartPin, DriversBaudRate);
+# else
 		TmcUartInterface::ResetUart();
+# endif
 #elif TMC22xx_USES_SERCOM
 		sercom->USART.CTRLB.reg &= ~(SERCOM_USART_CTRLB_RXEN | SERCOM_USART_CTRLB_TXEN);	// disable transmitter and receiver, reset receiver
 		while (sercom->USART.SYNCBUSY.bit.CTRLB) { }
@@ -1955,7 +1975,11 @@ inline void TmcDriverState::StartTransfer() noexcept
 		AtomicCriticalSectionLocker lock;
 
 #if RP2040
+# if TMC22xx_MULTIPLE_UART_PINS
+		TmcUartInterface::ResetUart(uartPin, DriversBaudRate);
+# else
 		TmcUartInterface::ResetUart();
+# endif
 #elif TMC22xx_USES_SERCOM
 		sercom->USART.CTRLB.reg &= ~(SERCOM_USART_CTRLB_RXEN | SERCOM_USART_CTRLB_TXEN);	// disable transmitter and receiver, reset receiver
 		while (sercom->USART.SYNCBUSY.bit.CTRLB) { }
@@ -2168,7 +2192,11 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 					driversStepped.Clear();
 					driversState = DriversState::stepping;
 #else
+# if TMC22xx_HAS_ENABLE_PINS
+					// Do we need to enable all drivers here?
+# else
 					fastDigitalWriteLow(GlobalTmc22xxEnablePin);
+# endif
 					driversState = DriversState::ready;
 #endif
 				}
@@ -2269,7 +2297,11 @@ debugPrintf("Driver %u ok\n", driver);
 
 				if (allInitialised)
 				{
+# if TMC22xx_HAS_ENABLE_PINS
+					// Do we need to enable all drivers here?
+# else
 					fastDigitalWriteLow(GlobalTmc22xxEnablePin);
+# endif
 					driversState = DriversState::ready;
 				}
 			}
@@ -2299,12 +2331,20 @@ void SmartDrivers::Init() noexcept
 	numTmc22xxDrivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
 #endif
 	// Make sure the ENN pins are high
+#if TMC22xx_HAS_ENABLE_PINS && TMC22xx_VARIABLE_NUM_DRIVERS
+	TurnDriversOff();
+#else
 	IoPort::SetPinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+#endif
 
 #if TMC22xx_SINGLE_UART
 	// Set up the single UART that communicates with all TMC22xx drivers
 # if RP2040
+#  if TMC22xx_VARIABLE_NUM_DRIVERS && TMC22xx_MULTIPLE_UART_PINS
+	TmcUartInterface::Init(Tmc22xxUartPins[0], DriversBaudRate, DmacChanTmcTx);
+#  else
 	TmcUartInterface::Init(Tmc22xxUartPin, DriversBaudRate, DmacChanTmcTx);
+#  endif
 # elif TMC22xx_USES_SERCOM
 	SetPinFunction(TMC22xxSercomTxPin, TMC22xxSercomTxPinPeriphMode);
 	SetPinFunction(TMC22xxSercomRxPin, TMC22xxSercomRxPinPeriphMode);
@@ -2381,6 +2421,9 @@ void SmartDrivers::Init() noexcept
 #if TMC22xx_HAS_ENABLE_PINS
 								, DriverSelectPins[drive]
 #endif
+#if TMC22xx_VARIABLE_NUM_DRIVERS && TMC22xx_MULTIPLE_UART_PINS
+								, Tmc22xxUartPins[drive]
+#endif
 #if HAS_STALL_DETECT
 								, DriverDiagPins[drive]
 #endif
@@ -2398,7 +2441,11 @@ void SmartDrivers::Init() noexcept
 // Shut down the drivers and stop any related interrupts
 void SmartDrivers::Exit() noexcept
 {
+#if TMC22xx_HAS_ENABLE_PINS && TMC22xx_VARIABLE_NUM_DRIVERS
+	TurnDriversOff();
+#else
 	IoPort::SetPinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+#endif
 #if TMC22xx_SINGLE_UART
 # if RP2040
 	TmcUartInterface::DisableCompletedCallback();
@@ -2500,7 +2547,11 @@ void SmartDrivers::Spin(bool powered) noexcept
 	else if (driversState != DriversState::shutDown)
 	{
 		driversState = DriversState::noPower;				// flag that there is no power to the drivers
+#if TMC22xx_HAS_ENABLE_PINS && TMC22xx_VARIABLE_NUM_DRIVERS
+		TurnDriversOff();
+#else
 		fastDigitalWriteHigh(GlobalTmc22xxEnablePin);		// disable the drivers
+#endif
 	}
 }
 
@@ -2508,7 +2559,13 @@ void SmartDrivers::Spin(bool powered) noexcept
 void SmartDrivers::TurnDriversOff() noexcept
 {
 	// When using TMC2660 drivers, this is called when an over-voltage event occurs, so that we can try to protect the drivers by disabling them.
-	// We don't use it with TMC22xx drivers.
+#if TMC22xx_HAS_ENABLE_PINS && TMC22xx_VARIABLE_NUM_DRIVERS
+	for(size_t drive = 0; drive < GetNumTmcDrivers(); drive++)
+	{
+		IoPort::SetPinMode(DriverSelectPins[drive], OUTPUT_HIGH);
+	}
+#endif
+
 }
 
 void SmartDrivers::SetStallThreshold(size_t driver, int sgThreshold) noexcept
