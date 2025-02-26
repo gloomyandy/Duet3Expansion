@@ -293,7 +293,7 @@ bool LISAccelerometer:: StartCollecting(uint8_t axes) noexcept
 
 	// Version 1.1 tool boards need the pullup resistor enabled on the interrupt pin.
 	// For other tool board versions and for the SAMMYC21, pulling it up allows us to check for a disconnected pin
-	pinMode(int1Pin, INPUT_PULLUP);
+	SetPinMode(int1Pin, INPUT_PULLUP, false);
 
 	totalNumRead = 0;
 

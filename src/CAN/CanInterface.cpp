@@ -215,7 +215,7 @@ void CanInterface::Init(CanAddress defaultBoardAddress, bool useAlternatePins, b
 								Can0Config, can0Memory, timing, nullptr);
 
 #ifdef SAMMYC21
-	pinMode(CanStandbyPin, OUTPUT_LOW);							// take the CAN drivers out of standby
+	SetPinMode(CanStandbyPin, OUTPUT_LOW);						// take the CAN drivers out of standby
 #endif
 
 	boardAddress = canConfigData.GetCanAddress(defaultBoardAddress);

@@ -522,12 +522,12 @@ void Platform::Init()
 	// On the board detect pin:
 	// Tool board V1.0 and earlier has 1K lower resistor, 10K upper, so will read as low
 	// Tool board V1.1 has 10K lower resistor, 1K upper, so will read as high
-	pinMode(BoardTypePin, INPUT);
+	SetPinMode(BoardTypePin, INPUT, false);
 	boardVariant = (digitalRead(BoardTypePin)) ? 1 : 0;
 #elif defined(EXP1HCL)
 	// EXP1HCL v1.0 has 10K lower resistor, 1K upper giving 3.0V on the board detect pin
 	// EXP1HCL v2.0 has 25.5K lower resistor, 16K upper giving 2.03V on the board detect pin
-	pinMode(BoardTypePin, AIN);
+	SetPinMode(BoardTypePin, AIN);
 	const AdcInput chan = PinToAdcChannel(BoardTypePin);
 	AnalogIn::EnableChannel(chan, nullptr, CallbackParameter(), 0);
 	constexpr float ratioV1 = 10.0/(10.0+1.0);
@@ -544,7 +544,7 @@ void Platform::Init()
 	AnalogIn::DisableChannel(chan);									// this does nothing currently, but might in future
 #elif defined(EXP3HC)
 	// Version 1.02 board has a pulldown resistor on BoardTypePins[1], earlier versions do not
-	pinMode(BoardTypePins[1], INPUT_PULLUP);
+	SetPinMode(BoardTypePins[1], INPUT_PULLUP, false);
 	delayMicroseconds(10);
 	boardVariant = (digitalRead(BoardTypePins[1])) ? 0 : 1;
 #endif

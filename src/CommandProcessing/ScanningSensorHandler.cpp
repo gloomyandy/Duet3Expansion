@@ -351,7 +351,7 @@ void ScanningSensorHandler::Init(SharedI2CMaster& i2cDevice) noexcept
 	if (sensor->CheckPresent())
 	{
 		sensor->SetDefaultConfiguration(0, false);
-		pinMode(LDC1612InterruptPin, PinMode::INPUT);
+		SetPinMode(LDC1612InterruptPin, PinMode::INPUT, false);
 	}
 	else
 	{

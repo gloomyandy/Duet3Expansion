@@ -146,7 +146,7 @@ static void GenerateTmcClock()
 
 void ClosedLoop::InitInstance() noexcept
 {
-	pinMode(EncoderCsPin, OUTPUT_HIGH);											// make sure that any attached SPI encoder is not selected
+	SetPinMode(EncoderCsPin, OUTPUT_HIGH);											// make sure that any attached SPI encoder is not selected
 
 	// Initialise to default error thresholds
 	errorThresholds[0] = DefaultClosedLoopPositionWarningThreshold;
@@ -296,8 +296,8 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 			break;
 
 		case EncoderType::linearComposite:
-			CreateCalibrationTask();
 			encoder = new LinearCompositeEncoder(tempCPR, tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin);
+			CreateCalibrationTask();
 			break;
 
 		case EncoderType::rotaryQuadrature:
@@ -569,7 +569,7 @@ GCodeResult ClosedLoop::ProcessBasicTuningResult(const StringRef& reply) noexcep
 
 // This function is run by the encoder calibration task.
 // Its purpose is to wait for encoder calibration data to become available and process it.
-// Processing to takes several seconds, so we need to do it in a separate task to avoid the main board timing out awaiting CAN responses.
+// Processing it takes several seconds, so we need to do it in a separate task to avoid the main board timing out awaiting CAN responses.
 void ClosedLoop::EncoderCalibrationTaskLoop() noexcept
 {
 	for (;;)

@@ -1651,11 +1651,11 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 void SmartDrivers::Init() noexcept
 {
 	// Make sure the ENN and CS pins are high
-	pinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
-	pinMode(GlobalTmc51xxCSPin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmc51xxCSPin, OUTPUT_HIGH);
 
 #if defined(M23CL)
-	pinMode(DriverSdModePin, OUTPUT_HIGH);									// on M23CL prototype boards high selects step/dir, low selects ramp generator
+	SetPinMode(DriverSdModePin, OUTPUT_HIGH);									// on M23CL prototype boards high selects step/dir, low selects ramp generator
 #endif
 
 	SetPinFunction(TMC51xxMosiPin, TMC51xxMosiPinPeriphMode);

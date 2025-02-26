@@ -99,7 +99,7 @@ public:
 	static AdcInput PinToAdcInput(Pin p, bool useAlternateAdc) noexcept;
 
 	// Low level port access
-	static void SetPinMode(Pin p, PinMode mode) noexcept { pinMode(p, mode); }
+	static void SetPinMode(Pin p, PinMode mode, bool debounce = false) noexcept { ::SetPinMode(p, mode, debounce); }
 
 	static bool ReadPin(Pin p) noexcept;
 	static void WriteDigital(Pin p, bool high) noexcept;

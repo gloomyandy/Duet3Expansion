@@ -30,9 +30,9 @@ void SerialPortInit(AsyncSerial*) noexcept
 
 void SerialPortDeinit(AsyncSerial*) noexcept
 {
-	pinMode(PortBPin(20), INPUT_PULLUP);
+	SetPinMode(PortBPin(20), INPUT_PULLUP);
 # if 0	// we don't use the receiver, but if we did we would need to do this:
-	pinMode(PortBPin(21), INPUT_PULLUP);					// RxD
+	SetPinMode(PortBPin(21), INPUT_PULLUP);					// RxD
 # endif
 }
 
@@ -71,9 +71,9 @@ void SerialPortInit(AsyncSerial*) noexcept
 
 void SerialPortDeinit(AsyncSerial*) noexcept
 {
-	pinMode(PortAPin(12), INPUT_PULLUP);
+	SetPinMode(PortAPin(12), INPUT_PULLUP);
 # if 0	// we don't use the receiver, but if we did we would need to do this:
-	pinMode(PortAPin(13), INPUT_PULLUP);					// RxD
+	SetPinMode(PortAPin(13), INPUT_PULLUP);					// RxD
 # endif
 }
 
@@ -109,7 +109,7 @@ extern "C" void SERCOM2_3_Handler()
 void DeviceInit() noexcept
 {
 #if defined(EXP1HCL) || defined(M23CL)
-	pinMode(ClockGenPin, OUTPUT_LOW);			// default the TMC clock to its internal clock until we program the clock generator
+	SetPinMode(ClockGenPin, OUTPUT_LOW);			// default the TMC clock to its internal clock until we program the clock generator
 #endif
 	AnalogIn::Init(NvicPriorityAdc);
 	AnalogOut::Init();
