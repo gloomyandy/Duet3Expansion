@@ -1067,7 +1067,7 @@ void Move::AddLinearSegments(size_t drive, uint32_t startTime, const PrepParams&
 					return;
 				}
 
-				if (startTime > segStartTime)
+				if ((int32_t)(startTime - segStartTime) > 0)							// if the segments we want to add start after this segment starts
 				{
 					// Split the existing segment
 					prev = tail;
