@@ -83,21 +83,20 @@ namespace TouchMode
 	static size_t goodCnt;						// for debug use
 	static float threshold;
 	static bool enabled = false;
-	static uint16_t sensitivity;
 	static uint32_t startTime;					// the time we started taking touch mode readings, in step clocks
 	static uint32_t lastReading;				// the previous reading
 	static unsigned int numBadReadings;
 
 //public:
-	static void Start(uint32_t sens) noexcept;
+	static void Start(uint32_t p_threshold) noexcept;
 	static void Stop() noexcept;
 	static void ProcessReading(uint32_t reading) noexcept;
 	static bool IsEnabled() noexcept { return enabled; }
 };
 
-void TouchMode::Start(uint32_t sens) noexcept
+// The incoming parameter p_threshold holds a value in the lower 16 bits, where 0x0000FFFF represents the maximum configurable threshold, which is 5.0.
+void TouchMode::Start(uint32_t p_threshold) noexcept
 {
-	sensitivity = (uint16_t)sens;				// we only send a 16-bit sensitivity
 	lastReading = baseReading = 0;
 	numBadReadings = 0;
 	startTime = StepTimer::GetTimerTicks();
@@ -109,7 +108,8 @@ void TouchMode::Start(uint32_t sens) noexcept
 	}
 	lastValue = startValue = 0.0f;
 	falling = false;
-	threshold = (LDC1612::FRef * 500.0) * (1.0 - ((float)sensitivity/65536.0));
+	threshold = (LDC1612::FRef * 250.0/65535.0) * (float)(p_threshold & 0x0000FFFF);	// This scaling puts a configured sensitivity of 0.5 about right on DC's toolchanger
+	//debugPrintf("Rec threshold %" PRIu32 ", scaled %.0f\n", p_threshold, (double)threshold);
 	goodCnt = 0;
 	enabled = true;
 }
