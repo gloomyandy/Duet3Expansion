@@ -3,6 +3,7 @@
  *
  *  Created on: 16 Jun 2023
  *      Author: David
+ * 		Major changes to touch detection: Andy
  *
  *  This file may be distributed under the terms of the GNU GPLv3 license.
  */
@@ -22,9 +23,6 @@
 #include <AppNotifyIndices.h>
 #include <Interrupts.h>
 
-#define USE_BUTTERWORTH_FILTER		1
-#define USE_FAST_TRIGGER			1
-
 constexpr unsigned int ResultBitsDropped = 8;		// we drop this number of least significant bits in the result
 
 constexpr unsigned int LdcTaskStackWords = 150;		// 100 was too little
@@ -41,8 +39,23 @@ static InputMonitor *inputMonitor = nullptr;		// when the sensor is active this 
 namespace TouchMode
 {
 //private:
-#if USE_BUTTERWORTH_FILTER
 	// Butterworth bandpass filter code and coefficients borrowed from https://github.com/vvuk/klipper/blob/vlad/eddy-ng/src/sensor_ldc1612_ng.c
+	//
+	// The coefficients can be generated using the following python code, it assumes a sample rate of 500 samples/s:
+	// sos: List[List[float]] = None
+	// sos = scipy.signal.butter(
+	//            2,
+	//            [5, 25],
+	//            btype="bandpass",
+	//            fs=500,
+	//            output="sos",
+	//        ).tolist()
+	// print(sos)
+
+	// Notes on touch sensing:
+	// The touch sensing code although using the Butterworth filter as used by Klipper is significantly different in how it detects
+	// a touch event. In particular we no longer look for a peak before the event, instead just detect the rapid fall in the
+	// output of the filter. This seems to provide a faster response and also avoids some false positives.
 	static const size_t sosSections = 2;
 	static float sosState[sosSections][2];
 	static constexpr float sosButterworthFilter500[sosSections][6] =
@@ -63,52 +76,41 @@ namespace TouchMode
 				 }
 			};
 	static float SosFilter(float value, const float filter[][6], float state[][2]) noexcept;
-	static float baseFreq;
+	static uint32_t baseReading;
 	static float lastValue;
 	static float startValue;
 	static bool falling;
 	static size_t goodCnt;						// for debug use
 	static float threshold;
-#else
-	static AveragingFilter<16> speedFilter;
-	static uint32_t lastReadingTime;			// the previous reading time of the sensor, in step clocks
-	static uint16_t lastSpeed, lastSpeedMinus1, lastSpeedMinus2;
-#endif
 	static bool enabled = false;
-	static uint16_t sensitivity;
 	static uint32_t startTime;					// the time we started taking touch mode readings, in step clocks
 	static uint32_t lastReading;				// the previous reading
 	static unsigned int numBadReadings;
 
 //public:
-	static void Start(uint32_t sens) noexcept;
+	static void Start(uint32_t p_threshold) noexcept;
 	static void Stop() noexcept;
 	static void ProcessReading(uint32_t reading) noexcept;
 	static bool IsEnabled() noexcept { return enabled; }
 };
 
-void TouchMode::Start(uint32_t sens) noexcept
+// The incoming parameter p_threshold holds a value in the lower 16 bits, where 0x0000FFFF represents the maximum configurable threshold, which is 5.0.
+void TouchMode::Start(uint32_t p_threshold) noexcept
 {
-	sensitivity = (uint16_t)sens;				// we only send a 16-bit sensitivity
-	lastReading = 0;
+	lastReading = baseReading = 0;
 	numBadReadings = 0;
 	startTime = StepTimer::GetTimerTicks();
-#if USE_BUTTERWORTH_FILTER
 	enabled = true;
 	for(size_t i = 0; i < sosSections; i++)
 	{
 		sosState[i][0] = 0.0f;
 		sosState[i][1] = 0.0f;
 	}
-	baseFreq = 0.0f;
-	lastValue = 0.0f;
-	startValue = 0.0f;
+	lastValue = startValue = 0.0f;
 	falling = false;
-	threshold = (LDC1612::FRef * 500.0) * (1.0 - ((float)sensitivity/65536.0));
+	threshold = (LDC1612::FRef * 250.0/65535.0) * (float)(p_threshold & 0x0000FFFF);	// This scaling puts a configured sensitivity of 0.5 about right on DC's toolchanger
+	debugPrintf("Rec threshold %" PRIu32 ", scaled %.0f\n", p_threshold, (double)threshold);
 	goodCnt = 0;
-#else
-	speedFilter.Init(0);
-#endif
 	enabled = true;
 }
 
@@ -116,8 +118,6 @@ void TouchMode::Stop() noexcept
 {
 	enabled = false;
 }
-
-#if USE_BUTTERWORTH_FILTER
 
 // Butterworth bandpass filter code and coefficients borrowed from https://github.com/vvuk/klipper/blob/vlad/eddy-ng/src/sensor_ldc1612_ng.c
 float TouchMode::SosFilter(float value, const float filter[][6], float state[][2]) noexcept
@@ -133,8 +133,6 @@ float TouchMode::SosFilter(float value, const float filter[][6], float state[][2
 	}
 	return value;
 }
-
-#endif
 
 // Process a sensor reading when we are in touch mode
 // A typical probing speed is 5mm/sec. At this speed, a processing interval of 1ms will give us a probing resolution of 5um.
@@ -158,46 +156,29 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 		reading &= 0x0FFFFFFF;										// clear Amplitude Error bit
 		const uint32_t now = StepTimer::GetTimerTicks();
 
-#if USE_BUTTERWORTH_FILTER
 		// Butterworth bandpass filter code and coefficients borrowed from see https://github.com/vvuk/klipper/blob/vlad/eddy-ng/src/sensor_ldc1612_ng.c
-		const float freq = (float)reading;							// no need to convert to an actual frequency here
 		if (now - startTime >= StepTimer::StepClockRate/10)			// allow for the movement start delay and some more
 		{
-			const float value = SosFilter(freq - baseFreq, sosButterworthFilter500, sosState);
-			//debugPrintf("%d F %f V %f\n", goodCnt++, (double)(freq - baseFreq), (double)value);
-			// allow filter to stabilise
-			if (now - startTime >= StepTimer::StepClockRate/5)
+			const float value = SosFilter((float)(int32_t)(reading - baseReading), sosButterworthFilter500, sosState);
+			//debugPrintf("%d F %" PRIi32 " V %f\n", goodCnt++, (int32_t)(reading - baseReading), (double)value);
+			if (now - startTime >= StepTimer::StepClockRate/4)		// allow probing speed and filter to stabilise before we look at the output
+
 			{
 				if (value < lastValue)
 				{
-#if USE_FAST_TRIGGER
 					if (falling)
 					{
-						if (startValue - value >= threshold)
+						if (-value >= threshold)
 						{
 							inputMonitor->SetTriggered();
 							Stop();
-							//delay(500);
-							//debugPrintf("%d Trig F %f V %f LV %f SV %f BV %f TH %f\n", goodCnt++, (double)freq, (double)value, (double)lastValue, (double)startValue, (double)baseFreq, (double)threshold);
+							//debugPrintf("%d Trig F %" PRIi32 " V %f LV %f SV %f BV %" PRIu32 " TH %f\n", goodCnt++, (int32_t)(reading - baseReading), (double)value, (double)lastValue, (double)startValue, baseReading, (double)threshold);
 						}
 					}
-#endif
 					falling = true;
 				}
 				else if (value > lastValue)
 				{
-#if !USE_FAST_TRIGGER
-					if (falling)
-					{
-						if (startValue - lastValue >= threshold)
-						{
-							inputMonitor->SetTriggered();
-							Stop();
-							//delay(500);
-							//debugPrintf("%d Trig F %f V %f LV %f SV %f BV %f TH %f\n", goodCnt++, (double)freq, (double)value, (double)lastValue, (double)startValue, (double)baseFreq, (double)threshold);
-						}
-					}
-#endif
 					falling = false;
 					startValue = value;
 				}
@@ -206,37 +187,9 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 		}
 		else
 		{
-			baseFreq = freq;
+			baseReading = reading;
 		}
 		numBadReadings = 0;
-#else
-		const uint32_t interval = now - lastReadingTime;
-
-		// We expect the speed to fit in 16 bits normally
-		const uint16_t currentSpeed = (uint16_t)constrain<int32_t>((((int32_t)reading - (int32_t)lastReading) * 256)/(int32_t)interval, 0, 65535);
-
-		if (now - startTime >= StepTimer::StepClockRate/10)		// allow for the movement start delay and some more
-		{
-			// Average the most recent 4 readings
-			const uint32_t recentSpeed = (uint32_t)currentSpeed + lastSpeed + lastSpeedMinus1 + lastSpeedMinus2;
-			const uint32_t speedSum = speedFilter.GetSum();
-//			debugPrintf("R %u I%u S %u/%u\n", (unsigned int)reading, (unsigned int)interval, currentSpeed, (unsigned int)(speedSum/speedFilter.NumAveraged()));
-			if ((recentSpeed * ((65536/4) * speedFilter.NumAveraged())) < speedSum * sensitivity)
-			{
-				inputMonitor->SetTriggered();
-				Stop();
-//				debugPrintf("Speed %u/%u\n", (unsigned int)(recentSpeed/4), (unsigned int)(speedSum/speedFilter.NumAveraged()));
-			}
-		}
-
-		speedFilter.ProcessReading(lastSpeedMinus2);
-		lastSpeedMinus2 = lastSpeedMinus1;
-		lastSpeedMinus1 = lastSpeed;
-		lastSpeed = currentSpeed;
-		lastReading = reading;
-		lastReadingTime = now;
-		numBadReadings = 0;
-#endif
 	}
 }
 
@@ -352,7 +305,7 @@ void ScanningSensorHandler::Init(SharedI2CMaster& i2cDevice) noexcept
 	{
 		sensor->SetDefaultConfiguration(0, false);
 		lastReadingTakenAt = millis();
-		pinMode(LDC1612InterruptPin, PinMode::INPUT);
+		SetPinMode(LDC1612InterruptPin, PinMode::INPUT, false);
 	}
 	else
 	{

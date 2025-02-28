@@ -241,8 +241,8 @@ void Move::Init() noexcept
 
 #ifdef M23CL
 	// Set the brake control pins to outputs, leaving the brake engaged
-	pinMode(BrakeOnPin, OUTPUT_LOW);
-	pinMode(BrakePwmPin, OUTPUT_LOW);
+	SetPinMode(BrakeOnPin, OUTPUT_LOW);
+	SetPinMode(BrakePwmPin, OUTPUT_LOW);
 #endif
 
 # if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
@@ -1071,7 +1071,7 @@ void Move::AddLinearSegments(size_t drive, uint32_t startTime, const PrepParams&
 					return;
 				}
 
-				if (startTime > segStartTime)
+				if ((int32_t)(startTime - segStartTime) > 0)							// if the segments we want to add start after this segment starts
 				{
 					// Split the existing segment
 					prev = tail;

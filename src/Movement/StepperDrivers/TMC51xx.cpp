@@ -1700,14 +1700,15 @@ void SmartDrivers::Init() noexcept
 #if TMC51xx_USES_SEPARATE_CS
 	for(size_t i = 0; i< numTmc51xxDrivers; i++)
 	{
-		pinMode(Tmc51xxCSPins[i], OUTPUT_HIGH);
+		SetPinMode(Tmc51xxCSPins[i], OUTPUT_HIGH);
 	}
 #else
-	pinMode(GlobalTmc51xxCSPin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmc51xxCSPin, OUTPUT_HIGH);
 #endif
+	SetPinMode(GlobalTmc51xxCSPin, OUTPUT_HIGH);
 
 #if defined(M23CL)
-	pinMode(DriverSdModePin, OUTPUT_HIGH);									// on M23CL prototype boards high selects step/dir, low selects ramp generator
+	SetPinMode(DriverSdModePin, OUTPUT_HIGH);									// on M23CL prototype boards high selects step/dir, low selects ramp generator
 #endif
 
 #if TMC51xx_USES_SHARED_SPI
