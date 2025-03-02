@@ -108,7 +108,11 @@ void TouchMode::Start(uint32_t p_threshold) noexcept
 	}
 	lastValue = startValue = 0.0f;
 	falling = false;
+#if defined(SHT36) || defined(FLYSB2040V3_0)
+	threshold = (LDC1612::FRef * 500.0/65535.0) * (float)(p_threshold & 0x0000FFFF);	// This scaling puts a configured sensitivity of 0.5 about right on DC's toolchanger
+#else
 	threshold = (LDC1612::FRef * 250.0/65535.0) * (float)(p_threshold & 0x0000FFFF);	// This scaling puts a configured sensitivity of 0.5 about right on DC's toolchanger
+#endif
 	debugPrintf("Rec threshold %" PRIu32 ", scaled %.0f\n", p_threshold, (double)threshold);
 	goodCnt = 0;
 	enabled = true;
