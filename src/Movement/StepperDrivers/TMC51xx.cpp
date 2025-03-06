@@ -1705,7 +1705,6 @@ void SmartDrivers::Init() noexcept
 #else
 	SetPinMode(GlobalTmc51xxCSPin, OUTPUT_HIGH);
 #endif
-	SetPinMode(GlobalTmc51xxCSPin, OUTPUT_HIGH);
 
 #if defined(M23CL)
 	SetPinMode(DriverSdModePin, OUTPUT_HIGH);									// on M23CL prototype boards high selects step/dir, low selects ramp generator
