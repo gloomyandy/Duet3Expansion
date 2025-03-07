@@ -81,7 +81,7 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 	if (parser.GetStringParam('C', portName.GetRef()))
 	{
 		seen = true;
-		if (!port.AssignPort(portName.c_str(), reply, PinUsedBy::filamentMonitor, PinAccess::read))
+		if (!port.AssignPort(portName.c_str(), reply, PinUsedBy::filamentMonitor, PinAccess::readNoDebounce))
 		{
 			return GCodeResult::error;
 		}
