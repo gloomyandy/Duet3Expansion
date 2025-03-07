@@ -65,8 +65,8 @@ constexpr bool DefaultStallDetectFiltered = false;
 constexpr unsigned int DefaultMinimumStepsPerSecond = 200;	// for stall detection: 1 rev per second assuming 1.8deg/step, as per the TMC5160 datasheet
 constexpr uint32_t DefaultTcoolthrs = 2000;					// max interval between 1/256 microsteps for stall detection to be enabled
 constexpr uint32_t DefaultThigh = 200;
-constexpr uint32_t LowestTmcClockSpeed = 11500000;			// the lowest speed at which the TMC driver is clocked internally
-constexpr uint32_t NominalTmcClockSpeed = 120000000;		// the nominal speed at which the TMC driver is clocked internally
+constexpr uint32_t LowestTmcClockSpeed =  11500000;			// the lowest speed at which the TMC driver is clocked internally
+constexpr uint32_t NominalTmcClockSpeed = 12000000;			// the nominal speed at which the TMC driver is clocked internally
 constexpr uint32_t HighestTmcClockSpeed = 12600000;			// the highest speed at which the TMC driver is clocked internally
 
 #if SUPPORT_CLOSED_LOOP
@@ -325,7 +325,17 @@ inline uint32_t GetLowestTmcClockSpeed() noexcept
 	return tmcClockSpeed;
 }
 
-uint32_t SmartDrivers::GetDriverClockFrequency() noexcept
+uint32_t SmartDrivers::GetDriverMinClockFrequency() noexcept
+{
+	return tmcClockSpeed;
+}
+
+uint32_t SmartDrivers::GetDriverNominalClockFrequency() noexcept
+{
+	return tmcClockSpeed;
+}
+
+uint32_t SmartDrivers::GetDriverMaxClockFrequency() noexcept
 {
 	return tmcClockSpeed;
 }
@@ -348,9 +358,19 @@ inline uint32_t GetLowestTmcClockSpeed() noexcept
 	return LowestTmcClockSpeed;
 }
 
-uint32_t SmartDrivers::GetDriverClockFrequency() noexcept
+uint32_t SmartDrivers::GetDriverMinClockFrequency() noexcept
+{
+	return LowestTmcClockSpeed;
+}
+
+uint32_t SmartDrivers::GetDriverNominalClockFrequency() noexcept
 {
 	return NominalTmcClockSpeed;
+}
+
+uint32_t SmartDrivers::GetDriverMaxClockFrequency() noexcept
+{
+	return HighestTmcClockSpeed;
 }
 
 #endif
@@ -657,12 +677,12 @@ const char *_ecv_array _ecv_null  TmcDriverState::CheckStallDetectionEnabled(flo
 	}
 	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor))
 	{
-		return "move is too slow for driver %u.%u to detect stall (increase speed or Tcoolthrs)";
+		return "move is too slow for driver %u.%u to detect stall (increase speed or reduce M915 V parameter)";
 	}
 #if 0	// the Tpwmthrs setting affects the DIAG pin output but not the stall detection that we read over SPI, so we must not check the following
 	if (speed * (float)StepTimer::StepClockRate * (float)writeRegisters[WriteTpwmthrs] > (float)((GetLowestTmcClockSpeed()/256) << microstepShiftFactor))
 	{
-		return "move is too fast for driver %u.%u to detect stall (reduce speed or Tpwmthrs)";
+		return "move is too fast for driver %u.%u to detect stall (reduce speed or M569 H parameter)";
 	}
 #endif
 	return nullptr;
