@@ -73,9 +73,9 @@ void LinearCompositeEncoder::SetTuningBackwards(bool backwards) noexcept
 }
 
 // Process the tuning data. Only applicable if the encoder supports basic tuning.
-TuningErrors LinearCompositeEncoder::ProcessTuningData() noexcept
+TuningErrors LinearCompositeEncoder::ProcessTuningData(bool isLinearEncoder) noexcept
 {
-	const TuningErrors rslt = linEncoder->ProcessTuningData();
+	const TuningErrors rslt = linEncoder->ProcessTuningData(true);
 	measuredCountsPerStep = linEncoder->GetMeasuredCountsPerStep();
 	measuredHysteresis = linEncoder->GetMeasuredHysteresis();
 	if (rslt == 0)

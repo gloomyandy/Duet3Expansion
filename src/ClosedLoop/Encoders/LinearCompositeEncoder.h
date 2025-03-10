@@ -61,7 +61,7 @@ public:
 	void SetReverseTuningResults(float slope, float xMean, float yMean) noexcept override { linEncoder->SetReverseTuningResults(slope, xMean, yMean); }
 
 	// Process the tuning data. Only applicable if the encoder supports basic tuning.
-	TuningErrors ProcessTuningData() noexcept override;
+	TuningErrors ProcessTuningData(bool isLinearEncoder) noexcept override;
 
 	// Clear the encoder data collection. Only applicable if the encoder supports calibration.
 	void ClearDataCollection(size_t p_numDataPoints) noexcept override { return shaftEncoder->ClearDataCollection(p_numDataPoints); }

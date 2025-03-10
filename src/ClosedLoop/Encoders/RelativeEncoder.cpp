@@ -5,6 +5,7 @@
  *      Author: David
  */
 
+#include <ClosedLoop/ClosedLoop.h>
 #include "RelativeEncoder.h"
 
 #if SUPPORT_CLOSED_LOOP
@@ -51,7 +52,7 @@ void RelativeEncoder::SetTuningBackwards(bool backwards) noexcept
 }
 
 // Process the tuning data
-TuningErrors RelativeEncoder::ProcessTuningData() noexcept
+TuningErrors RelativeEncoder::ProcessTuningData(bool isLinearEncoder) noexcept
 {
 #ifdef DEBUG
 	debugPrintf("slope %.5f %.5f, mean phase %.1f %.1f, mean reading %.3f %.3f, \n",
@@ -64,7 +65,8 @@ TuningErrors RelativeEncoder::ProcessTuningData() noexcept
 
 	TuningErrors result;
 
-	if (fabsf(averageSlope) < MinimumSlope || fabsf(forwardSlope - reverseSlope) > MaxSlopeMismatch * 2 * fabsf(averageSlope))
+	const unsigned int increaseFactor = (isLinearEncoder) ? LinearEncoderIncreaseFactor : 1;
+	if (fabsf(averageSlope) * increaseFactor < MinimumSlope || fabsf(forwardSlope - reverseSlope) > MaxSlopeMismatch * 2 * fabsf(averageSlope))
 	{
 		result = TuningError::InconsistentMotion;
 	}
@@ -72,7 +74,7 @@ TuningErrors RelativeEncoder::ProcessTuningData() noexcept
 	{
 		result = TuningError::TooMuchMotion;
 	}
-	else if (measuredCountsPerStep < countsPerStep * 0.95)
+	else if (measuredCountsPerStep < countsPerStep * ((isLinearEncoder) ? 0.8 : 0.95))
 	{
 		result = TuningError::TooLittleMotion;
 	}
@@ -99,6 +101,12 @@ TuningErrors RelativeEncoder::ProcessTuningData() noexcept
 		result = 0;
 	}
 
+#if 0	//TEMP debug
+	if (result != 0)
+	{
+		debugPrintf("Slopes fwd %.3e rev %.3e, measured cps %.2f\n", (double)forwardSlope, (double)reverseSlope, (double)measuredCountsPerStep);
+	}
+#endif
 	return result;
 }
 
