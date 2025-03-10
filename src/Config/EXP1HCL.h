@@ -192,7 +192,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA09 driver SCLK
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA10 driver CS
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA11 driver MISO
-	{ TcOutput::none,	TccOutput::tcc1_2F,	AdcInput::none,		SercomIo::none,		sercom2cPad0,		Nx,	"io1.out" 		},	// PA12 IO1 out, I2C capable
+	{ TcOutput::none,	TccOutput::tcc1_2G,	AdcInput::none,		SercomIo::none,		sercom2cPad0,		Nx,	"io1.out" 		},	// PA12 IO1 out, I2C capable
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		sercom2cPad1,		SercomIo::none,		13,	"io1.in"		},	// PA13 IO1 in, I2C capable
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA14 crystal
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA15 crystal
@@ -240,8 +240,8 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"ate.d0.step"	},	// PB23 driver STEP
 };
 
-static constexpr size_t NumPins = ARRAY_SIZE(PinTable);
-static constexpr size_t NumRealPins = 32 + 24;			// 32 pins on port A (some missing), 24 on port B
+constexpr size_t NumPins = ARRAY_SIZE(PinTable);
+constexpr size_t NumRealPins = 32 + 24;					// 32 pins on port A (some missing), 24 on port B
 static_assert(NumPins == NumRealPins);					// no virtual pins in this table
 
 // Timer/counter used to generate step pulses and other sub-millisecond timings
