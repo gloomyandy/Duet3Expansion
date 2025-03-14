@@ -1195,7 +1195,7 @@ pre(!driversPowered)
 #if HAS_STALL_DETECT
 	diagPin = p_diagPin;
 	IoPort::SetPinMode(p_diagPin, INPUT_PULLUP, false);
-	AttachPinInterrupt(p_diagPin, DiagPinInterruptEntry, InterruptMode::rising, CallbackParameter(p_driverNumber), false);
+	AttachPinInterrupt(p_diagPin, DiagPinInterruptEntry, InterruptMode::high, CallbackParameter(p_driverNumber), false);
 	// Leave the interrupt disabled until we enable a stall endstop on this driver
 #endif
 
