@@ -2624,6 +2624,7 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 		if (msg == nullptr)
 		{
 			stallEndstopsEnabled.SetBit(driverNumber);
+			driverStates[driverNumber].EnableDiagInterrupt();
 			return GCodeResult::ok;
 		}
 		reply.printf(msg, CanInterface::GetCanAddress(), driverNumber);
