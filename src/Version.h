@@ -10,8 +10,6 @@
 
 #define VERSION		"3.6.0-rc.1+2"
 
-#include <General/IsoDate.h>
-
 #if 0
 // Use this for official releases
 # define TIME_SUFFIX
@@ -19,5 +17,7 @@
 // Use this for internal builds
 # define TIME_SUFFIX		" " __TIME__
 #endif
+
+extern const char *const DateText;
 
 #endif /* SRC_VERSION_H_ */
