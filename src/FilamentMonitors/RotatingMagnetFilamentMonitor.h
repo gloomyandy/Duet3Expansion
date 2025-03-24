@@ -26,7 +26,7 @@ protected:
 	void GetLiveData(FilamentMonitorDataNew2& data) const noexcept override;
 
 private:
-	static constexpr float DefaultMmPerRev = 25.2;
+	static constexpr float DefaultMmPerRev = 25.1;
 	static constexpr float DefaultMinMovementAllowed = 0.6;
 	static constexpr float DefaultMaxMovementAllowed = 1.6;
 	static constexpr float DefaultMinimumExtrusionCheckLength = 3.0;

@@ -130,6 +130,7 @@ bool IoPort::SetMode(PinAccess access) noexcept
 		break;
 
 	case PinAccess::read:
+	case PinAccess::readNoDebounce:
 	default:
 		desiredMode = INPUT;
 		break;
@@ -534,6 +535,7 @@ void IoPort::AppendPinName(const StringRef& str, bool includeBoardAddress) const
 	{
 	case PinAccess::read:			return "digital read";
 	case PinAccess::readWithPullup_InternalUseOnly:	return "digital read (pullup resistor enabled)";
+	case PinAccess::readNoDebounce:	return "digital read (no debouncing)";
 	case PinAccess::readAnalog:		return "analog read";
 	case PinAccess::write0:			return "write (initially low)";
 	case PinAccess::write1:			return "write (initially high)";

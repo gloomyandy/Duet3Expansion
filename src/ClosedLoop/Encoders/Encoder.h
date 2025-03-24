@@ -68,7 +68,7 @@ public:
 	virtual void SetReverseTuningResults(float slope, float xMean, float yMean) noexcept = 0;
 
 	// Process the tuning data. Only applicable if the encoder supports basic tuning.
-	virtual TuningErrors ProcessTuningData() noexcept = 0;
+	virtual TuningErrors ProcessTuningData(bool isLinearEncoder = false) noexcept = 0;
 
 	// Clear the encoder data collection. Only applicable if the encoder supports calibration.
 	virtual void ClearDataCollection(size_t p_numDataPoints) noexcept = 0;

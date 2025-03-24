@@ -57,7 +57,7 @@ public:
 	void SetReverseTuningResults(float slope, float xMean, float yMean) noexcept override { reverseSlope = slope; reverseXmean = xMean; reverseYmean = yMean; }
 
 	// Process the tuning data
-	TuningErrors ProcessTuningData() noexcept override;
+	TuningErrors ProcessTuningData(bool isLinearEncoder) noexcept override;
 
 	// Clear the encoder data collection. Only applicable if the encoder supports calibration.
 	void ClearDataCollection(size_t p_numDataPoints) noexcept override { }

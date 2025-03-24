@@ -1440,18 +1440,18 @@ void Platform::AppendBoardAndFirmwareDetails(const StringRef& reply) noexcept
 #if defined(TOOL1LC)
 	reply.lcatf("Duet " BOARD_TYPE_NAME " rev %s firmware version " VERSION " (%s%s)",
 				(boardVariant == 1) ? "1.1 or later" : "1.0 or earlier",
-				IsoDate, TIME_SUFFIX);
+				DateText, TIME_SUFFIX);
 #elif defined(EXP1HCL)
 	reply.lcatf("Duet " BOARD_TYPE_NAME " rev %s firmware version " VERSION " (%s%s)",
 				(boardVariant == 1) ? "2.0 or later" : "1.0a or earlier",
-				IsoDate, TIME_SUFFIX);
+				DateText, TIME_SUFFIX);
 #elif defined(EXP3HC)
 	reply.lcatf("Duet " BOARD_TYPE_NAME " rev %s firmware version " VERSION " (%s%s)",
 				(boardVariant == 1) ? "1.02 or later" : "1.01 or earlier",
-				IsoDate, TIME_SUFFIX);
+				DateText, TIME_SUFFIX);
 #else
 	reply.lcatf("Duet " BOARD_TYPE_NAME " firmware version " VERSION " (%s%s)",
-				IsoDate, TIME_SUFFIX);
+				DateText, TIME_SUFFIX);
 #endif
 }
 

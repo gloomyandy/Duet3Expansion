@@ -64,7 +64,7 @@ public:
 	void SetReverseTuningResults(float slope, float xMean, float yMean) noexcept override { }
 
 	// Process the tuning data. Only applicable if the encoder supports basic tuning.
-	TuningErrors ProcessTuningData() noexcept override { return TuningError::SystemError; }
+	TuningErrors ProcessTuningData(bool isLinearEncoder) noexcept override { return TuningError::SystemError; }
 
 	// Get the angle within a rotation from the most recent reading, corrected for direction only
 	uint32_t GetRawAngle() const noexcept { return rawAngle; }

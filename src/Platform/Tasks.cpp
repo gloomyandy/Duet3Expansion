@@ -81,8 +81,9 @@ constexpr uint32_t BlockReceiveTimeout = 2000;					// bootloader block receive t
 constexpr uint8_t memPattern = 0xA5;
 
 constexpr unsigned int MainTaskStackWords = 830;				// this seems very large; but a user had a stack overflow when it was set to 800
+constexpr unsigned int UpdateBootloaderTaskStackWords = 300;
 
-static Task<MainTaskStackWords> mainTask;
+static TaskBase *mainTask = nullptr;
 static Mutex mallocMutex;
 static unsigned int heatTaskIdleTicks = 0;
 
@@ -159,7 +160,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 	const char * const cStack = reinterpret_cast<const char*>((stk == nullptr) ? GetStackPointer() : stk);
 
 	// See if we can use the bottom of the main task stack
-	char *ret = (char *)&mainTask + sizeof(TaskBase);
+	char *ret = (char *)mainTask + sizeof(TaskBase);
 	if (cStack > ret + (sizeof(NonVolatileMemory) + stackAllowance + 4))	// allow space for the buffer + 128b in case we are on that stack
 	{
 		ret += 4;															// the +4 is so that we leave the stack marker alone in case the main task raised the exception
@@ -270,15 +271,27 @@ static bool watchdogCausedReboot = false;
 	timerTask.AddToList();
 #endif
 
-	// Create the startup task and memory allocation mutex
-	mainTask.Create((updateNeeded) ?
+	// Create the startup task and memory allocation mutex.
+	// We now allocate the main task memory dynamically to leave sufficient free RAM when updating the bootloader on the TOOL1LC.
+	mallocMutex.Create("Malloc");
+	if (updateNeeded)
+	{
+		auto task = new Task<UpdateBootloaderTaskStackWords>;
+		mainTask = task;
+		task->Create(
 #if RP2040
 						UpdateFirmwareTask
 #else
 						UpdateBootloaderTask
 #endif
-									: MainTask, "MAIN", nullptr, TaskPriority::SpinPriority);
-	mallocMutex.Create("Malloc");
+						, "UPDATER", nullptr, TaskPriority::SpinPriority);
+	}
+	else
+	{
+		auto task = new Task<MainTaskStackWords>;
+		mainTask = task;
+		task->Create(MainTask, "MAIN", nullptr, TaskPriority::SpinPriority);
+	}
 
 	// Initialise watchdog clock
 	WatchdogInit();
