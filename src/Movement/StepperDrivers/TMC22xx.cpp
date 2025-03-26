@@ -2110,6 +2110,11 @@ bool DoTransaction(size_t driverNumber)
 		currentDriver->UartTmcHandler();
 #if TMC22xx_SINGLE_DRIVER
 		delay(2);						// TMC22xx can't handle back-to-back reads, so we need a short delay
+#else
+		if (driverNumber == 0)
+		{
+			delay(2);
+		}
 #endif
 		return true;
 	}
@@ -2120,6 +2125,11 @@ bool DoTransaction(size_t driverNumber)
 		currentDriver->DmaError();
 #if TMC22xx_SINGLE_DRIVER
 		delay(2);						// TMC22xx can't handle back-to-back reads, so we need a short delay
+#else
+		if (driverNumber == 0)
+		{
+			delay(2);
+		}
 #endif
 	}
 #endif
