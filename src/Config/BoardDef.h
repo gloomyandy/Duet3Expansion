@@ -53,6 +53,8 @@
 # include "SZP.h"
 #elif defined(F3PTB)
 # include "F3PTB.h"
+#elif defined(FLYM2)
+# include "FlyM2.h"
 #else
 # error Board type not defined
 #endif
