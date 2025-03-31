@@ -693,6 +693,10 @@ CanMessageBuffer *CanInterface::ProcessReceivedMessage(CanMessageBuffer *buf) no
 			Platform::OnProcessingCanMessage();
 			break;
 
+		case CanMessageType::sensorTemperaturesReport:
+			PendingCommands.AddMessage(buf);			// it's a broadcast message that we are interested in from the master, so queue it for processing
+			return nullptr;
+
 		default:
 			if (buf->id.Dst() == GetCanAddress() && buf->id.IsRequest())
 			{
