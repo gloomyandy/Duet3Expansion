@@ -94,7 +94,7 @@ namespace TouchMode
 	static bool IsEnabled() noexcept { return enabled; }
 };
 
-// The incoming parameter p_threshold holds a value in the lower 16 bits, where 0x0000FFFF represents the maximum configurable threshold, which is 5.0.
+// The incoming parameter p_threshold holds a value in the lower 16 bits, where 0x0000FFFF represents the maximum configurable threshold, which is TouchModeMaxThreshold.
 void TouchMode::Start(uint32_t p_threshold) noexcept
 {
 	lastReading = baseReading = 0;
@@ -108,7 +108,10 @@ void TouchMode::Start(uint32_t p_threshold) noexcept
 	}
 	lastValue = startValue = 0.0f;
 	falling = false;
-	threshold = ((31250.0 * TouchModeMaxThreshold)/(65535.0 * LDC1612::FRef)) * (float)(p_threshold & 0x0000FFFF);	// This scaling puts a configured sensitivity of 0.5 about right on DC's toolchanger
+
+	// The following scaling makes a configured sensitivity of 0.5 about right on DC's toolchanger
+	threshold = ((31250.0 * TouchModeMaxThreshold)/(65535.0 * LDC1612::FRef)) * (float)(p_threshold & 0x0000FFFF);
+
 	//debugPrintf("Rec threshold %" PRIu32 ", scaled %.0f\n", p_threshold, (double)threshold);
 	goodCnt = 0;
 	enabled = true;
