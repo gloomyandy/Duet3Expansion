@@ -108,7 +108,7 @@ void TouchMode::Start(uint32_t p_threshold) noexcept
 	}
 	lastValue = startValue = 0.0f;
 	falling = false;
-	threshold = (LDC1612::FRef * (50.0 * TouchModeMaxThreshold)/65535.0) * (float)(p_threshold & 0x0000FFFF);	// This scaling puts a configured sensitivity of 0.5 about right on DC's toolchanger
+	threshold = ((31250.0 * TouchModeMaxThreshold)/(65535.0 * LDC1612::FRef)) * (float)(p_threshold & 0x0000FFFF);	// This scaling puts a configured sensitivity of 0.5 about right on DC's toolchanger
 	//debugPrintf("Rec threshold %" PRIu32 ", scaled %.0f\n", p_threshold, (double)threshold);
 	goodCnt = 0;
 	enabled = true;
