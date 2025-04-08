@@ -27,6 +27,7 @@ namespace Tasks
 		) noexcept;
 	void Diagnostics(const StringRef& reply) noexcept;
 	uint32_t DoDivide(uint32_t a, uint32_t b) noexcept;
+	void *DoMemoryLeak() noexcept;
 	uint32_t DoMemoryRead(const uint32_t* addr) noexcept;
 	void *GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept;
 }

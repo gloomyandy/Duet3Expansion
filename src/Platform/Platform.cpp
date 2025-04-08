@@ -85,7 +85,8 @@ enum class DeferredCommand : uint8_t
 	testWatchdog,
 	testDivideByZero,
 	testUnalignedMemoryAccess,
-	testBadMemoryAccess
+	testBadMemoryAccess,
+	testMemoryLeak
 };
 
 static volatile DeferredCommand deferredCommand = DeferredCommand::none;
@@ -793,6 +794,13 @@ void Platform::Spin()
 			deliberateError = false;
 			break;
 
+		case DeferredCommand::testMemoryLeak:
+			deliberateError = true;
+			(void)Tasks::DoMemoryLeak();
+			__ISB();
+			deliberateError = false;
+			break;
+
 		default:
 			break;
 		}
@@ -1339,6 +1347,10 @@ GCodeResult Platform::DoDiagnosticTest(const CanMessageDiagnosticTest& msg, cons
 			}
 		}
 		deliberateError = false;
+		return GCodeResult::ok;
+
+	case 1008:
+		deferredCommand = DeferredCommand::testMemoryLeak;
 		return GCodeResult::ok;
 
 	default:

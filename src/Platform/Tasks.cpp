@@ -1043,6 +1043,17 @@ uint32_t Tasks::DoDivide(uint32_t a, uint32_t b) noexcept
 	return a/b;
 }
 
+void *Tasks::DoMemoryLeak() noexcept
+{
+	void * leak;
+	while (true)
+	{
+		leak = Tasks::AllocPermanent(1024); 	// Allocate memory continuously
+		(void)leak;								// Prevent unused variable warning
+	}
+	return leak;
+}
+
 uint32_t Tasks::DoMemoryRead(const uint32_t* addr) noexcept
 {
 	return *addr;
