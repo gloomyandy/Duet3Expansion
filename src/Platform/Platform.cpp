@@ -816,7 +816,7 @@ void Platform::Spin()
 	currentV12 = v12Filter.GetSum()/v12Filter.NumAveraged();
 	if (v12Filter.IsValid())
 	{
-		if (currentV12 < lowestV12)
+		if (currentV12 < lowestV12 || millis64() < 1000)				// don't record lowest V12 while we are powering up
 		{
 			lowestV12 = currentV12;
 		}
@@ -1037,7 +1037,7 @@ void Platform::SpinMinimal()
 	currentVin = vinFilter.GetSum()/vinFilter.NumAveraged();			// we must store this even if it is not valid yet
 	if (vinFilter.IsValid())
 	{
-		if (currentVin < lowestVin)
+		if (currentVin < lowestVin || millis64() < 1000)				// don't record lowest Vin while we are powering up
 		{
 			lowestVin = currentVin;
 		}
