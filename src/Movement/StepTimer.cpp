@@ -87,6 +87,26 @@ void StepTimer::Init() noexcept
 #endif
 }
 
+#if !RP2040
+
+// Get the step timer clock count
+/*static*/ StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
+{
+	AtomicCriticalSectionLocker lock;
+	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
+# if SAMC21
+	// Tony's tests suggest that the following nop is not needed, but including it makes it faster
+	asm volatile("nop");														// allow time for the peripheral to react to the command (faster than DMB instruction)
+# else
+	// On the SAME5x it isn't enough just to wait for SYNCBUSY.COUNT here, nor is it enough just to use a DSB instruction
+	while (StepTc->CTRLBSET.bit.CMD != 0) { }
+# endif
+	while (StepTc->SYNCBUSY.bit.COUNT) { }
+	return StepTc->COUNT.reg;
+}
+
+#endif
+
 // Check whether we have synced and received a clock sync message recently
 /*static*/ bool StepTimer::CheckSynced() noexcept
 {
@@ -124,7 +144,7 @@ void StepTimer::Init() noexcept
 		timeStampNow = CanInterface::GetTimeStampCounter();
 	}
 
-	// The time stamp counter runs at the CAN normal bit rate, but the step clock runs at 48MHz/64. Calculate the delay to in step clocks.
+	// The time stamp counter runs at the CAN normal bit rate, but the step clock runs at 48MHz/64. Calculate the delay in step clocks.
 	// Datasheet suggests that on the SAMC21 only 15 bits of timestamp counter are readable, but Microchip confirmed this is a documentation error (case 00625843)
 	const uint32_t timeStampDelay = ((uint32_t)((timeStampNow - timeStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;	// timestamp counter is 16 bits
 #endif
