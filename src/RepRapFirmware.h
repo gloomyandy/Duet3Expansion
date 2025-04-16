@@ -185,15 +185,7 @@ extern Move *moveInstance;
 #endif
 
 // Module numbers and names, used for diagnostics and debug
-enum class Module : uint8_t
-{
-	Platform = 0,
-	Move = 1,
-	Heat = 2,
-	FilamentSensors = 3,
-	numModules = 4,				// make this one greater than the last module number
-	noModule = 4
-};
+NamedEnum(Module, uint8_t, Platform, Move, Heat, FilamentSensors, CAN, numModules);
 
 extern const char * const moduleName[];
 

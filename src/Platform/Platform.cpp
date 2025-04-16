@@ -96,6 +96,7 @@ static bool deliberateError = false;
 namespace Platform
 {
 	static uint32_t errorCodeBits = 0;
+	static DebugFlags debugMaps[Module::numModules];
 
 	UniqueIdBase uniqueId;
 	bool isPrinting = false;
@@ -1149,13 +1150,81 @@ void Platform::LogError(ErrorCode e)
 	errorCodeBits |= (uint32_t)e;
 }
 
-bool Platform::Debug(Module module)
+bool Platform::Debug(Module module) noexcept
 {
-#if 0
-	return module == Module::Move;	//DEBUG
-#else
-	return false;
-#endif
+	return debugMaps[module.ToBaseType()].IsNonEmpty();
+}
+
+DebugFlags Platform::GetDebugFlags(Module m) noexcept
+{
+	return debugMaps[m.ToBaseType()];
+}
+
+GCodeResult Platform::ProcessRemoteM111(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+	CanMessageGenericParser parser(msg, M111Params);
+
+	// Debug flags are as set by the D parameter. If D is not specified then S0 means all off, S1 means lower 8 bits on.
+	uint32_t flags = 0;
+	bool seen = parser.GetUintParam('D', flags);
+	if (!seen)
+	{
+		uint8_t sParam;
+		seen = parser.GetUintParam('S', sParam);
+		if (seen && sParam != 0)
+		{
+			flags = DefaultDebugFlags;
+		}
+	}
+
+	uint8_t module = Module::numModules;
+	if (parser.GetUintParam('P', module))
+	{
+		seen = true;
+	}
+
+	if (seen)
+	{
+		if (module < Module::numModules)
+		{
+			debugMaps[module].SetFromRaw(flags);
+		}
+		else if (flags != 0)
+		{
+			// Repetier Host sends M111 with various S parameters to enable echo and similar features, which used to turn on all our debugging.
+			// But it's not useful to enable all debugging anyway. So we no longer allow debugging to be enabled without a P parameter.
+			reply.copy("Use P parameter to specify which module to debug");
+			return GCodeResult::error;
+		}
+		else
+		{
+			// M111 S0 with no P parameter still clears all debugging
+			for (DebugFlags& dbf : debugMaps)
+			{
+				dbf.Clear();
+			}
+		}
+	}
+
+	reply.copy("Debugging on for modules:");
+	for (size_t i = 0; i < Module::numModules; i++)
+	{
+		if (debugMaps[i].IsNonEmpty())
+		{
+			reply.catf(" %s(%u - %#" PRIx16 ")", Module(i).ToString(), i, debugMaps[i].GetRaw());
+		}
+	}
+
+	reply.lcat("Debugging off for modules:");
+	for (size_t i = 0; i < Module::numModules; i++)
+	{
+		if (debugMaps[i].IsEmpty())
+		{
+			reply.catf(" %s(%u)", Module(i).ToString(), i);
+		}
+	}
+
+	return GCodeResult::ok;
 }
 
 #if HAS_ADDRESS_SWITCHES
@@ -1266,7 +1335,7 @@ GCodeResult Platform::DoDiagnosticTest(const CanMessageDiagnosticTest& msg, cons
 			do
 			{
 				--i;
-				(void)StepTimer::GetTimerTicks();
+				(void)StepTimer::GetTimerTicksWhenInterruptsDisabled();
 			} while (i != 0);
 			uint32_t now2 = SysTick->VAL;
 			asm volatile("":::"memory");
@@ -1284,13 +1353,13 @@ GCodeResult Platform::DoDiagnosticTest(const CanMessageDiagnosticTest& msg, cons
 			uint16_t startTimeStamp, endTimeStamp;
 			{
 				AtomicCriticalSectionLocker lock;
-				startClocks = StepTimer::GetTimerTicks();
+				startClocks = StepTimer::GetTimerTicksWhenInterruptsDisabled();
 				startTimeStamp = CanInterface::GetTimeStampCounter();
 			}
 			delay(2);
 			{
 				AtomicCriticalSectionLocker lock;
-				endClocks = StepTimer::GetTimerTicks();
+				endClocks = StepTimer::GetTimerTicksWhenInterruptsDisabled();
 				endTimeStamp = CanInterface::GetTimeStampCounter();
 			}
 			const uint32_t tsDiff = (((endTimeStamp - startTimeStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;

@@ -885,6 +885,11 @@ void CommandProcessor::Spin()
 			rslt = CustomCommandHandler::ProcessM655(buf->msg.generic, replyRef);
 			break;
 
+		case CanMessageType::m111:
+			requestId = buf->msg.diagnosticTest.requestId;
+			rslt = Platform::ProcessRemoteM111(buf->msg.generic, replyRef);
+			break;
+
 		default:
 			// We received a message type that we don't recognise. If it's a broadcast, ignore it. If it's addressed to us, send a reply.
 			if (buf->id.Src() != CanInterface::GetCanAddress())

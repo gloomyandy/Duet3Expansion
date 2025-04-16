@@ -56,6 +56,9 @@ public:
 	// Get the current tick count
 	static Ticks GetTimerTicks() noexcept SPEED_CRITICAL;
 
+	// Get the current tick count
+	static Ticks GetTimerTicksWhenInterruptsDisabled() noexcept SPEED_CRITICAL;
+
 	// Get the current tick count, adjusted for the movement delay
 	static Ticks GetMovementTimerTicks() noexcept SPEED_CRITICAL;
 
@@ -122,7 +125,8 @@ private:
 	static volatile uint32_t whenLastSynced;									// the millis tick count when we last synced
 	static uint32_t prevMasterTime;												// the previous master time received
 	static uint32_t prevLocalTime;												// the previous local time when the master time was received, corrected for receive processing delay
-	static int32_t peakPosJitter, peakNegJitter;								// the max and min corrections we made to local time offset while synced
+	static int32_t peakPosJitter, peakNegJitter;								// the max and min time sync errors we received after subtracting the average error
+	static int32_t errorAccumulator;												// the average time sync error
 	static bool gotJitter;														// true if we have recorded the jitter
 	static uint32_t peakReceiveDelay;											// the maximum receive delay we measured by using the receive time stamp
 	static volatile unsigned int syncCount;										// the number of messages we have received since starting sync
@@ -134,7 +138,14 @@ private:
 
 #if RP2040
 
+// On the RP2040 reading the timer is simple so we inline it
 inline StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
+{
+
+	return timer_hw->timerawl;													// read lower 32 bits of hardware timer
+}
+
+inline StepTimer::Ticks StepTimer::GetTimerTicksWhenInterruptsDisabled() noexcept
 {
 
 	return timer_hw->timerawl;													// read lower 32 bits of hardware timer
