@@ -36,6 +36,7 @@ uint32_t StepTimer::prevMasterTime;												// the previous master time recei
 uint32_t StepTimer::prevLocalTime;												// the previous local time when the master time was received, corrected for receive processing delay
 int32_t StepTimer::peakPosJitter = 0;
 int32_t StepTimer::peakNegJitter = 0;
+int32_t StepTimer::errorAccumulator = 0;
 bool StepTimer::gotJitter = false;
 uint32_t StepTimer::peakReceiveDelay = 0;
 volatile unsigned int StepTimer::syncCount = 0;
@@ -105,6 +106,21 @@ void StepTimer::Init() noexcept
 	return StepTc->COUNT.reg;
 }
 
+// Get the step timer clock count
+/*static*/ StepTimer::Ticks StepTimer::GetTimerTicksWhenInterruptsDisabled() noexcept
+{
+	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
+# if SAMC21
+	// Tony's tests suggest that the following nop is not needed, but including it makes it faster
+	asm volatile("nop");														// allow time for the peripheral to react to the command (faster than DMB instruction)
+# else
+	// On the SAME5x it isn't enough just to wait for SYNCBUSY.COUNT here, nor is it enough just to use a DSB instruction
+	while (StepTc->CTRLBSET.bit.CMD != 0) { }
+# endif
+	while (StepTc->SYNCBUSY.bit.COUNT) { }
+	return StepTc->COUNT.reg;
+}
+
 #endif
 
 // Check whether we have synced and received a clock sync message recently
@@ -131,6 +147,8 @@ void StepTimer::Init() noexcept
 
 /*static*/ void StepTimer::ProcessTimeSyncMessage(const CanMessageTimeSync& msg, size_t msgLen, uint16_t timeStamp) noexcept
 {
+	static uint32_t originalOffset = 0;
+
 #if RP2040
 	// On the RP2040 the timestamp counter is the same as the step counter
 	const uint32_t localTimeNow = StepTimer::GetTimerTicks();
@@ -140,7 +158,7 @@ void StepTimer::Init() noexcept
 	uint16_t timeStampNow;
 	{
 		AtomicCriticalSectionLocker lock;							// there must be no delay between calling GetTimerTicks and GetTimeStampCounter
-		localTimeNow = StepTimer::GetTimerTicks();
+		localTimeNow = StepTimer::GetTimerTicksWhenInterruptsDisabled();
 		timeStampNow = CanInterface::GetTimeStampCounter();
 	}
 
@@ -165,9 +183,7 @@ void StepTimer::Init() noexcept
 	if (locSyncCount == 0)											// we can't sync until we have previous message details
 	{
 		syncCount = 1;
-#if 0 //RP2040
-		debugPrintf("1st sync\n");
-#endif
+		errorAccumulator = 0;
 	}
 	else if (msg.lastTimeSent == oldMasterTime && msg.lastTimeAcknowledgeDelay != 0)
 	{
@@ -175,26 +191,27 @@ void StepTimer::Init() noexcept
 		const uint32_t correctedMasterTime = oldMasterTime + msg.lastTimeAcknowledgeDelay;
 		const uint32_t newOffset = oldLocalTime - correctedMasterTime;
 
-		//TODO convert this to a PLL, but note that there could be a constant offset if the clocks run at slightly different speeds
-		const uint32_t oldOffset = localTimeOffset;
-		localTimeOffset = newOffset;
-		const int32_t diff = (int32_t)(newOffset - oldOffset);
+		int32_t diff = (int32_t)(newOffset - localTimeOffset);
 		if ((uint32_t)labs(diff) > MaxSyncJitter && locSyncCount > 1)
 		{
+			localTimeOffset = newOffset;
 			syncCount = 0;
 			++numJitterResyncs;
-#if 0 //RP2040
-			debugPrintf("diff %" PRIi32 "\n", diff);
-#endif
 		}
 		else
 		{
 			whenLastSynced = millis();
-			if (locSyncCount == MaxSyncCount)
+			if (locSyncCount < MaxSyncCount)
 			{
-#if 0 //RP2040
-				debugPrintf("synced\n");
-#endif
+				localTimeOffset = newOffset;
+				originalOffset = newOffset;
+				syncCount = locSyncCount + 1;
+			}
+			else
+			{
+				errorAccumulator = (errorAccumulator - errorAccumulator/64) + diff;
+				localTimeOffset += (uint32_t)(errorAccumulator/64);
+				diff -= errorAccumulator/64;
 				if (!gotJitter)
 				{
 					peakPosJitter = peakNegJitter = diff;
@@ -222,22 +239,17 @@ void StepTimer::Init() noexcept
 						}
 					}
 				}
-			}
-			else
-			{
-				syncCount = locSyncCount + 1;
-#if 0 //RP2040
-				debugPrintf("inc sync ct\n");
-#endif
+				if (Platform::Debug(Module::CAN))
+				{
+					debugPrintf("TS RxD,TxD,diff,errac,offs %" PRIu32 ",%u,%" PRIi32 ",%" PRIi32 ",%" PRIi32 "\n",
+								timeStampDelay, (unsigned int)msg.lastTimeAcknowledgeDelay, diff, errorAccumulator, (int32_t)(newOffset - originalOffset));
+				}
 			}
 		}
 	}
 	else
 	{
 		// Looks like we missed a time sync message, or the message didn't specify the acknowledge delay. Ignore it.
-#if 0 //RP2040
-		debugPrintf("missed ts msg, prev=%" PRIu32 " old=%" PRIu32 "\n", msg.lastTimeSent, oldMasterTime);
-#endif
 	}
 }
 
@@ -248,7 +260,7 @@ inline /*static*/ bool StepTimer::ScheduleTimerInterrupt(Ticks tim) noexcept
 	// We need to disable all interrupts, because once we read the current step clock we have only 6us to set up the interrupt, or we will miss it
 	AtomicCriticalSectionLocker lock;
 
-	const int32_t diff = (int32_t)(tim - GetTimerTicks());			// see how long we have to go
+	const int32_t diff = (int32_t)(tim - GetTimerTicksWhenInterruptsDisabled());	// see how long we have to go
 	if (diff < (int32_t)MoveTiming::MinInterruptInterval)			// if less than about 6us or already passed
 	{
 		return true;												// tell the caller to simulate an interrupt instead
@@ -280,7 +292,7 @@ __attribute__((section(".time_critical")))
 	// We need to disable all interrupts, because once we read the current step clock we have only 6us to set up the interrupt, or we will miss it
 	AtomicCriticalSectionLocker lock;
 
-	const int32_t diff = (int32_t)(when - GetTimerTicks());			// see how long we have to go
+	const int32_t diff = (int32_t)(when - GetTimerTicksWhenInterruptsDisabled());	// see how long we have to go
 	if (diff < (int32_t)MoveTiming::MinInterruptInterval)			// if less than about 6us or already passed
 	{
 		return true;												// tell the caller to simulate an interrupt instead
@@ -477,7 +489,7 @@ void StepTimer::CancelCallback() noexcept
 
 /*static*/ void StepTimer::Diagnostics(const StringRef& reply)
 {
-	reply.lcatf("Peak sync jitter %" PRIi32 "/%" PRIi32 ", peak Rx sync delay %" PRIu32 ", resyncs %u/%u, ", peakNegJitter, peakPosJitter, peakReceiveDelay, numTimeoutResyncs, numJitterResyncs);
+	reply.lcatf("Avg sync error %" PRIi32 ", peak jitter %" PRIi32 "/%" PRIi32 ", peak Rx sync delay %" PRIu32 ", resyncs %u/%u, ", errorAccumulator, peakNegJitter, peakPosJitter, peakReceiveDelay, numTimeoutResyncs, numJitterResyncs);
 	gotJitter = false;
 	numTimeoutResyncs = numJitterResyncs = 0;
 	peakReceiveDelay = 0;
