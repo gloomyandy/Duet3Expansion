@@ -191,7 +191,7 @@ void StepTimer::Init() noexcept
 		const uint32_t correctedMasterTime = oldMasterTime + msg.lastTimeAcknowledgeDelay;
 		const uint32_t newOffset = oldLocalTime - correctedMasterTime;
 
-		int32_t diff = (int32_t)(newOffset - localTimeOffset);
+		const int32_t diff = (int32_t)(newOffset - localTimeOffset);
 		if ((uint32_t)labs(diff) > MaxSyncJitter && locSyncCount > 1)
 		{
 			localTimeOffset = newOffset;
@@ -209,9 +209,8 @@ void StepTimer::Init() noexcept
 			}
 			else
 			{
-				errorAccumulator = (errorAccumulator - errorAccumulator/64) + diff;
-				localTimeOffset += (uint32_t)(errorAccumulator/64);
-				diff -= errorAccumulator/64;
+				errorAccumulator += diff;
+				localTimeOffset += (uint32_t)(errorAccumulator/64 + diff/4);		// this is effectively a PI controller with P=1/4, I=freq/64
 				if (!gotJitter)
 				{
 					peakPosJitter = peakNegJitter = diff;
@@ -226,7 +225,7 @@ void StepTimer::Init() noexcept
 					peakNegJitter = diff;
 				}
 				Platform::SetPrinting(msg.isPrinting);
-				if (msgLen >= CanMessageTimeSync::SizeWithRealTime)		// if real time is included
+				if (msgLen >= CanMessageTimeSync::SizeWithRealTime)					// if real time is included
 				{
 					Platform::SetDateTime(msg.realTime);
 					if (msgLen >= CanMessageTimeSync::SizeWithRealTimeAndMovementDelay)
@@ -489,12 +488,13 @@ void StepTimer::CancelCallback() noexcept
 
 /*static*/ void StepTimer::Diagnostics(const StringRef& reply)
 {
-	reply.lcatf("Avg sync error %" PRIi32 ", peak jitter %" PRIi32 "/%" PRIi32 ", peak Rx sync delay %" PRIu32 ", resyncs %u/%u, ", errorAccumulator, peakNegJitter, peakPosJitter, peakReceiveDelay, numTimeoutResyncs, numJitterResyncs);
+	reply.lcatf("Sync err accum %" PRIi32 ", peak jitter %" PRIi32 "/%" PRIi32 ", peak Rx delay %" PRIu32 ", resyncs %u/%u, ",
+					errorAccumulator, peakNegJitter, peakPosJitter, peakReceiveDelay, numTimeoutResyncs, numJitterResyncs);
 	gotJitter = false;
 	numTimeoutResyncs = numJitterResyncs = 0;
 	peakReceiveDelay = 0;
 
-	StepTimer *pst = pendingList;
+	const StepTimer *const pst = pendingList;
 	if (pst == nullptr)
 	{
 		reply.cat("no timer interrupt scheduled");
