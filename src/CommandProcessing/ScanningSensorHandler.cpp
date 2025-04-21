@@ -34,7 +34,7 @@ static volatile uint32_t lastReading = 0;
 static volatile bool isCalibrating = false;
 static uint32_t lastReadingTakenAt = 0;
 static uint32_t offset = 0;
-static InputMonitor *inputMonitor = nullptr;		// when the sensor is active this point to the associated input monitor; when inactive it is null
+static InputMonitor *volatile inputMonitor = nullptr;	// when the sensor is active this point to the associated input monitor; when inactive it is null
 
 namespace TouchMode
 {
@@ -94,7 +94,7 @@ namespace TouchMode
 	static bool IsEnabled() noexcept { return enabled; }
 };
 
-// The incoming parameter p_threshold holds a value in the lower 16 bits, where 0x0000FFFF represents the maximum configurable threshold, which is 5.0.
+// The incoming parameter p_threshold holds a value in the lower 16 bits, where 0x0000FFFF represents the maximum configurable threshold, which is TouchModeMaxThreshold.
 void TouchMode::Start(uint32_t p_threshold) noexcept
 {
 	lastReading = baseReading = 0;
@@ -108,7 +108,10 @@ void TouchMode::Start(uint32_t p_threshold) noexcept
 	}
 	lastValue = startValue = 0.0f;
 	falling = false;
-	threshold = ((31250.0 * TouchModeMaxThreshold)/(65535.0 * LDC1612::FRef)) * (float)(p_threshold & 0x0000FFFF);	// This scaling puts a configured sensitivity of 0.5 about right on DC's toolchanger
+
+	// The following scaling makes a configured sensitivity of 0.5 about right on DC's toolchanger
+	threshold = ((31250.0 * TouchModeMaxThreshold)/(65535.0 * LDC1612::FRef)) * (float)(p_threshold & 0x0000FFFF);
+
 	//debugPrintf("Rec threshold %" PRIu32 ", scaled %.0f\n", p_threshold, (double)threshold);
 	goodCnt = 0;
 	enabled = true;
@@ -143,9 +146,10 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 		++numBadReadings;
 		if (numBadReadings == 3)					// if we get 3 bad readings in a row, give up
 		{
-			if (inputMonitor != nullptr)
+			InputMonitor *const locInputMonitor = inputMonitor;		// capture volatile variable
+			if (locInputMonitor != nullptr)
 			{
-				inputMonitor->SetTriggered();
+				locInputMonitor->SetTriggered();
 			}
 //			debugPrintf("Bad reading %08" PRIx32 "\n", reading);
 			Stop();
@@ -170,7 +174,11 @@ void TouchMode::ProcessReading(uint32_t reading) noexcept
 					{
 						if (-value >= threshold)
 						{
-							inputMonitor->SetTriggered();
+							InputMonitor *const locInputMonitor = inputMonitor;		// capture volatile variable
+							if (locInputMonitor != nullptr)
+							{
+								locInputMonitor->SetTriggered();
+							}
 							Stop();
 							//debugPrintf("%d Trig F %" PRIi32 " V %f LV %f SV %f BV %" PRIu32 " TH %f\n", goodCnt++, (int32_t)(reading - baseReading), (double)value, (double)lastValue, (double)startValue, baseReading, (double)threshold);
 						}
@@ -249,7 +257,12 @@ __attribute__ ((aligned (8))) static void Ldc1612Interrupt(CallbackParameter) no
 					}
 					else
 					{
-						inputMonitor->AnalogInterrupt(ScanningSensorHandler::GetReading());
+						// The input monitor may have been deactivated and inputMonitor set to nullptr while we were getting the reading, so we need to check it again here
+						InputMonitor *const locInputMonitor = inputMonitor;
+						if (locInputMonitor != nullptr)
+						{
+							locInputMonitor->AnalogInterrupt(ScanningSensorHandler::GetReading());
+						}
 					}
 				}
 				else if (millis() - lastReadingTakenAt > 5)	// we get occasional reading errors, so don't report a bad reading unless it's 5ms since we had a good reading

@@ -91,6 +91,9 @@ enum class ErrorCode : uint32_t
 	HsmciTimeout = 1u << 4
 };
 
+typedef Bitmap<uint16_t> DebugFlags;
+static constexpr uint16_t DefaultDebugFlags = 0x00FF;
+
 class IoPort;
 
 namespace Platform
@@ -121,6 +124,9 @@ namespace Platform
 	// Message output (see MessageType for further details)
 	void LogError(ErrorCode e);
 	bool Debug(Module module);
+	DebugFlags GetDebugFlags(Module m) noexcept;
+	GCodeResult ProcessRemoteM111(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+
 	void WriteLed(uint8_t ledNumber, bool turnOn);
 
 #if USE_SERIAL_DEBUG

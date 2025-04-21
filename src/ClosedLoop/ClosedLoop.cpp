@@ -188,7 +188,7 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 	const bool seenQ = parser.GetFloatParam('Q', tempTorquePerAmp);
 
 	// Report back if no parameters to change
-	if (!(seenT || seenC || seenPid || seenE || seenQ))
+	if (!(seenT || seenC || seenPid || seenE || seenQ || seenS))
 	{
 		if (encoder == nullptr)
 		{
@@ -220,7 +220,7 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 	// Validate the new params
 	if (tempEncoderType > EncoderType::NumValues)
 	{
-		reply.copy("Invalid T value. Valid values are 2 and 3");
+		reply.copy("Invalid T value. Valid values are 1, 2 and 3");
 		return GCodeResult::error;
 	}
 	if (seenE && (tempErrorThresholds[0] < 0 || tempErrorThresholds[1] < 0))
@@ -290,11 +290,12 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 			CreateCalibrationTask();
 			break;
 
+#if defined(SUPPORT_TLI5012B)
 		case EncoderType::rotaryTLI5012:
 			encoder = new TLI5012B(tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin);
 			CreateCalibrationTask();
 			break;
-
+#endif
 		case EncoderType::linearComposite:
 			encoder = new LinearCompositeEncoder(tempCPR, tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin);
 			CreateCalibrationTask();

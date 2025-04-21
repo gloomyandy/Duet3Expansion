@@ -67,11 +67,11 @@ constexpr CanDevice::Config Can0Config =
 {
 	.dataSize = 64,									// must be one of: 8, 12, 16, 20, 24, 32, 48, 64
 #if RP2040
-	.numTxBuffers = 0,
+	.numTxBuffers = 0,								// RP2040 implementation doesn't support transmit buffers
 	.txFifo0Size = 16,
-	.txFifo1Size = 2,
+	.txFifo1Size = 2,								// RP2040 supports multiple transmit fifos so use another one instead of dedicated transmit buffers
 #else
-	.numTxBuffers = 2,
+	.numTxBuffers = 2,								// we allocate 2 buffers to sending urgent messages in case we need to send more than one in quick succession
 	.txFifoSize = 16,								// enough to send a 512-byte response broken into 60-byte fragments, plus status messages
 #endif
 #if RP2040
@@ -85,9 +85,9 @@ constexpr CanDevice::Config Can0Config =
 #else
 	.rxFifo1Size = 0,								// we don't use FIFO 1
 #endif
-	.numShortFilterElements = 0,
+	.numShortFilterElements = 0,					// we don't use 11-bit addresses
 	.numExtendedFilterElements = 3,
-	.txEventFifoSize = 0
+	.txEventFifoSize = 0							// we don't need transmit events
 };
 
 static_assert(Can0Config.IsValid());
@@ -208,7 +208,7 @@ void CanInterface::Init(CanAddress defaultBoardAddress, bool useAlternatePins, b
 	// Initialise the CAN hardware, using the timing data if it was valid
 	can0dev = CanDevice::Init(
 #if RP2040
-								CanTxPin, CanRxPin,
+								CanTxPin, CanRxPin,				// which pins we use for CAN transmit and receive
 #else
 								0, whichPort,
 #endif
@@ -309,7 +309,7 @@ CanAddress CanInterface::GetCurrentMasterAddress() noexcept
 bool CanInterface::Send(CanMessageBuffer *buf) noexcept
 {
 	//TODO option to not force sending, and return true only if successful?
-	MutexLocker lock(txFifoMutex);
+	MutexLocker lock(txFifoMutex);								// this is called from multiple tasks so we need to lock the mutex
 	const uint32_t cancelledId = can0dev->SendMessage(CanDevice::TxBufferNumber::fifo, 1000, buf);
 	if (cancelledId != 0)
 	{
@@ -319,12 +319,12 @@ bool CanInterface::Send(CanMessageBuffer *buf) noexcept
 	return true;
 }
 
-// Send a high-priority message. Called only from the CansAsyncSender task, so we don't need to use a mutex.
+// Send a high-priority message. Called only from the CanAsyncSender task, so we don't need to use a mutex.
 // We reserve two buffers for sending these messages.
 bool CanInterface::SendAsync(CanMessageBuffer *buf) noexcept
 {
 #if RP2040
-	// RP2040 doesn't support dedicated buffers but it can support more than one fifo. We prioritise fifo1 over fifo.
+	// RP2040 doesn't support dedicated buffers but it can support more than one fifo. We prioritise fifo1 over fifo0.
 	const CanDevice::TxBufferNumber bufferNumber = CanDevice::TxBufferNumber::fifo1;
 #else
 	const CanDevice::TxBufferNumber bufferNumber = (can0dev->IsSpaceAvailable(CanDevice::TxBufferNumber::buffer0, 0))
@@ -348,7 +348,7 @@ bool CanInterface::SendAndFree(CanMessageBuffer *buf) noexcept
 }
 
 // Return a move message, if there is one. Caller must free the message buffer.
-CanMessageBuffer * CanInterface::GetCanMove(uint32_t timeout) noexcept
+CanMessageBuffer *CanInterface::GetCanMove(uint32_t timeout) noexcept
 {
 	return PendingMoves.GetMessage(timeout);
 }
@@ -361,7 +361,7 @@ CanMessageBuffer *CanInterface::GetCanCommand(uint32_t timeout) noexcept
 // Process a received message. Return the buffer it arrived in if it is free for re-use, else nullptr.
 CanMessageBuffer *CanInterface::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 {
-	// Only respond to messages from a master address
+	// Mostly, we only respond to messages from a master address
 #if defined(ATEIO) || defined(ATECM)
 	if (buf->id.Src() == CanId::ATEMasterAddress)			// ATE boards only respond to the ATE master, because a main board under test may also transmit when it starts up
 #else
@@ -575,7 +575,7 @@ CanMessageBuffer *CanInterface::ProcessReceivedMessage(CanMessageBuffer *buf) no
 	}
 	else if (buf->id.Dst() == CanId::BroadcastAddress && buf->id.MsgType() == CanMessageType::sensorTemperaturesReport && buf->id.IsRequest())
 	{
-		PendingCommands.AddMessage(buf);				// it's a broadcast message that we are interested in, so queue it for processing
+		PendingCommands.AddMessage(buf);				// it's a broadcast message that we are interested in from an expansion board, so queue it for processing
 		return nullptr;
 	}
 

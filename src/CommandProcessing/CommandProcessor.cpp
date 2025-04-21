@@ -467,7 +467,7 @@ static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& rep
 		extra = LastDiagnosticsPart;
 		{
 			Platform::AppendBoardAndFirmwareDetails(reply);
-			// GCC 12.2 produces a spurious diagnostic for the following line of code, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105523
+			// GCC 12.2 and 13.2 produce a spurious diagnostic for the following line of code, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105523
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
 			const char *bootloaderVersionText = *reinterpret_cast<const char**>(0x20);		// offset of vectors.pvReservedM8
@@ -883,6 +883,11 @@ void CommandProcessor::Spin()
 		case CanMessageType::m655:
 			requestId = buf->msg.generic.requestId;
 			rslt = CustomCommandHandler::ProcessM655(buf->msg.generic, replyRef);
+			break;
+
+		case CanMessageType::m111:
+			requestId = buf->msg.diagnosticTest.requestId;
+			rslt = Platform::ProcessRemoteM111(buf->msg.generic, replyRef);
 			break;
 
 		default:

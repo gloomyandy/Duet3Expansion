@@ -7,7 +7,7 @@
 
 #include "TLI5012B.h"
 
-#if SUPPORT_CLOSED_LOOP
+#if SUPPORT_CLOSED_LOOP && defined(SUPPORT_TLI5012B)
 
 constexpr unsigned int TLI5012BResolutionBits = 14;
 

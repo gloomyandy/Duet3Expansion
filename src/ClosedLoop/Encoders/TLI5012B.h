@@ -11,7 +11,7 @@
 #include "AbsoluteRotaryEncoder.h"
 #include "SpiEncoder.h"
 
-#if SUPPORT_CLOSED_LOOP
+#if SUPPORT_CLOSED_LOOP && defined(SUPPORT_TLI5012B)
 
 #include <General/FreelistManager.h>
 
