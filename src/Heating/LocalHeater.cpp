@@ -416,6 +416,7 @@ void LocalHeater::Spin() noexcept
 					}
 					else
 					{
+						TaskCriticalSectionLocker lock;					// avoid a race with tasks that implement feedforward
 						iAccumulator = constrain<float>
 										(iAccumulator + (error * params.kP * params.recipTi * HeatSampleIntervalMillis * MillisToSeconds),
 											0.0, GetModel().GetMaxPwm());
@@ -557,7 +558,7 @@ GCodeResult LocalHeater::ApplyFeedForward(const CanMessageHeaterFeedForwardNew& 
 			lastFanPwm = msg.fanPwmFraction;
 			pwmBoost += GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, pwmChange) * FanFeedForwardMultiplier;
 		}
-		InterruptCriticalSectionLocker lock;
+		TaskCriticalSectionLocker lock;
 		iAccumulator += pwmBoost;
 	}
 	extrusionTemperatureBoost = msg.extrusionTemperatureBoost;
