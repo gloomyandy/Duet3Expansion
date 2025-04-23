@@ -197,8 +197,15 @@ GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 	}
 
 	const float target = min<float>(GetTargetTemperature() + extrusionTemperatureBoost, GetHighestTemperatureLimit());
-	const HeaterMode newMode = (temperature + TemperatureCloseEnough < target) ? HeaterMode::heating
-					: (temperature > target + TemperatureCloseEnough) ? HeaterMode::cooling
+	UpdateHeaterMode(target);
+	return GCodeResult::ok;
+}
+
+// Determine and if necessary change the current heater mode
+void LocalHeater::UpdateHeaterMode(float targetTemperature) noexcept
+{
+	const HeaterMode newMode = (temperature + TemperatureCloseEnough < targetTemperature) ? HeaterMode::heating
+					: (temperature > targetTemperature + TemperatureCloseEnough) ? HeaterMode::cooling
 						: HeaterMode::stable;
 	if (newMode != mode)
 	{
@@ -212,7 +219,6 @@ GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 		heatingFaultCount = 0;
 		mode = newMode;
 	}
-	return GCodeResult::ok;
 }
 
 // Switch off the specified heater. If in tuning mode, delete the array used to store tuning temperature readings.
@@ -286,10 +292,7 @@ void LocalHeater::Spin() noexcept
 
 			if (IsPidMode(mode) && extrusionTemperatureBoost != lastExtrusionTemperatureBoost)
 			{
-				// Calculate new heater mode to prevent heater fault due to exceededAllowedExcursion
-				mode = (temperature + TemperatureCloseEnough < targetTemperature) ? HeaterMode::heating
-						: (temperature > targetTemperature + TemperatureCloseEnough) ? HeaterMode::cooling
-							: HeaterMode::stable;
+				UpdateHeaterMode(targetTemperature);									// calculate new heater mode to prevent heater fault due to exceededAllowedExcursion
 				lastExtrusionTemperatureBoost = extrusionTemperatureBoost;
 			}
 
