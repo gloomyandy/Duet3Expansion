@@ -36,12 +36,7 @@ namespace MoveTiming
 	constexpr uint32_t MaxStepInterruptTime = 10 * MinInterruptInterval;						// the maximum time we spend looping in the ISR, in step clocks
 	constexpr uint32_t HiccupIncrement = HiccupTime/2;											// how much we increase the hiccup time by on each attempt
 
-	constexpr uint32_t UsualMinimumPreparedTime = StepTimer::StepClockRate/10;					// 100ms
-	constexpr uint32_t AbsoluteMinimumPreparedTime = StepTimer::StepClockRate/20;				// 50ms
 	constexpr uint32_t MaximumMoveStartAdvanceClocks = StepTimer::StepClockRate/1000;			// 1ms
-
-	constexpr uint32_t StandardMoveWakeupInterval = 500;										// milliseconds
-	constexpr uint32_t MachineCoordinateUpdateInterval = 200;									// milliseconds
 }
 
 #endif /* SRC_MOVEMENT_MOVETIMING_H_ */
