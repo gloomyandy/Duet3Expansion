@@ -9,5 +9,6 @@
 #include <General/IsoDate.h>
 
 const char *const DateText = IsoDate;
+const char *const TimeSuffix = " " __TIME__;
 
 // End
