@@ -8,16 +8,9 @@
 #ifndef SRC_VERSION_H_
 #define SRC_VERSION_H_
 
-#define VERSION		"3.6.0-rc.3"
-
-#if 0
-// Use this for official releases
-# define TIME_SUFFIX
-#else
-// Use this for internal builds
-# define TIME_SUFFIX		" " __TIME__
-#endif
+#define VERSION		"3.6.0-rc.3+1"
 
 extern const char *const DateText;
+extern const char *const TimeSuffix;
 
 #endif /* SRC_VERSION_H_ */
