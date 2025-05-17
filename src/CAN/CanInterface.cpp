@@ -653,6 +653,12 @@ void CanInterface::WakeAsyncSender() noexcept
 	}
 }
 
+// Wake the CAN sender task when the caller is definitely an ISR
+void CanInterface::WakeAsyncSenderFromIsr() noexcept
+{
+	canAsyncSenderTask->GiveFromISR(NotifyIndices::CanAsyncSender);
+}
+
 GCodeResult CanInterface::ChangeAddressAndDataRate(const CanMessageSetAddressAndNormalTiming &msg, const StringRef &reply) noexcept
 {
 	if (msg.oldAddress == boardAddress)
