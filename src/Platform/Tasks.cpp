@@ -583,23 +583,18 @@ constexpr uint32_t FlashSectorSize = 4096;									// the flash chip has 4K sect
 constexpr uint32_t FlashSize = 2 * 1024 * 1024;								// the flash chip size in bytes (2Mbytes = 16Mbits)
 constexpr uint32_t FlashStart = XIP_BASE;
 
-uint32_t eraseTime = 0;
-uint32_t flashTime = 0;
 // Erase flash and write the firmware to it.
 // NOTE: during this operation we must not execute any code from flash.
 [[noreturn]] void RAMFUNC WriteFirmwareToFlash(uint32_t *firmware, uint32_t length)
 {
-	uint32_t start = StepTimer::GetTimerTicks();
 	// make sure that nothing runs from flash memory
 	IrqDisable();
 	// Reboot in 10 seconds no matter what happens (The flash operation usually takes less than 2 seconds)!
 	watchdog_reboot(0, 0, 5000);
 	// Erase the flash pages
 	flash_range_erase(0, length);
-	eraseTime = StepTimer::GetTimerTicks() - start;
 	// now write the flash data
 	flash_range_program(0, (uint8_t *)firmware, length);
-	flashTime = StepTimer::GetTimerTicks() - start;
 	// Spin waiting for reboot
 	for(;;)
 	{
@@ -611,7 +606,6 @@ extern "C" [[noreturn]] void UpdateFirmwareTask(void *pvParameters) noexcept
 {
 	// Allocate a buffer large enough to contain the entire bootloader
 	Platform::InitMinimal();
-	delay(1000);
 	debugPrintf("Starting firmware update free RAM %d\n", Tasks::GetNeverUsedRam());
 	uint8_t * blockBuffer = (uint8_t *)(new uint32_t[FlashBlockSize/4]);		// if this fails then an OutOfMemory reset will occur;
 	debugPrintf("After memory allocation1 free %d\n", Tasks::GetNeverUsedRam());
