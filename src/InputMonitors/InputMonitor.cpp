@@ -51,12 +51,12 @@ bool InputMonitor::Activate() noexcept
 			else
 #endif
 			{
-				AtomicCriticalSectionLocker lock;
 #if SAME5x
 				ok = port.AttachInterrupt(CommonDigitalPortInterrupt, InterruptMode::changeWithDebounce, CallbackParameter(this));
 				delay(2);								// give the debouncer enough time to get the correct state
 				state = (ok) ? port.ReadDebouncedDigital() : port.ReadDigital();
 #else
+				AtomicCriticalSectionLocker lock;
 				ok = port.AttachInterrupt(CommonDigitalPortInterrupt, InterruptMode::change, CallbackParameter(this));
 				state = port.ReadDigital();
 #endif
