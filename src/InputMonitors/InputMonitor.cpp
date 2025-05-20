@@ -213,7 +213,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 		if (active)
 		{
 			sendDue = true;
-			CanInterface::WakeAsyncSenderFromIsr();
+			CanInterface::WakeAsyncSender();
 		}
 	}
 }
