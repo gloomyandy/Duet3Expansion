@@ -283,7 +283,6 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 
 		for (size_t drv = 0; drv < NumDrivers; ++drv)
 		{
-			FilamentSensorStatus fst(FilamentSensorStatus::noMonitor);
 			if (filamentSensors[drv] != nullptr)
 			{
 				const uint32_t startTime = StepTimer::GetTimerTicks();
@@ -310,6 +309,7 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 					locIsrMillis = 0;
 				}
 
+				FilamentSensorStatus fst(FilamentSensorStatus::noMonitor);
 				if (fs.enableMode == 2 || Platform::IsPrinting())
 				{
 					const float extrusionCommanded = (float)extruderStepsCommanded/moveInstance->DriveStepsPerMm(drv);

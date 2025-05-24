@@ -51,9 +51,15 @@ bool InputMonitor::Activate() noexcept
 			else
 #endif
 			{
+#if SAME5x
+				ok = port.AttachInterrupt(CommonDigitalPortInterrupt, InterruptMode::changeWithDebounce, CallbackParameter(this));
+				delay(2);								// give the debouncer enough time to get the correct state
+				state = (ok) ? port.ReadDebouncedDigital() : port.ReadDigital();
+#else
 				AtomicCriticalSectionLocker lock;
 				ok = port.AttachInterrupt(CommonDigitalPortInterrupt, InterruptMode::change, CallbackParameter(this));
 				state = port.ReadDigital();
+#endif
 			}
 		}
 		else
@@ -130,7 +136,12 @@ void InputMonitor::Deactivate() noexcept
 uint32_t InputMonitor::GetAnalogValue() const noexcept
 {
 	return (!IsDigital()) ? port.ReadAnalog()
-			: port.ReadDigital() ? 0xFFFFFFFF
+#if SAME5x
+			: port.ReadDebouncedDigital()
+#else
+			: port.ReadDigital()
+#endif
+			  ? 0xFFFFFFFF
 				: 0;
 }
 
@@ -176,14 +187,19 @@ void InputMonitor::SetTriggered() noexcept
 
 void InputMonitor::DigitalInterrupt() noexcept
 {
-	const bool newState = port.ReadDigital();
+	const bool newState =
+#if SAME5x
+							port.ReadDebouncedDigital();
+#else
+							port.ReadDigital();
+#endif
 	if (newState != state)
 	{
 		state = newState;
 		if (active)
 		{
 			sendDue = true;
-			CanInterface::WakeAsyncSender();
+			CanInterface::WakeAsyncSenderFromIsr();
 		}
 	}
 }

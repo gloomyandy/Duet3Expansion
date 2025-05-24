@@ -74,14 +74,14 @@ constexpr uint32_t Tmc2240CurrentRange = 0x01;								// which current range we 
 constexpr uint32_t Tmc2240SlopeControl = 0x01;								// which slope control we set the TMC2240 to (200V/us)
 constexpr float Tmc2240Rref = 15.0;											// TMC2240 reference resistor in Kohms
 constexpr float DriverFullScaleCurrent = 24000/Tmc2240Rref;					// in mA, assuming we set the range bits in the DRV_CONF register to 0x01
-constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
+constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;			// with RRef = 15K this works out as 1.6A so this is the maximum current we can ask for
 
-#if 0
-// Current limits for thermal testing of the board
+#if 1
+// New current limits (RRF 3.6 and later)
 constexpr float MaximumMotorCurrent = 1600.0;
 constexpr float MaximumStandstillCurrent = 1130.0;
 #else
-// Proposed current limits for normal use
+// Original current limits for normal use (RRF 3.5.x and earlier)
 constexpr float MaximumMotorCurrent = 1000.0;								// peak current per phase, only one phase gets this at a time
 constexpr float MaximumStandstillCurrent = 800.0;							// peak current in a single phase at standstill
 #endif
