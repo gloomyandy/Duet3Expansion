@@ -599,7 +599,7 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear() noexcept
 }
 
 // Store collected data in a CAN message slot
-void RotatingMagnetFilamentMonitor::GetLiveData(FilamentMonitorDataNew2& data) const noexcept
+void RotatingMagnetFilamentMonitor::GetLiveData(FilamentMonitorDataV2& data) const noexcept
 {
 	data.ClearReservedFields();
 	data.position = lastKnownPosition;

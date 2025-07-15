@@ -349,7 +349,7 @@ GCodeResult ScanningSensorHandler::SetOrCalibrateCurrent(uint32_t param, const S
 	}
 	else
 	{
-		if (param == CanMessageChangeInputMonitorNew::paramAutoCalibrateDriveLevelAndReport)
+		if (param == CanMessageChangeInputMonitorV1::paramAutoCalibrateDriveLevelAndReport)
 		{
 			isCalibrating = true;
 			delay(2);												// avoid race with LDC task
@@ -372,7 +372,7 @@ GCodeResult ScanningSensorHandler::SetOrCalibrateCurrent(uint32_t param, const S
 			isCalibrating = false;
 			reply.copy("failed to calibrate sensor drive current");
 		}
-		else if (param == CanMessageChangeInputMonitorNew::paramReportDriveLevel)
+		else if (param == CanMessageChangeInputMonitorV1::paramReportDriveLevel)
 		{
 			extra = sensor->GetDriveCurrent(0);
 			reply.printf("Sensor drive current is %u, offset is %" PRIu32, extra, offset);
@@ -380,8 +380,8 @@ GCodeResult ScanningSensorHandler::SetOrCalibrateCurrent(uint32_t param, const S
 		}
 		else
 		{
-			const uint16_t driveCurrent = param & CanMessageChangeInputMonitorNew::paramDriveLevelMask;
-			const uint32_t newOffset = param >> CanMessageChangeInputMonitorNew::paramOffsetShift;
+			const uint16_t driveCurrent = param & CanMessageChangeInputMonitorV1::paramDriveLevelMask;
+			const uint32_t newOffset = param >> CanMessageChangeInputMonitorV1::paramOffsetShift;
 			isCalibrating = true;
 			delay(2);												// avoid race with LDC task
 			const bool ok = sensor->SetDriveCurrent(0, driveCurrent);

@@ -295,7 +295,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	return false;
 }
 
-/*static*/ GCodeResult InputMonitor::Create(const CanMessageCreateInputMonitorNew& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept
+/*static*/ GCodeResult InputMonitor::Create(const CanMessageCreateInputMonitorV1& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept
 {
 	WriteLocker lock(listLock);
 
@@ -332,9 +332,9 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	return GCodeResult::error;
 }
 
-/*static*/ GCodeResult InputMonitor::Change(const CanMessageChangeInputMonitorNew& msg, const StringRef& reply, uint8_t& extra) noexcept
+/*static*/ GCodeResult InputMonitor::Change(const CanMessageChangeInputMonitorV1& msg, const StringRef& reply, uint8_t& extra) noexcept
 {
-	if (msg.action == CanMessageChangeInputMonitorNew::actionDelete)
+	if (msg.action == CanMessageChangeInputMonitorV1::actionDelete)
 	{
 		WriteLocker lock(listLock);
 
@@ -357,11 +357,11 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	GCodeResult rslt;
 	switch (msg.action)
 	{
-	case CanMessageChangeInputMonitorNew::actionDoMonitor:
+	case CanMessageChangeInputMonitorV1::actionDoMonitor:
 		rslt = (m->Activate()) ? GCodeResult::ok : GCodeResult::error;
 		break;
 
-	case CanMessageChangeInputMonitorNew::actionDontMonitor:
+	case CanMessageChangeInputMonitorV1::actionDontMonitor:
 		m->Deactivate();
 #if SUPPORT_LDC1612
 		if (m->port.IsLdc1612())
@@ -372,13 +372,13 @@ void InputMonitor::UpdateState(bool newState) noexcept
 		rslt = GCodeResult::ok;
 		break;
 
-	case CanMessageChangeInputMonitorNew::actionReturnPinName:
+	case CanMessageChangeInputMonitorV1::actionReturnPinName:
 		m->port.AppendPinName(reply);
 		reply.catf(", min interval %ums", m->minInterval);
 		rslt = GCodeResult::ok;
 		break;
 
-	case CanMessageChangeInputMonitorNew::actionChangeThreshold:
+	case CanMessageChangeInputMonitorV1::actionChangeThreshold:
 		m->threshold = msg.param;
 		m->state = m->port.ReadAnalog() >= m->threshold;
 #if SUPPORT_LDC1612
@@ -390,7 +390,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 		rslt = GCodeResult::ok;
 		break;
 
-	case CanMessageChangeInputMonitorNew::actionChangeMinInterval:
+	case CanMessageChangeInputMonitorV1::actionChangeMinInterval:
 		m->minInterval = msg.param;
 #if SUPPORT_LDC1612
 		if (m->port.IsLdc1612())
@@ -402,11 +402,11 @@ void InputMonitor::UpdateState(bool newState) noexcept
 		break;
 
 #if SUPPORT_LDC1612
-	case CanMessageChangeInputMonitorNew::actionSetDriveLevel:
+	case CanMessageChangeInputMonitorV1::actionSetDriveLevel:
 		rslt = m->SetDriveLevel(msg.param, reply, extra);
 		break;
 
-	case CanMessageChangeInputMonitorNew::actionSelectTouchMode:
+	case CanMessageChangeInputMonitorV1::actionSelectTouchMode:
 		rslt = m->SelectTouchMode(msg.param, reply, extra);
 		break;
 #endif
@@ -423,7 +423,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 
 // Check the input monitors and add any pending ones to the message
 // Return the number of ticks before we should be woken again, or TaskBase::TimeoutUnlimited if we shouldn't be woken until an input changes state
-/*static*/ uint32_t InputMonitor::AddStateChanges(CanMessageInputChangedNew *msg) noexcept
+/*static*/ uint32_t InputMonitor::AddStateChanges(CanMessageInputChangedV1 *msg) noexcept
 {
 	uint32_t timeToWait = TaskBase::TimeoutUnlimited;
 	ReadLocker lock(listLock);
@@ -479,7 +479,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	const uint16_t pattern = req.pattern.all & mask;
 
 	// Construct the new message in the same buffer
-	auto reply = buf->SetupResponseMessage<CanMessageReadInputsReply>(rid, CanInterface::GetCanAddress(), srcAddress);
+	auto reply = buf->SetupResponseMessage<CanMessageReadInputsReplyV0>(rid, CanInterface::GetCanAddress(), srcAddress);
 
 	unsigned int count = 0;
 	ReadLocker lock(listLock);
@@ -501,21 +501,21 @@ void InputMonitor::UpdateState(bool newState) noexcept
 }
 
 // Append analog handle data to the supplied buffer
-/*static*/ unsigned int InputMonitor::AddAnalogHandleData(uint8_t *buffer, size_t spaceLeft) noexcept
+/*static*/ unsigned int InputMonitor::AddAnalogHandleDataV0(uint8_t *buffer, size_t spaceLeft) noexcept
 {
 	unsigned int count = 0;
 	ReadLocker lock(listLock);
 	InputMonitor *h = monitorsList;
-	while (h != nullptr && spaceLeft >= sizeof(AnalogHandleData))
+	while (h != nullptr && spaceLeft >= sizeof(AnalogHandleDataV0))
 	{
 		if (!h->IsDigital())
 		{
-			AnalogHandleData data;
+			AnalogHandleDataV0 data;
 			data.reading = h->GetAnalogValue();
 			data.handle.all = h->handle;
-			memcpy(buffer, &data, sizeof(AnalogHandleData));
-			buffer += sizeof(AnalogHandleData);
-			spaceLeft -= sizeof(AnalogHandleData);
+			memcpy(buffer, &data, sizeof(AnalogHandleDataV0));
+			buffer += sizeof(AnalogHandleDataV0);
+			spaceLeft -= sizeof(AnalogHandleDataV0);
 			++count;
 		}
 		h = h->next;

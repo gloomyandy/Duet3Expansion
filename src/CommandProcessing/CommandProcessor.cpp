@@ -636,9 +636,9 @@ void CommandProcessor::Spin()
 			rslt = GetInfo(buf->msg.getInfo, replyRef, extra);
 			break;
 
-		case CanMessageType::heaterModelNewNew:
-			requestId = buf->msg.heaterModelNewNew.requestId;
-			rslt = Heat::ProcessM307New(buf->msg.heaterModelNewNew, replyRef);
+		case CanMessageType::heaterModelV2:
+			requestId = buf->msg.heaterModelV2.requestId;
+			rslt = Heat::ProcessM307V1(buf->msg.heaterModelV2, replyRef);
 			break;
 
 		case CanMessageType::setHeaterTemperature:
@@ -651,7 +651,7 @@ void CommandProcessor::Spin()
 			rslt = Heat::TuningCommand(buf->msg.heaterTuningCommand, replyRef);
 			break;
 
-		case CanMessageType::m308New:
+		case CanMessageType::m308V1:
 			requestId = buf->msg.generic.requestId;
 			rslt = Heat::ProcessM308(buf->msg.generic, replyRef);
 			break;
@@ -666,9 +666,9 @@ void CommandProcessor::Spin()
 			rslt = Heat::ConfigureHeater(buf->msg.generic, replyRef);
 			break;
 
-		case CanMessageType::heaterFeedForwardNew:
+		case CanMessageType::heaterFeedForwardV1:
 			requestId = CanRequestIdNoReplyNeeded;
-			rslt = Heat::FeedForward(buf->msg.heaterFeedForwardNew, replyRef);
+			rslt = Heat::FeedForward(buf->msg.heaterFeedForwardV1, replyRef);
 			break;
 
 		case CanMessageType::m950Gpio:
@@ -770,10 +770,10 @@ void CommandProcessor::Spin()
 			rslt = HandlePressureAdvance(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
 			break;
 
-		case CanMessageType::setInputShapingNew:
+		case CanMessageType::setInputShapingV1:
 			// This message is sent by main boards running 3.6.0. Ignore it but return OK to prevent them reporting CAN timeouts.
-			requestId = buf->msg.setInputShapingNew.requestId;
-			rslt = moveInstance->HandleInputShaping(buf->msg.setInputShapingNew, buf->dataLength, replyRef);
+			requestId = buf->msg.setInputShapingV1.requestId;
+			rslt = moveInstance->HandleInputShaping(buf->msg.setInputShapingV1, buf->dataLength, replyRef);
 			break;
 #endif
 
@@ -807,14 +807,14 @@ void CommandProcessor::Spin()
 			rslt = Heat::SetHeaterMonitors(buf->msg.setHeaterMonitors, replyRef);
 			break;
 
-		case CanMessageType::createInputMonitorNew:
-			requestId = buf->msg.createInputMonitorNew.requestId;
-			rslt = InputMonitor::Create(buf->msg.createInputMonitorNew, buf->dataLength, replyRef, extra);
+		case CanMessageType::createInputMonitorV1:
+			requestId = buf->msg.createInputMonitorV1.requestId;
+			rslt = InputMonitor::Create(buf->msg.createInputMonitorV1, buf->dataLength, replyRef, extra);
 			break;
 
-		case CanMessageType::changeInputMonitorNew:
-			requestId = buf->msg.changeInputMonitorNew.requestId;
-			rslt = InputMonitor::Change(buf->msg.changeInputMonitorNew, replyRef, extra);
+		case CanMessageType::changeInputMonitorV1:
+			requestId = buf->msg.changeInputMonitorV1.requestId;
+			rslt = InputMonitor::Change(buf->msg.changeInputMonitorV1, replyRef, extra);
 			break;
 
 		case CanMessageType::readInputsRequest:

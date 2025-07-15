@@ -549,7 +549,7 @@ GCodeResult LocalHeater::TuningCommand(const CanMessageHeaterTuningCommand& msg,
 }
 
 // Adjust heater power for fan PWM or extrusion change
-GCodeResult LocalHeater::ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept
+GCodeResult LocalHeater::ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept
 {
 	if (mode == HeaterMode::stable)
 	{

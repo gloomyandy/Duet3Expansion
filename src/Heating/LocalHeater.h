@@ -39,7 +39,7 @@ public:
 	float GetAccumulator() const noexcept override;				// Return the integral accumulator
 	void Suspend(bool sus) noexcept override;					// Suspend the heater to conserve power or while doing Z probing
 	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept override;
-	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept override;
+	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept override;
 
 	static bool GetTuningCycleData(CanMessageHeaterTuningReport& msg);	// get a heater tuning cycle report, if we have one
 

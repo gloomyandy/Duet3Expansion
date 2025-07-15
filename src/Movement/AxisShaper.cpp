@@ -19,7 +19,7 @@ AxisShaper::AxisShaper() noexcept
 }
 
 // Handle a request from the master board to set input shaping parameters
-GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShapingNew& msg, size_t dataLength, const StringRef& reply) noexcept
+GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShapingV1& msg, size_t dataLength, const StringRef& reply) noexcept
 {
 	if (msg.numImpulses <= MaxImpulses && dataLength >= msg.GetActualDataLength())
 	{

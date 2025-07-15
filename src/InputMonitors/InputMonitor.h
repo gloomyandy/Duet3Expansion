@@ -14,9 +14,9 @@
 #include <RTOSIface/RTOSIface.h>
 #include <General/FreelistManager.h>
 
-struct CanMessageCreateInputMonitorNew;
-struct CanMessageChangeInputMonitorNew;
-struct CanMessageInputChangedNew;
+struct CanMessageCreateInputMonitorV1;
+struct CanMessageChangeInputMonitorV1;
+struct CanMessageInputChangedV1;
 class CanMessageBuffer;
 
 class InputMonitor
@@ -39,13 +39,13 @@ public:
 	static void Init() noexcept;
 	static void Spin() noexcept;
 
-	static GCodeResult Create(const CanMessageCreateInputMonitorNew& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept;
-	static GCodeResult Change(const CanMessageChangeInputMonitorNew& msg, const StringRef& reply, uint8_t& extra) noexcept;
+	static GCodeResult Create(const CanMessageCreateInputMonitorV1& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept;
+	static GCodeResult Change(const CanMessageChangeInputMonitorV1& msg, const StringRef& reply, uint8_t& extra) noexcept;
 
-	static uint32_t AddStateChanges(CanMessageInputChangedNew *msg) noexcept;
+	static uint32_t AddStateChanges(CanMessageInputChangedV1 *msg) noexcept;
 	static void ReadInputs(CanMessageBuffer *buf) noexcept;
 
-	static unsigned int AddAnalogHandleData(uint8_t *buffer, size_t spaceLeft) noexcept;
+	static unsigned int AddAnalogHandleDataV0(uint8_t *buffer, size_t spaceLeft) noexcept;
 
 	static void CommonDigitalPortInterrupt(CallbackParameter cbp) noexcept;
 	static void CommonAnalogPortInterrupt(CallbackParameter cbp, uint32_t reading) noexcept;

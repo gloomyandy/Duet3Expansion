@@ -24,7 +24,7 @@ protected:
 	FilamentSensorStatus Clear() noexcept override;
 
 	void Diagnostics(const StringRef& reply) noexcept override;
-	void GetLiveData(FilamentMonitorDataNew2& data) const noexcept override;
+	void GetLiveData(FilamentMonitorDataV2& data) const noexcept override;
 
 private:
 	static constexpr float DefaultMinMovementAllowed = 0.6;

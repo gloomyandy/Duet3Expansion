@@ -14,7 +14,7 @@
 #include "GCodeResult.h"
 
 class StringRef;
-class CanMessageHeaterModelNewNew;
+class CanMessageHeaterModelV2;
 
 // This is how PID parameters are stored internally
 struct PidParameters
@@ -40,7 +40,7 @@ public:
 	FopDt() noexcept;
 
 	void Reset() noexcept;
-	bool SetParameters(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept;
+	bool SetParameters(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
 	void SetDefaultToolParameters() noexcept;
 	void SetDefaultBedOrChamberParameters() noexcept;
 

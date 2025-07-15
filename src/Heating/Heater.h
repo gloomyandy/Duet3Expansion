@@ -17,11 +17,11 @@
 class HeaterMonitor;
 class CanMessageGenericParser;
 class CanMessageSetHeaterTemperature;
-class CanMessageHeaterModelNewNew;
+class CanMessageHeaterModelV2;
 class CanMessageSetHeaterMonitors;
 class CanMessageHeaterTuningCommand;
 class CanMessageSetHeaterFaultDetectionParameters;
-class CanMessageHeaterFeedForwardNew;
+class CanMessageHeaterFeedForwardV1;
 
 class Heater
 {
@@ -42,7 +42,7 @@ public:
 	virtual void Suspend(bool sus) noexcept = 0;						// Suspend the heater to conserve power or while doing Z probing
 	virtual float GetAccumulator() const noexcept = 0;					// get the inertial term accumulator
 	virtual GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept = 0;
-	virtual GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept = 0;
+	virtual GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept = 0;
 
 	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
 
@@ -54,7 +54,7 @@ public:
 	void SetHeaterMonitoring(HeaterMonitor *h) noexcept;
 
 	const FopDt& GetModel() const noexcept { return model; }			// Get the process model
-	GCodeResult SetModel(unsigned int heater, const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept;
+	GCodeResult SetModel(unsigned int heater, const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
 
 	bool IsHeaterEnabled() const noexcept								// Is this heater enabled?
 		{ return model.IsEnabled(); }
