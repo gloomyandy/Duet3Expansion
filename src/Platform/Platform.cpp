@@ -1531,8 +1531,8 @@ void Platform::AppendBoardAndFirmwareDetails(const StringRef& reply) noexcept
 				(boardVariant == 1) ? "1.02 or later" : "1.01 or earlier",
 				DateText, TimeSuffix);
 #else
-	reply.lcatf("Duet " BOARD_TYPE_NAME " firmware version " VERSION " (%s%s)",
-				DateText, TimeSuffix);
+	reply.lcatf("Duet " BOARD_TYPE_NAME " firmware version " VERSION " (%s%s) Clock %.1fMHz",
+				DateText, TimeSuffix, (double)(SystemCoreClock/1000000.0f));
 #endif
 }
 
