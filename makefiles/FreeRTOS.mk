@@ -2,7 +2,13 @@
 #RTOS location
 RTOS_SRC = $(FREERTOS_DIR)/src
 RTOS_INCLUDE = $(RTOS_SRC)/include/
+ifeq ($(PROCESSOR),RP2040)
 RTOS_SRC_PORTABLE = $(RTOS_SRC)/portable/GCC/ARM_CM0
+endif
+ifeq ($(PROCESSOR),RP2350)
+RTOS_SRC_PORTABLE = $(RTOS_SRC)/portable/GCC/ARM_CM33_NTZ/non_secure
+endif
+
 
 RTOS_CONFIG_INCLUDE = CoreN2G/src/RP2040/FreeRTOSConfig
 

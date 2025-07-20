@@ -11,7 +11,7 @@
 #include "RepRapFirmware.h"
 
 #if RP2040
-# include <hardware/structs/timer.h>
+# include <hardware/timer.h>
 #endif
 
 class CanMessageTimeSync;
@@ -142,13 +142,13 @@ private:
 inline StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
 {
 
-	return timer_hw->timerawl;													// read lower 32 bits of hardware timer
+	return TIMER_INSTANCE(0)->timerawl;													// read lower 32 bits of hardware timer
 }
 
 inline StepTimer::Ticks StepTimer::GetTimerTicksWhenInterruptsDisabled() noexcept
 {
 
-	return timer_hw->timerawl;													// read lower 32 bits of hardware timer
+	return TIMER_INSTANCE(0)->timerawl;													// read lower 32 bits of hardware timer
 }
 
 #endif

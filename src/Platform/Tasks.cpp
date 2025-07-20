@@ -31,7 +31,9 @@
 #if RP2040
 # include <hardware/dma.h>
 # include <hardware/watchdog.h>
+#if defined(__RP2040__)
 # include <hardware/structs/vreg_and_chip_reset.h>
+#endif 
 # include <hardware/structs/watchdog.h>
 #else
 # include <hpl_user_area.h>
@@ -315,7 +317,7 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 	moveInstance = new Move();
 	moveInstance->Init();
 #endif
-
+debugPrintf("Main task running\n");
 	for (;;)
 	{
 		Platform::Spin();
@@ -941,6 +943,11 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 			reply.cat("software");
 		}
 		else
+#if defined(__RP2350__)
+		{
+			reply.cat("unknown not implemented");
+		}
+#else
 		{
 			const uint32_t reason2 = vreg_and_chip_reset_hw->chip_reset;
 			if (reason2 & 0x0100)
@@ -956,6 +963,7 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 				reply.cat("debugger");
 			}
 		}
+#endif
 	}
 #else
 	const uint8_t resetCause = RSTC->RCAUSE.reg;

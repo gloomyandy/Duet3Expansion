@@ -12,7 +12,7 @@
 
 #ifndef SRC_CONFIG_SHT36_H_
 #define SRC_CONFIG_SHT36_H_
-
+# include <hardware/timer.h>
 #if BOARD_REV < 300
 #error "Unsupported board version"
 #endif
@@ -24,6 +24,9 @@
 #elif BOARD_REV == 301
 #define BOARD_TYPE_NAME		"SHT36MAX3"
 #define BOOTLOADER_NAME		"SHT36MAX3"
+#elif BOARD_REV == 401
+#define BOARD_TYPE_NAME		"SHT36MAX4"
+#define BOOTLOADER_NAME		"SHT36MAX4"
 #else
 #error "Unsupported board version"
 #endif
@@ -32,7 +35,7 @@
 
 // General features
 #define HAS_VREF_MONITOR		0
-#if BOARD_REV == 300
+#if BOARD_REV == 300 || BOARD_REV == 401
 #define HAS_VOLTAGE_MONITOR		1
 #elif BOARD_REV == 301
 #define HAS_VOLTAGE_MONITOR		0
@@ -42,7 +45,7 @@
 #define HAS_ADDRESS_SWITCHES	0
 #define HAS_BUTTONS				0
 #define HAS_USB_SERIAL			1
-#define USE_SERIAL_DEBUG		0
+#define USE_SERIAL_DEBUG		1
 #define SUPPORT_LED_STRIPS		1
 #define SUPPORT_PIO_NEOPIXEL	1
 #define SUPPORT_INPUT_SHAPING	1
@@ -53,7 +56,11 @@
 #if SUPPORT_DRIVERS
 
 #define HAS_SMART_DRIVERS		1
+#if BOARD_REV == 401
 #define HAS_STALL_DETECT		0
+#else
+#define HAS_STALL_DETECT		0
+#endif
 #define SINGLE_DRIVER			1
 #define SUPPORT_SLOW_DRIVERS	0
 #define SUPPORT_DELTA_MOVEMENT	0
@@ -95,7 +102,11 @@ constexpr Pin Tmc22xxUartPin = GpioPin(15);
 constexpr Pin StepPins[NumDrivers] = { GpioPin(7) };
 constexpr Pin DirectionPins[NumDrivers] = { GpioPin(6) };
 #if HAS_STALL_DETECT
+#if BOARD_REV == 300 || BOARD_REV == 301
 constexpr Pin DriverDiagPins[NumDrivers] = { NoPin };
+#elif BOARD_REV == 401
+constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(27) };
+#endif
 #endif
 
 #define ACTIVE_HIGH_STEP		1		// 1 = active high, 0 = active low
@@ -121,9 +132,11 @@ constexpr size_t MaxPortsPerHeater = 1;
 
 constexpr size_t NumThermistorInputs = 2;
 constexpr float DefaultThermistorSeriesR = 4700.0;		// TEMP0 has 1K or 4K7 pullup, chamber thermistor has 4K7
-
+#if BOARD_REV == 300 || BOARD_REV == 301
 constexpr Pin TempSensePins[NumThermistorInputs] = { GpioPin(27), GpioPin(28) };
-
+#elif BOARD_REV == 401
+constexpr Pin TempSensePins[NumThermistorInputs] = { GpioPin(40), GpioPin(41) };
+#endif
 constexpr Pin CanTxPin = GpioPin(0);
 constexpr Pin CanRxPin = GpioPin(1);
 
@@ -131,7 +144,11 @@ constexpr Pin ButtonPins[] = { PIN_TODO };
 
 // VIN voltage monitor
 #if HAS_VOLTAGE_MONITOR
+#if BOARD_REV == 300
 constexpr Pin VinMonitorPin = GpioPin(29);
+#elif BOARD_REV == 401
+constexpr Pin VinMonitorPin = GpioPin(42);
+#endif
 constexpr float VinDividerRatio = (47.0 + 4.7)/4.7;
 constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico uses the 3.3V supply as the voltage reference
 #endif
@@ -207,11 +224,36 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm3a,	AdcInput::none,		"io0.in"	},	// GPIO22 PROBE
 	{ PwmOutput::pwm3b,	AdcInput::none,		"out0"		},	// GPIO23 HEAT0
 	{ PwmOutput::pwm4a,	AdcInput::none,		"io0.out"	},	// GPIO24 SERVO
-	{ PwmOutput::none,	AdcInput::none,		nullptr		},	// GPIO25 ACC_INT1
+	{ PwmOutput::pwm4b,	AdcInput::none,		nullptr		},	// GPIO25 ACC_INT1
+#if BOARD_REV == 300 || BOARD_REV == 301
 	{ PwmOutput::pwm5a,	AdcInput::adc0_0,	"rgbled"	},	// GPIO26 RGB
 	{ PwmOutput::pwm5b,	AdcInput::adc0_1,	"temp0"		},	// GPIO27 TEMP0
 	{ PwmOutput::pwm6a,	AdcInput::adc0_2,	"temp1"		},	// GPIO28 CHAMBER_TEMP
-	{ PwmOutput::none,	AdcInput::adc0_3,	nullptr		},	// GPIO29 VIN ADC/ldc1612 int pin
+	{ PwmOutput::pwm6b,	AdcInput::adc0_3,	"intb"		},	// GPIO29 ldc1612 int pin (Power adc on rev 300)
+#elif BOARD_REV == 401
+	{ PwmOutput::pwm5a,	AdcInput::none,		"rgbled"	},	// GPIO26 RGB
+	{ PwmOutput::pwm5b,	AdcInput::none,		"diag0"		},	// GPIO27 DIAG0
+	{ PwmOutput::pwm6a,	AdcInput::none,		nullptr		},	// GPIO28 NC
+	{ PwmOutput::pwm6b,	AdcInput::none,		"intb"		},	// GPIO29 ldc1612 int pin
+	{ PwmOutput::pwm7a,	AdcInput::none,		"out2"		},	// GPIO30 FAN PWM0
+	{ PwmOutput::pwm7b,	AdcInput::none,		nullptr		},	// GPIO31 NC
+	{ PwmOutput::pwm8a,	AdcInput::none,		nullptr		},	// GPIO32 NC
+	{ PwmOutput::pwm8b,	AdcInput::none,		"out3"		},	// GPIO33 FAN PWM1
+	{ PwmOutput::pwm9a,	AdcInput::none,		nullptr		},	// GPIO34 NC
+	{ PwmOutput::pwm9b,	AdcInput::none,		nullptr		},	// GPIO35 NC
+	{ PwmOutput::pwm10a,AdcInput::none,		nullptr		},	// GPIO36 NC
+	{ PwmOutput::pwm10b,AdcInput::none,		nullptr		},	// GPIO37 NC
+	{ PwmOutput::pwm11a,AdcInput::none,		nullptr		},	// GPIO38 NC
+	{ PwmOutput::pwm11b,AdcInput::none,		nullptr		},	// GPIO39 NC
+	{ PwmOutput::pwm8a,	AdcInput::adc0_0,	"temp1"		},	// GPIO40 CHAMBER TEMP
+	{ PwmOutput::pwm8b,	AdcInput::adc0_1,	"temp0"		},	// GPIO41 TEMP0
+	{ PwmOutput::pwm9a,	AdcInput::adc0_2,	nullptr		},	// GPIO42 Power ADC
+	{ PwmOutput::pwm9b,	AdcInput::adc0_3,	nullptr		},	// GPIO43 NC
+	{ PwmOutput::pwm10a,AdcInput::adc0_4,	nullptr		},	// GPIO44 NC
+	{ PwmOutput::pwm10b,AdcInput::adc0_5,	nullptr		},	// GPIO45 NC
+	{ PwmOutput::pwm11a,AdcInput::adc0_6,	nullptr		},	// GPIO46 NC
+	{ PwmOutput::pwm11b,AdcInput::adc0_7,	nullptr		},	// GPIO47 NC
+#endif
 	// Virtual pins
 #if SUPPORT_LDC1612
 	{ PwmOutput::none,	AdcInput::ldc1612,	"i2c.ldc1612"},	// LDC1612 sensor connected via I2C
@@ -219,14 +261,23 @@ constexpr PinDescription PinTable[] =
 };
 
 constexpr size_t NumPins = ARRAY_SIZE(PinTable);
+#if defined(__RP2040__)
 static constexpr size_t NumRealPins = 30;				// 30 GPIO pins on RP2040
+#elif defined(__RP2350__)
+static constexpr size_t NumRealPins = 48;				// 30 GPIO pins on RP2040
+#endif
 constexpr size_t NumVirtualPins = SUPPORT_LDC1612;
 
 static_assert(NumPins == NumRealPins + NumVirtualPins);
 
 // Timer/counter used to generate step pulses and other sub-millisecond timings
 constexpr unsigned int StepTimerAlarmNumber = 0;
+#if defined(__RP2040__)
 constexpr unsigned int StepTcIRQn = TIMER_IRQ_0;
+#else
+// we should be able to use TIMER_ALARM_IRQ_NUM here but it generates an error when using it with constexpr
+constexpr unsigned int StepTcIRQn = TIMER0_IRQ_0;
+#endif
 
 // Available UART ports
 #define NUM_SERIAL_PORTS		1
