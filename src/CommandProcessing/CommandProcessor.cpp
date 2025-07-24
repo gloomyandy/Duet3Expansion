@@ -467,11 +467,21 @@ static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& rep
 		extra = LastDiagnosticsPart;
 		{
 			Platform::AppendBoardAndFirmwareDetails(reply);
+#if RP2040
+# if defined(__RP2040__)
+			const char *bootloaderVersionText = "RP2040";
+# elif defined(__RP2350__)
+			const char *bootloaderVersionText = "RP2350";
+# else
+			const char *bootloaderVersionText = nullptr;
+# endif
+#else
 			// GCC 12.2 and 13.2 produce a spurious diagnostic for the following line of code, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105523
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
 			const char *bootloaderVersionText = *reinterpret_cast<const char**>(0x20);		// offset of vectors.pvReservedM8
 #pragma GCC diagnostic pop
+#endif
 			reply.lcatf("Bootloader ID: %s", (bootloaderVersionText == nullptr) ? "not available" : bootloaderVersionText);
 			Platform::AppendDiagnostics(reply);
 		}
