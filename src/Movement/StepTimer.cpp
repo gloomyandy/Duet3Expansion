@@ -23,6 +23,10 @@
 #elif RP2040
 # include <hardware/watchdog.h>
 # include <hardware/timer.h>
+# if defined(__RP2350__)
+#  include <hardware/ticks.h>
+#  include <hardware/structs/ticks.h>
+# endif
 #endif
 
 StepTimer * volatile StepTimer::pendingList = nullptr;
@@ -49,7 +53,11 @@ void StepTimer::Init() noexcept
 {
 #if RP2040
 	// Reprogram the tick generator to run at 750kHz instead of 1MHz. We use a 12MHz crystal, so we need a divisor of 16.
+#if defined(__RP2350__)
+	tick_start(TICK_TIMER0, (XOSC_MHZ * 4)/3);
+#else
 	watchdog_start_tick((XOSC_MHZ * 4)/3);
+#endif
 	// Claim timer 0 because we use it as the step timer
 	hardware_alarm_claim(StepTimerAlarmNumber);
 	// Claim the associated interrupt
