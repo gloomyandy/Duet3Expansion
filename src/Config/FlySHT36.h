@@ -57,7 +57,7 @@
 
 #define HAS_SMART_DRIVERS		1
 #if BOARD_REV == 401
-#define HAS_STALL_DETECT		0
+#define HAS_STALL_DETECT		1
 #else
 #define HAS_STALL_DETECT		0
 #endif
