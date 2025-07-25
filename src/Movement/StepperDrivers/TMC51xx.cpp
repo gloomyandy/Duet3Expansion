@@ -148,7 +148,9 @@ constexpr uint32_t DefaultGConfReg = GCONF_5160_RECAL | GCONF_5160_MULTISTEP_FIL
 constexpr uint8_t REGNUM_GSTAT = 0x01;
 constexpr uint32_t GSTAT_RESET = 1 << 0;					// driver has been reset since last read
 constexpr uint32_t GSTAT_DRV_ERR = 1 << 1;					// driver has been shut down due to over temp or short circuit
-constexpr uint32_t GSTAT_UV_CP = 1 << 2;					// undervoltage on charge pump, driver disabled. Not latched so does not need to be cleared.
+constexpr uint32_t GSTAT_UV_CP = 1 << 2;					// undervoltage on charge pump, driver disabled while it persists. This bit is latched for information.
+
+constexpr uint32_t DefaultGstatReg = 0x07;					// this value clear all bits
 
 // IFCOUNT register (0x02, RO) is not used in SPI mode
 // SLAVECONF register (0x03, WO) is not used in SPI mode
@@ -461,13 +463,14 @@ private:
 	static constexpr unsigned int WriteChopConf = 5;		// chopper control
 	static constexpr unsigned int WriteCoolConf = 6;		// coolstep control
 	static constexpr unsigned int WritePwmConf = 7;			// stealthchop and freewheel control
+	static constexpr unsigned int WriteGstat = 8;			// global status register (writing it resets status bits)
 #if TMC_TYPE == 5160
-	static constexpr unsigned int Write5160ShortConf = 8;	// short circuit detection configuration
-	static constexpr unsigned int Write5160DrvConf = 9;		// driver timing
-	static constexpr unsigned int Write5160GlobalScaler = 10; // motor current scaling
-	static constexpr unsigned int NumWriteRegisters = 11;	// the number of registers that we write to
+	static constexpr unsigned int Write5160ShortConf = 9;	// short circuit detection configuration
+	static constexpr unsigned int Write5160DrvConf = 10;	// driver timing
+	static constexpr unsigned int Write5160GlobalScaler = 11; // motor current scaling
+	static constexpr unsigned int NumWriteRegisters = 12;	// the number of registers that we write to
 #else
-	static constexpr unsigned int NumWriteRegisters = 8;	// the number of registers that we write to
+	static constexpr unsigned int NumWriteRegisters = 9;	// the number of registers that we write to
 #endif
 	static constexpr unsigned int WriteSpecial = NumWriteRegisters;
 
@@ -530,6 +533,7 @@ const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 	REGNUM_CHOPCONF,
 	REGNUM_COOLCONF,
 	REGNUM_PWMCONF,
+	REGNUM_GSTAT,
 #if TMC_TYPE == 5160
 	REGNUM_5160_SHORTCONF,
 	REGNUM_5160_DRVCONF,
@@ -572,6 +576,7 @@ pre(!driversPowered)
 	UpdateRegister(WriteTpwmthrs, DefaultTpwmthrsReg);
 	UpdateRegister(WriteTcoolthrs, DefaultTcoolthrsReg);
 	UpdateRegister(WriteThigh, DefaultThighReg);
+	UpdateRegister(WriteGstat, DefaultGstatReg);
 	configuredChopConfReg = DefaultChopConfReg;
 	SetMicrostepping(DefaultMicrosteppingShift, DefaultInterpolation);	// this also updates the chopper control register
 	writeRegisters[WriteCoolConf] = DefaultCoolConfReg;
