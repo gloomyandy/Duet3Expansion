@@ -82,7 +82,7 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 // If there is a segment ready to execute and it has steps, set up our movement parameters, copy the flags over, set the 'executing' flag in the segment, and return the segment.
 // If there is a segment ready to execute but it involves zero steps, skip and free it and start again.
 // This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
-#if RP2040 || SAMC21
+#if RPXXXX || SAMC21
 __attribute__((section(".time_critical")))
 #endif
 MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
@@ -165,7 +165,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 					// It can also happen that the target end speed is zero but due to FP rounding error, distanceToReverse was just below netStepsInInitialDirection and got rounded down
 					// Note, t0 = -u/a therefore u = a*t0 therefore u*t0^2 + 0.5*a*t0^2 = -a*t0^2 + 0.5*a*t0^2 = -0.5*a*t0^2
 					const motioncalc_t rawDistanceToReverse = (motioncalc_t)-0.5 * seg->GetA() * msquare(t0) + distanceCarriedForwards;
-#if SAMC21 || RP2040							// avoid floating point multiplication
+#if SAMC21 || RPXXXX							// avoid floating point multiplication
 					const motioncalc_t distanceToReverse = (newDirection) ? rawDistanceToReverse : -rawDistanceToReverse;
 #else
 					const motioncalc_t distanceToReverse = rawDistanceToReverse * multiplier;
@@ -181,7 +181,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 					{
 						// Reversal happens immediately
 						newDirection = !newDirection;
-#if !(SAMC21 || RP2040)															// we've finished with 'multiplier' on these processors
+#if !(SAMC21 || RPXXXX)															// we've finished with 'multiplier' on these processors
 						multiplier = -multiplier;
 #endif
 						segmentStepLimit = reverseStartStep = 1 - netStepsInInitialDirection;
@@ -211,7 +211,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 #endif
 		}
 
-#if SAMC21 || RP2040							// avoid floating point multiplication
+#if SAMC21 || RPXXXX							// avoid floating point multiplication
 		p = (newDirection) ? rawP : -rawP;
 #else
 		p = rawP * multiplier;
@@ -304,7 +304,7 @@ bool DriveMovement::LogStepError(uint8_t type, float info, const MoveSegment *se
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // We have already incremented nextStep and checked that it does not exceed totalSteps, so at least one more step is due
 // Return true if all OK, false to abort this move because the calculation has gone wrong
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 __attribute__((section(".time_critical")))
 #endif
 bool DriveMovement::CalcNextStepTimeFull(uint32_t now) noexcept
@@ -368,7 +368,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 		if (stepsToLimit <= 0)
 		{
 			distanceCarriedForwards += currentSegment->GetLength() - (motioncalc_t)netStepsThisSegment;
-#if !(SAMC21 || RP2040)												// this check is expensive on these processors
+#if !(SAMC21 || RPXXXX)												// this check is expensive on these processors
 			if (fabsm(distanceCarriedForwards) > (motioncalc_t)1.0)
 			{
 				return LogStepError(5, (float)distanceCarriedForwards, currentSegment);
@@ -485,7 +485,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 	uint32_t iNextCalcStepTime;
 
 	// Check that the next step time is reasonable
-#if (SAMC21 || RP2040) && !USE_DOUBLE_MOTIONCALC
+#if (SAMC21 || RPXXXX) && !USE_DOUBLE_MOTIONCALC
 	// The FP library we use on Cortext-M0+ MCUs doesn't support NaNs so there is no point in testing for them
 	if (unlikely(std::signbit(nextCalcStepTime)))
 #else

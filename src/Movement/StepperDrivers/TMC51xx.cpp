@@ -1097,7 +1097,7 @@ void TmcDriverState::GetSpiReadCommand(uint8_t *sendDataBlock) noexcept
 	}
 
 	sendDataBlock[0] = (regIndexRequested == ReadSpecial) ? specialReadRegisterNumber : ReadRegNumbers[regIndexRequested];
-#if SAME70 || SAMC21 || RP2040
+#if SAME70 || SAMC21 || RPXXXX
 	sendDataBlock[1] = 0;
 	sendDataBlock[2] = 0;
 	sendDataBlock[3] = 0;
@@ -1127,7 +1127,7 @@ inline void TmcDriverState::GetSpiCommand(uint8_t *sendDataBlock) noexcept
 		const size_t regNum = LowestSetBit(locRegistersToUpdate);
 		regIndexBeingUpdated = regNum;
 		sendDataBlock[0] = ((regNum == WriteSpecial) ? specialWriteRegisterNumber : WriteRegNumbers[regNum]) | 0x80;
-#if SAME70 || SAMC21 || RP2040
+#if SAME70 || SAMC21 || RPXXXX
 		StoreBEU32(sendDataBlock + 1, writeRegisters[regNum]);
 #else
 		*reinterpret_cast<uint32_t*>(sendDataBlock + 1) = __builtin_bswap32(writeRegisters[regNum]);
@@ -1151,7 +1151,7 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 	if (previousRegIndexRequested <= NumReadRegisters)
 	{
 		++numReads;
-#if SAME70 || SAMC21 || RP2040
+#if SAME70 || SAMC21 || RPXXXX
 		uint32_t regVal = LoadBEU32(rcvDataBlock + 1);
 #else
 		uint32_t regVal = __builtin_bswap32(*reinterpret_cast<const uint32_t*>(rcvDataBlock + 1));

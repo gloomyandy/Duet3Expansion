@@ -30,7 +30,7 @@
 # include <Movement/StepperDrivers/SmartDrivers.h>			// for extern declaration of driverStallsToNotify
 #endif
 
-#if RP2040
+#if RPXXXX
 # include <Hardware/NonVolatileMemory.h>
 #else
 # include <hpl_user_area.h>
@@ -66,7 +66,7 @@ static bool enabled = false;
 constexpr CanDevice::Config Can0Config =
 {
 	.dataSize = 64,									// must be one of: 8, 12, 16, 20, 24, 32, 48, 64
-#if RP2040
+#if RPXXXX
 	.numTxBuffers = 0,								// RP2040 implementation doesn't support transmit buffers
 	.txFifo0Size = 16,
 	.txFifo1Size = 2,								// RP2040 supports multiple transmit fifos so use another one instead of dedicated transmit buffers
@@ -74,13 +74,13 @@ constexpr CanDevice::Config Can0Config =
 	.numTxBuffers = 2,								// we allocate 2 buffers to sending urgent messages in case we need to send more than one in quick succession
 	.txFifoSize = 16,								// enough to send a 512-byte response broken into 60-byte fragments, plus status messages
 #endif
-#if RP2040
+#if RPXXXX
 	.numRxBuffers = 0,								// RP2040 implementation doesn't support receive buffers
 #else
 	.numRxBuffers = 1,								// we use a dedicated buffer for the clock sync messages
 #endif
 	.rxFifo0Size = 32,
-#if RP2040
+#if RPXXXX
 	.rxFifo1Size = 1,								// we use FIFO 1 instead of a dedicated receive buffer to receive CAN clock messages
 #else
 	.rxFifo1Size = 0,								// we don't use FIFO 1
@@ -97,7 +97,7 @@ static uint32_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (
 
 // CanClock task
 constexpr size_t CanClockTaskStackWords =
-#if RP2040
+#if RPXXXX
 										400;		// to allow calls to debugPrintf
 #else
 										130;
@@ -107,7 +107,7 @@ static Task<CanClockTaskStackWords> *canClockTask = nullptr;				// allocated dyn
 
 // CanReceiver management task
 constexpr size_t CanReceiverTaskStackWords =
-#if RP2040
+#if RPXXXX
 										400;								// to allow calls to debugPrintf
 #else
 										120;
@@ -164,7 +164,7 @@ void CanInterface::Init(CanAddress defaultBoardAddress, bool useAlternatePins, b
 
 	CanTiming timing;
 
-#if RP2040
+#if RPXXXX
 	{
 		NonVolatileMemory mem(NvmPage::common);
 		mem.GetCanSettings(canConfigData);
@@ -207,7 +207,7 @@ void CanInterface::Init(CanAddress defaultBoardAddress, bool useAlternatePins, b
 
 	// Initialise the CAN hardware, using the timing data if it was valid
 	can0dev = CanDevice::Init(
-#if RP2040
+#if RPXXXX
 								CanTxPin, CanRxPin,				// which pins we use for CAN transmit and receive
 #else
 								0, whichPort,
@@ -230,13 +230,13 @@ void CanInterface::Init(CanAddress defaultBoardAddress, bool useAlternatePins, b
 	{
 		// Set up a CAN receive filter to receive clock sync messages in buffer 0
 		can0dev->SetExtendedFilterElement(1,
-#if RP2040
+#if RPXXXX
 											CanDevice::RxBufferNumber::fifo1,
 #else
 											CanDevice::RxBufferNumber::buffer0,
 #endif
 											((uint32_t)CanMessageType::timeSync << CanId::MessageTypeShift) | ((uint32_t)CanId::BroadcastAddress << CanId::DstAddressShift),
-#if RP2040
+#if RPXXXX
 											(CanId::MessageTypeMask << CanId::MessageTypeShift) | (CanId::BoardAddressMask << CanId::DstAddressShift)
 #else
 											1					// mask is unused when using a dedicated Rx buffer, but must be nonzero to enable the element
@@ -249,7 +249,7 @@ void CanInterface::Init(CanAddress defaultBoardAddress, bool useAlternatePins, b
 											CanId::BoardAddressMask << CanId::DstAddressShift);
 	}
 
-#if !RP2040
+#if !RPXXXX
 	// For receiving into a dedicated buffer, the mask is ignored and only the extended ID mask is applied. We need to ignore the source address.
 	can0dev->SetExtendedIdMask(0x1FFFFFFF & ~(CanId::BoardAddressMask << CanId::SrcAddressShift));
 #endif
@@ -323,7 +323,7 @@ bool CanInterface::Send(CanMessageBuffer *buf) noexcept
 // We reserve two buffers for sending these messages.
 bool CanInterface::SendAsync(CanMessageBuffer *buf) noexcept
 {
-#if RP2040
+#if RPXXXX
 	// RP2040 doesn't support dedicated buffers but it can support more than one fifo. We prioritise fifo1 over fifo0.
 	const CanDevice::TxBufferNumber bufferNumber = CanDevice::TxBufferNumber::fifo1;
 #else
@@ -415,7 +415,7 @@ CanMessageBuffer *CanInterface::ProcessReceivedMessage(CanMessageBuffer *buf) no
 			{
 				// Track how much processing delay there was
 				{
-#if RP2040 && !USE_SPICAN
+#if RPXXXX && !USE_SPICAN
 					// RP2040 uses the low 16 bits of the step counter for the time stamp
 					const uint16_t timeStampNow = StepTimer::GetTimerTicks();
 					const uint32_t timeStampDelay = (uint32_t)((timeStampNow - buf->timeStamp) & 0xFFFF);	// the delay in step clocks
@@ -586,7 +586,7 @@ void CanInterface::Diagnostics(const StringRef& reply) noexcept
 {
 	CanDevice::CanStats stats;
 	can0dev->GetAndClearStats(stats);
-#if RP2040 && !USE_SPICAN
+#if RPXXXX && !USE_SPICAN
 	reply.lcatf("CAN messages queued %u, send timeouts %u, received %u, free buffers %u, min %u",
 					stats.messagesQueuedForSending, txTimeouts, stats.messagesReceived, CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers());
 	CanErrorCounts errs;
@@ -687,7 +687,7 @@ GCodeResult CanInterface::ChangeAddressAndDataRate(const CanMessageSetAddressAnd
 
 		if (seen)
 		{
-#if RP2040
+#if RPXXXX
 			NonVolatileMemory mem(NvmPage::common);
 			mem.SetCanSettings(canConfigData);
 			mem.EnsureWritten();
@@ -722,7 +722,7 @@ bool CanInterface::GetCanMessage(CanMessageBuffer *buf) noexcept
 	return can0dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo0, 0, buf);
 }
 
-#if !RP2040 || USE_SPICAN
+#if !RPXXXX || USE_SPICAN
 #if USE_SPICAN
 void CanInterface::GetTimeStampCounters(uint16_t& canTimeStamp, uint32_t& stepTimeStamp) noexcept
 {
@@ -762,7 +762,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 	{
 		CanMessageBuffer buf;
 		can0dev->ReceiveMessage(
-#if RP2040
+#if RPXXXX
 								CanDevice::RxBufferNumber::fifo1,
 #else
 								CanDevice::RxBufferNumber::buffer0,

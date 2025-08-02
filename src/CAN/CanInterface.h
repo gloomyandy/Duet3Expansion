@@ -35,7 +35,7 @@ namespace CanInterface
 	bool DebugPutc(char c) noexcept;
 #endif
 
-#if (!SAME70 && !RP2040) || USE_SPICAN
+#if (!SAME70 && !RPXXXX) || USE_SPICAN
 #if USE_SPICAN
 	void GetTimeStampCounters(uint16_t& canTimeStamp, uint32_t& stepTimeStamp) noexcept;
 #else

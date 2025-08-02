@@ -17,7 +17,7 @@
 
 #include <RTOSIface/RTOSIface.h>
 
-#if RP2040
+#if RPXXXX
 # include "hardware/spi.h"
 #endif
 
@@ -31,7 +31,7 @@ class SharedSpiDevice
 public:
 #if SAME5x || SAMC21
 	SharedSpiDevice(uint8_t sercomNum, uint32_t dataInPad) noexcept;
-#elif RP2040
+#elif RPXXXX
 	SharedSpiDevice(uint8_t spiInstanceNum) noexcept;
 #endif
 
@@ -51,7 +51,7 @@ private:
 	bool waitForRxReady() const noexcept;
 
 	Sercom * const hardware;
-#elif RP2040
+#elif RPXXXX
 	spi_inst_t *hardware;
 #endif
 

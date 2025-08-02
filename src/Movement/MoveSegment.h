@@ -181,7 +181,7 @@ inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
 // Test whether a floating point number is equal to positive or negative zero
 static bool IsNonZero(motioncalc_t f) noexcept
 {
-#if (SAMC21 || RP2040) && !USE_DOUBLE_MOTIONCALC && !defined(__ECV__)
+#if (SAMC21 || RPXXXX) && !USE_DOUBLE_MOTIONCALC && !defined(__ECV__)
 	// Nasty hack to avoid calling floating point subroutines on MCUs without a hardware FPU
 	// ARM uses IEEE format, which uses the MSB as a sign bit and encodes zero as all zeros
 # pragma GCC diagnostic push
@@ -196,7 +196,7 @@ static bool IsNonZero(motioncalc_t f) noexcept
 // Test whether a floating point number is strictly greater than zero. The result is undefined if the operand is a NaN.
 inline bool IsPositive(motioncalc_t f) noexcept
 {
-#if (SAMC21 || RP2040) && !USE_DOUBLE_MOTIONCALC && !defined(__ECV__)
+#if (SAMC21 || RPXXXX) && !USE_DOUBLE_MOTIONCALC && !defined(__ECV__)
 	// Nasty hack to avoid calling floating point subroutines on MCUs without a hardware FPU
 	// ARM uses IEEE format, which uses the MSB as a sign bit and encodes positive zero as all zeros. Therefore we can just test for > 0 when interpreted as an integer.
 # pragma GCC diagnostic push

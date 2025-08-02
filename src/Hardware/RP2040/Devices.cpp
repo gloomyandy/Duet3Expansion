@@ -7,7 +7,7 @@
 
 #include <Hardware/Devices.h>
 
-#if RP2040
+#if RPXXXX
 
 #include <AnalogIn.h>
 #include <AnalogOut.h>

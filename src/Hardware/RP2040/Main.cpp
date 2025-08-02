@@ -1,6 +1,6 @@
 #include <CoreIO.h>
 
-#if RP2040
+#if RPXXXX
 
 #include "pico/stdlib.h"
 

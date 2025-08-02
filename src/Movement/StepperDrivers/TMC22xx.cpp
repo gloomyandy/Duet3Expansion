@@ -58,7 +58,7 @@
 # include <DmacManager.h>
 # include <Serial.h>
 # include <component/sercom.h>
-#elif RP2040
+#elif RPXXXX
 # include <DmacManager.h>							// for DmaCallbackReason
 # include <TmcUartInterface.h>
 #else
@@ -509,7 +509,7 @@ static inline constexpr uint8_t SlowReflect(uint8_t b) noexcept
 // Reverse the order of the bits
 static inline uint8_t Reflect(uint8_t b) noexcept
 {
-#if SAMC21 || RP2040			// ARM Cortex M0 doesn't support the 'rbit' instruction
+#if SAMC21 || RPXXXX			// ARM Cortex M0 doesn't support the 'rbit' instruction
 	return SlowReflect(b);
 #else
 	uint32_t temp = b;
@@ -745,7 +745,7 @@ private:
 	uint8_t axisNumber;										// the axis number of this driver as used to index the DriveMovements in the DDA
 	uint8_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 
-#if !RP2040
+#if !RPXXXX
 # if TMC22xx_SINGLE_UART
 #  if TMC22xx_USES_SERCOM
 	static Sercom * const sercom;
@@ -812,7 +812,7 @@ private:
 
 // Static data members of class TmcDriverState
 
-#if !RP2040
+#if !RPXXXX
 # if TMC22xx_SINGLE_UART
 #  if TMC22xx_USES_SERCOM
 Sercom * const TmcDriverState::sercom = SERCOM_TMC22xx;
@@ -826,7 +826,7 @@ Uart * const TmcDriverState::uart = UART_TMC22xx;
 // TMC22xx management task
 static Task<TmcTaskStackWords> *tmcTask;
 
-#if RP2040 || TMC22xx_USES_SERCOM
+#if RPXXXX || TMC22xx_USES_SERCOM
 static DmaCallbackReason dmaFinishedReason;
 #else
 static bool dmaFinished;
@@ -949,7 +949,7 @@ inline bool TmcDriverState::UpdatePending() const noexcept
 // Set up the PDC or DMAC to send a register
 inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal) noexcept
 {
-#if RP2040
+#if RPXXXX
 	TmcUartInterface::ResetDMA();
 #elif TMC22xx_USES_SERCOM
 	DmacManager::DisableChannel(DmacChanTmcTx);
@@ -1004,7 +1004,7 @@ inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal) noexce
 	Cache::FlushBeforeDMASend(sendData, sizeof(sendData));
 	Cache::FlushBeforeDMAReceive(receiveData, sizeof(receiveData));
 
-#if RP2040
+#if RPXXXX
 	TmcUartInterface::SetDmaData(sendData, 12, receiveData + 12, 8);
 #elif TMC22xx_USES_SERCOM
 	DmacManager::SetSourceAddress(DmacChanTmcTx, sendData);
@@ -1047,7 +1047,7 @@ inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal) noexce
 // Set up the PDC or DMAC to send a register read request and receive the status
 inline void TmcDriverState::SetupDMARead(uint8_t regNum) noexcept
 {
-#if RP2040
+#if RPXXXX
 	TmcUartInterface::ResetDMA();
 #elif TMC22xx_USES_SERCOM
 	DmacManager::DisableChannel(DmacChanTmcTx);
@@ -1072,7 +1072,7 @@ inline void TmcDriverState::SetupDMARead(uint8_t regNum) noexcept
 	Cache::FlushBeforeDMASend(sendData, sizeof(sendData));
 	Cache::FlushBeforeDMAReceive(receiveData, sizeof(receiveData));
 
-#if RP2040
+#if RPXXXX
 	TmcUartInterface::SetDmaData(sendData, 4, receiveData + 4, 8);
 #elif TMC22xx_USES_SERCOM
 	DmacManager::SetSourceAddress(DmacChanTmcTx, sendData);
@@ -1880,7 +1880,7 @@ inline void TmcDriverState::TransferDone() noexcept
 // This is called to abandon the current transfer, if any
 void TmcDriverState::AbortTransfer() noexcept
 {
-#if RP2040
+#if RPXXXX
 	TmcUartInterface::AbortTransfer();
 #elif TMC22xx_USES_SERCOM
 	DmacManager::DisableChannel(DmacChanTmcTx);
@@ -1922,7 +1922,7 @@ inline void TmcDriverState::SetUartMux() noexcept
 
 #endif
 
-#if RP2040
+#if RPXXXX
 void TransferCompleteCallback(CallbackParameter, DmaCallbackReason reason) noexcept;		// forward declaration
 #endif
 
@@ -1944,7 +1944,7 @@ inline void TmcDriverState::StartTransfer() noexcept
 		AtomicCriticalSectionLocker lock;
 
 		regnumBeingUpdated = regNum;
-#if RP2040
+#if RPXXXX
 # if TMC22xx_MULTIPLE_UART_PINS
 		TmcUartInterface::ResetUart(uartPin, DriversBaudRate);
 # else
@@ -1957,7 +1957,7 @@ inline void TmcDriverState::StartTransfer() noexcept
 		uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX;	// reset transmitter and receiver
 #endif
 		SetupDMASend(GetWriteRegNumber(regNum), writeRegisters[regNum]);									// set up the DMAC
-#if RP2040
+#if RPXXXX
 		TmcUartInterface::StartTransfer(TransferCompleteCallback);
 #elif TMC22xx_USES_SERCOM
 		dmaFinishedReason = DmaCallbackReason::none;
@@ -1974,7 +1974,7 @@ inline void TmcDriverState::StartTransfer() noexcept
 		regnumBeingUpdated = 0xFF;
 		AtomicCriticalSectionLocker lock;
 
-#if RP2040
+#if RPXXXX
 # if TMC22xx_MULTIPLE_UART_PINS
 		TmcUartInterface::ResetUart(uartPin, DriversBaudRate);
 # else
@@ -1989,7 +1989,7 @@ inline void TmcDriverState::StartTransfer() noexcept
 
 		SetupDMARead(GetReadRegNumber(registerToRead));														// set up the DMAC
 
-#if RP2040
+#if RPXXXX
 		TmcUartInterface::StartTransfer(TransferCompleteCallback);
 #elif TMC22xx_USES_SERCOM
 		dmaFinishedReason = DmaCallbackReason::none;
@@ -2018,7 +2018,7 @@ inline void TmcDriverState::UartTmcHandler() noexcept
 
 #if TMC22xx_SINGLE_UART
 
-# if RP2040 || TMC22xx_USES_SERCOM
+# if RPXXXX || TMC22xx_USES_SERCOM
 
 // DMA complete callback
 void TransferCompleteCallback(CallbackParameter, DmaCallbackReason reason) noexcept
@@ -2076,7 +2076,7 @@ bool DoTransaction(size_t driverNumber)
 	currentDriver = &driverStates[driverNumber];
 #endif
 
-#if RP2040 || TMC22xx_USES_SERCOM
+#if RPXXXX || TMC22xx_USES_SERCOM
 	dmaFinishedReason = DmaCallbackReason::none;
 #else
 	dmaFinished = false;
@@ -2086,7 +2086,7 @@ bool DoTransaction(size_t driverNumber)
 
 	// Wait for the end-of-transfer interrupt
 	const bool timedOut = !TaskBase::TakeIndexed(NotifyIndices::Tmc, TransferTimeout);
-#if RP2040
+#if RPXXXX
 	TmcUartInterface::DisableCompletedCallback();
 #elif TMC22xx_USES_SERCOM
 	DmacManager::DisableCompletedInterrupt(DmacChanTmcRx);
@@ -2101,7 +2101,7 @@ bool DoTransaction(size_t driverNumber)
 	{
 		currentDriver->TransferTimedOut();
 	}
-#if RP2040 || TMC22xx_USES_SERCOM
+#if RPXXXX || TMC22xx_USES_SERCOM
 	else if (dmaFinishedReason == DmaCallbackReason::complete)
 #else
 	else if (dmaFinished)
@@ -2118,7 +2118,7 @@ bool DoTransaction(size_t driverNumber)
 #endif
 		return true;
 	}
-#if RP2040 || TMC22xx_USES_SERCOM
+#if RPXXXX || TMC22xx_USES_SERCOM
 	else if (dmaFinishedReason != DmaCallbackReason::none)
 	{
 		// DMA error, or DMA complete and DMA error
@@ -2349,7 +2349,7 @@ void SmartDrivers::Init() noexcept
 
 #if TMC22xx_SINGLE_UART
 	// Set up the single UART that communicates with all TMC22xx drivers
-# if RP2040
+# if RPXXXX
 #  if TMC22xx_VARIABLE_NUM_DRIVERS && TMC22xx_MULTIPLE_UART_PINS
 	TmcUartInterface::Init(Tmc22xxUartPins[0], DriversBaudRate, DmacChanTmcTx);
 #  else
@@ -2457,7 +2457,7 @@ void SmartDrivers::Exit() noexcept
 	IoPort::SetPinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 #endif
 #if TMC22xx_SINGLE_UART
-# if RP2040
+# if RPXXXX
 	TmcUartInterface::DisableCompletedCallback();
 # elif TMC22xx_USES_SERCOM
 	DmacManager::SetInterruptCallback(DmacChanTmcRx, nullptr, CallbackParameter(nullptr));

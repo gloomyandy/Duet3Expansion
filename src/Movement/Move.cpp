@@ -61,7 +61,7 @@
 unsigned int getCanMoveTimeoutErrs;
 #endif
 
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 constexpr size_t MoveTaskStackWords = 180;
 #else
 constexpr size_t MoveTaskStackWords = 220;
@@ -187,7 +187,7 @@ void Move::Init() noexcept
 # if !HAS_SMART_DRIVERS
 		SetDriveStrength(StepPins[i], 2);
 # endif
-# if RP2040
+# if RPXXXX || RP2350
 		SetPinFunction(StepPins[i], GpioPinFunction::Sio);			// enable fast stepping - must do this after the call to SetPinMode
 # endif
 
@@ -593,7 +593,7 @@ int32_t Move::GetLastMoveStepsTaken(size_t drive) const noexcept
 // It returns true if it needs to be called again on the DDA of the new current move, otherwise false.
 // This must be as fast as possible, because it determines the maximum movement speed.
 // This may occasionally get called prematurely, so it must check that a step is actually due before generating one.
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 __attribute__((section(".time_critical")))
 #endif
 void Move::StepDrivers(uint32_t now) noexcept
@@ -736,7 +736,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 // Prepare each DM that we generated a step for for the next step
 #if SINGLE_DRIVER
 
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 __attribute__((section(".time_critical")))
 #endif
 void Move::PrepareForNextSteps(uint32_t now) noexcept
@@ -850,7 +850,7 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 	}
 
 	// Adjust the distance (and implicitly the initial speed) to account for pressure advance
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 	if (IsNonZero(pressureAdvance))
 #endif
 	{
@@ -1039,7 +1039,7 @@ void Move::AddLinearSegments(size_t drive, uint32_t startTime, const PrepParams&
 	{
 		MoveSegment *prev = nullptr;
 
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 		const uint32_t oldFlags = IrqSave();
 #else
 		const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);					// shut out the step interrupt
@@ -1057,7 +1057,7 @@ void Move::AddLinearSegments(size_t drive, uint32_t startTime, const PrepParams&
 					const uint32_t now = StepTimer::GetMovementTimerTicks();
 					const int32_t overlap = endTime - startTime;
 					LogStepError(3);
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 					IrqRestore(oldFlags);
 #else
 					RestoreBasePriority(oldPrio);
@@ -1097,7 +1097,7 @@ void Move::AddLinearSegments(size_t drive, uint32_t startTime, const PrepParams&
 			tail = tail->GetNext();
 		}
 
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 		IrqRestore(oldFlags);
 #else
 		RestoreBasePriority(oldPrio);
@@ -1181,7 +1181,7 @@ void Move::AddLinearSegments(size_t drive, uint32_t startTime, const PrepParams&
 	// If there were no segments attached to this DM initially, we need to schedule the interrupt for the new segment at the start of the list.
 	// Don't do this until we have added all the segments for this move, because the first segment we added may have been modified and/or split when we added further segments to implement input shaping
 	{
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 		const uint32_t oldFlags = IrqSave();
 #else
 		const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);					// shut out the step interrupt
@@ -1226,7 +1226,7 @@ void Move::AddLinearSegments(size_t drive, uint32_t startTime, const PrepParams&
 				}
 			}
 		}
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 		IrqRestore(oldFlags);
 #else
 		RestoreBasePriority(oldPrio);
@@ -1256,7 +1256,7 @@ uint32_t Move::ExtruderPrintingSince(size_t logicalDrive) const noexcept
 
 // This is the function that is called by the timer interrupt to step the motors. It is also called form Move::Spin() if the first step for a move is due immediately.
 // This may occasionally get called prematurely.
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 __attribute__((section(".time_critical")))
 #endif
 void Move::Interrupt() noexcept

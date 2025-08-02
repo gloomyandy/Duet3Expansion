@@ -13,7 +13,7 @@
 #if SUPPORT_I2C_SENSORS
 
 #include <RTOSIface/RTOSIface.h>
-#if RP2040
+#if RPXXXX
 # include "hardware/i2c.h"
 #endif
 
@@ -22,7 +22,7 @@ class SharedI2CMaster
 public:
 #if SAME5x || SAMC21
 	SharedI2CMaster(uint8_t sercomNum) noexcept;
-#elif RP2040
+#elif RPXXXX
 	SharedI2CMaster(uint8_t spiInstanceNum) noexcept;
 #endif
 
@@ -47,7 +47,7 @@ private:
 	bool InternalTransfer(uint16_t address, const uint8_t *txBuffer, uint8_t *rxBuffer, size_t numToWrite, size_t numToRead) noexcept;
 	void ProtocolError()  noexcept;
 
-#if RP2040
+#if RPXXXX
 	i2c_inst_t *hardware;
 #else
 	Sercom * const hardware;

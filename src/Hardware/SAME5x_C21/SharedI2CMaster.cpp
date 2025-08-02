@@ -7,7 +7,7 @@
 
 #include <Hardware/SharedI2CMaster.h>
 
-#if SUPPORT_I2C_SENSORS && !RP2040
+#if SUPPORT_I2C_SENSORS && !RPXXXX
 
 #include "Serial.h"
 #include <AppNotifyIndices.h>

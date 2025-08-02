@@ -10,7 +10,7 @@
 
 #include <RepRapFirmware.h>
 
-#if RP2040
+#if RPXXXX
 
 #define SUPPORT_USB		1		// needed by SerialCDC.h
 #include <SerialCDC_tusb.h>

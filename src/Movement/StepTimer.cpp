@@ -20,10 +20,10 @@
 # include <hri_tc_e54.h>
 #elif SAMC21
 # include <hri_tc_c21.h>
-#elif RP2040
+#elif RPXXXX
 # include <hardware/watchdog.h>
 # include <hardware/timer.h>
-# if defined(__RP2350__)
+# if RP2350
 #  include <hardware/ticks.h>
 #  include <hardware/structs/ticks.h>
 # endif
@@ -51,11 +51,11 @@ extern "C" void STEP_TC_HANDLER() noexcept SPEED_CRITICAL;
 
 void StepTimer::Init() noexcept
 {
-#if RP2040
+#if RPXXXX
 	// Reprogram the tick generator to run at 750kHz instead of 1MHz. We use a 12MHz crystal, so we need a divisor of 16.
-#if defined(__RP2350__)
+#if RP2350
 	tick_start(TICK_TIMER0, (XOSC_MHZ * 4)/3);
-#else
+#elif RP2040
 	watchdog_start_tick((XOSC_MHZ * 4)/3);
 #endif
 	// Claim timer 0 because we use it as the step timer
@@ -96,7 +96,7 @@ void StepTimer::Init() noexcept
 #endif
 }
 
-#if !RP2040
+#if !RPXXXX
 
 // Get the step timer clock count
 /*static*/ StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
@@ -157,7 +157,7 @@ void StepTimer::Init() noexcept
 {
 	static uint32_t originalOffset = 0;
 
-#if RP2040 && !USE_SPICAN
+#if RPXXXX && !USE_SPICAN
 	// On the RP2040 the timestamp counter is the same as the step counter
 	const uint32_t localTimeNow = StepTimer::GetTimerTicks();
 	const uint32_t timeStampDelay = (localTimeNow - timeStamp) & 0xFFFF;
@@ -275,7 +275,7 @@ inline /*static*/ bool StepTimer::ScheduleTimerInterrupt(Ticks tim) noexcept
 		return true;												// tell the caller to simulate an interrupt instead
 	}
 
-#if RP2040
+#if RPXXXX
 	hw_set_bits(&timer_hw->inte, 1u << StepTimerAlarmNumber);		// enable the interrupt
 	timer_hw->alarm[StepTimerAlarmNumber] = tim;					// writing the value arms the timer
 #else
@@ -291,7 +291,7 @@ inline /*static*/ bool StepTimer::ScheduleTimerInterrupt(Ticks tim) noexcept
 
 // Schedule a step interrupt, returning true if it was not scheduled because it is already due or imminent.
 // On entry, interrupts must be disabled or the base priority must be <= step interrupt priority.
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 __attribute__((section(".time_critical")))
 #endif
 /*static*/ bool StepTimer::ScheduleMovementCallbackFromIsr(Ticks when) noexcept
@@ -319,7 +319,7 @@ __attribute__((section(".time_critical")))
 // Make sure we get no timer interrupts
 void StepTimer::DisableTimerInterrupt() noexcept
 {
-#if RP2040
+#if RPXXXX
 	hw_clear_bits(&timer_hw->inte, 1u << StepTimerAlarmNumber);		// disable the interrupt
 #else
 	StepTc->INTENCLR.reg = TC_INTFLAG_MC0 | TC_INTFLAG_MC1;
@@ -355,12 +355,12 @@ void StepTimer::DisableTimerInterrupt() noexcept
 }
 
 // Step pulse timer ISR
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 __attribute__((section(".time_critical")))
 #endif
 void STEP_TC_HANDLER() noexcept
 {
-#if RP2040
+#if RPXXXX
 	hw_clear_bits(&timer_hw->intr, 1u << StepTimerAlarmNumber);		// clear the alarm interrupt
 	StepTimer::Interrupt();											// this will re-enable the interrupt if necessary
 #else
@@ -511,7 +511,7 @@ void StepTimer::CancelCallback() noexcept
 	}
 	else
 	{
-#if RP2040
+#if RPXXXX
 		reply.catf("next timer interrupt due in %" PRIu32 " ticks, %s",
 					timer_hw->alarm[StepTimerAlarmNumber] - GetTimerTicks(),
 					(timer_hw->inte & (1u << StepTimerAlarmNumber)) ? "enabled" : "disabled");

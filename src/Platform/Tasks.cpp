@@ -28,10 +28,10 @@
 #include <task.h>
 #include <freertos_task_additions.h>
 
-#if RP2040
+#if RPXXXX
 # include <hardware/dma.h>
 # include <hardware/watchdog.h>
-#if defined(__RP2040__)
+#if RP2040
 # include <hardware/structs/vreg_and_chip_reset.h>
 #endif 
 # include <hardware/structs/watchdog.h>
@@ -45,7 +45,7 @@ constexpr uint32_t FlashBlockSize = 0x00010000;					// the erase size we assume 
 #elif SAMC21
 # include <hri_wdt_c21.h>
 constexpr uint32_t FlashBlockSize = 0x00004000;					// the erase size we assume for flash, and the bootloader size (16K)
-#elif RP2040
+#elif RPXXXX
 constexpr uint32_t FlashBlockSize = 0x00001000;					// the erase size we assume for flash, and the bootloader size (4K)
 constexpr uint32_t MaxFirmwareSize = 190*1024;					// Max size of firmware we can flash
 struct UF2_Block
@@ -116,7 +116,7 @@ extern "C" void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuf
 #endif
 
 extern "C" [[noreturn]] void MainTask(void * pvParameters) noexcept;
-#if RP2040
+#if RPXXXX
 extern "C" [[noreturn]] void UpdateFirmwareTask(void * pvParameters) noexcept;
 #else
 extern "C" [[noreturn]] void UpdateBootloaderTask(void * pvParameters) noexcept;
@@ -124,7 +124,7 @@ extern "C" [[noreturn]] void UpdateBootloaderTask(void * pvParameters) noexcept;
 
 // We need to make malloc/free thread safe. We must use a recursive mutex for it.
 // RP2040 builds use standard malloc from newlib. Other builds use our own version of nano_mallocr.
-#if RP2040
+#if RPXXXX
 extern "C" void __malloc_lock(struct _reent *_r) noexcept
 #else
 extern "C" void GetMallocMutex() noexcept
@@ -136,7 +136,7 @@ extern "C" void GetMallocMutex() noexcept
 	}
 }
 
-#if RP2040
+#if RPXXXX
 extern "C" void __malloc_unlock(struct _reent *_r) noexcept
 #else
 extern "C" void ReleaseMallocMutex() noexcept
@@ -174,7 +174,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 	return ret;
 }
 
-#if RP2040
+#if RPXXXX
 static bool watchdogCausedReboot = false;
 #endif
 
@@ -185,7 +185,7 @@ static bool watchdogCausedReboot = false;
 
 #ifndef DEBUG
 
-# if RP2040
+# if RPXXXX
 	// Did the watchdog cause the last reboot? We need to capture this before we enable
 	// the watchdog otherwise the result is invalid.
 	watchdogCausedReboot = watchdog_enable_caused_reboot();
@@ -252,7 +252,7 @@ static bool watchdogCausedReboot = false;
 	CoreInit();
 	DeviceInit();
 
-#if !SAMC21 && !RP2040		// SAMC21 has a DIVAS unit, but that does not have an interrupt. RP2040 has a divide unit, also without an interrupt.
+#if !SAMC21 && !RPXXXX		// SAMC21 has a DIVAS unit, but that does not have an interrupt. RP2040 has a divide unit, also without an interrupt.
 	// Trap integer divide-by-zero.
 	// We could also trap unaligned memory access, if we change the gcc options to not generate code that uses unaligned memory access.
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
@@ -281,7 +281,7 @@ static bool watchdogCausedReboot = false;
 		auto task = new Task<UpdateBootloaderTaskStackWords>;
 		mainTask = task;
 		task->Create(
-#if RP2040
+#if RPXXXX
 						UpdateFirmwareTask
 #else
 						UpdateBootloaderTask
@@ -297,7 +297,7 @@ static bool watchdogCausedReboot = false;
 
 	// Initialise watchdog clock
 	WatchdogInit();
-#if !RP2040
+#if !RPXXXX
 	NVIC_EnableIRQ(WDT_IRQn);		// enable the watchdog early warning interrupt
 #endif
 
@@ -328,7 +328,7 @@ debugPrintf("Main task running\n");
 	}
 }
 
-#if RP2040
+#if RPXXXX
 static void RequestFirmwareBlock(uint32_t fileOffset, uint32_t numBytes, CanMessageBuffer& buf)
 {
 	//debugPrintf("Request block %d\n", fileOffset);
@@ -504,7 +504,7 @@ static FirmwareFlashErrorCode GetBootloaderBlock(uint8_t *blockBuffer)
 
 static void ReportFlashError(FirmwareFlashErrorCode err)
 {
-#if RP2040
+#if RPXXXX
 	debugPrintf("Firmware update error %d\n", (int)err);
 #endif
 	for (unsigned int i = 0; i < (unsigned int)err; ++i)
@@ -522,7 +522,7 @@ static void ReportFlashError(FirmwareFlashErrorCode err)
 // This assumes the caller has exclusive use of the DMAC
 uint32_t ComputeCRC32(const uint32_t *start, const uint32_t *end)
 {
-#if RP2040
+#if RPXXXX
 	dma_channel_claim(DmacChanCRC);
 	dma_channel_config config;
 	config.ctrl = (0x3f << 15)				// unpaced transfer
@@ -576,7 +576,7 @@ bool CheckCRC(uint32_t *blockBuffer) noexcept
 	return ComputeCRC32(blockBuffer, blockBuffer + crcOffset/4) == expectedCRC;
 }
 
-#if RP2040
+#if RPXXXX
 
 # include <hardware/flash.h>
 
@@ -925,7 +925,7 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 	const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
 	reply.lcatf("Last reset %02d:%02d:%02d ago, cause: ", (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60));
 
-#if RP2040
+#if RPXXXX
 	{
 		const uint32_t reason = watchdog_hw->reason & 0x03;
 		if (watchdogCausedReboot && reason != 0)
@@ -943,7 +943,7 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 			reply.cat("software");
 		}
 		else
-#if defined(__RP2350__)
+#if RP2350
 		{
 			reply.cat("unknown not implemented");
 		}

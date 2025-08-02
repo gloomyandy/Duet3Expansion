@@ -50,11 +50,11 @@
 # include <Hardware/ATEIO/ExtendedAnalog.h>
 #endif
 
-#if !RP2040
+#if !RPXXXX
 # include <hpl_user_area.h>
 #endif
 
-#if RP2040
+#if RPXXXX
 # include <hardware/structs/watchdog.h>
 #endif
 
@@ -70,7 +70,7 @@ constexpr uint32_t FirmwareFlashStart = FLASH_ADDR + FlashBlockSize;	// we reser
 constexpr uint32_t FlashBlockSize = 0x00004000;							// the block size we assume for flash
 constexpr uint32_t FirmwareFlashStart = FLASH_ADDR + FlashBlockSize;	// we reserve 16K for the bootloader
 
-#elif RP2040
+#elif RPXXXX
 // TODO
 #else
 # error Unsupported processor
@@ -148,7 +148,7 @@ namespace Platform
 #if SAME5x
 	static AveragingFilter<McuTempReadingsAveraged> tpFilter;
 	static AveragingFilter<McuTempReadingsAveraged> tcFilter;
-#elif SAMC21 || RP2040
+#elif SAMC21 || RPXXXX
 	static AveragingFilter<McuTempReadingsAveraged> tsensFilter;
 #endif
 
@@ -263,7 +263,7 @@ namespace Platform
 # endif
 		NVIC_SetPriority(DMAC_IRQn, NvicPriorityDmac);
 		NVIC_SetPriority(EIC_IRQn, NvicPriorityPins);
-#elif RP2040
+#elif RPXXXX
 		NVIC_SetPriority((IRQn_Type)StepTcIRQn, NvicPriorityStep);
 		NVIC_SetPriority(IO_IRQ_BANK0_IRQn, NvicPriorityPins);
 #else
@@ -271,7 +271,7 @@ namespace Platform
 #endif
 	}
 
-#if !RP2040
+#if !RPXXXX
 	// Erase the firmware (but not the bootloader) and reset the processor
 	[[noreturn]] RAMFUNC static void EraseAndReset()
 	{
@@ -363,7 +363,7 @@ namespace Platform
 #elif SAMC21
 		NVIC->ICER[0] = 0xFFFFFFFF;						// Disable IRQs
 		NVIC->ICPR[0] = 0xFFFFFFFF;						// Clear pending IRQs
-#elif RP2040
+#elif RPXXXX
 		// We reboot and update the firmware in a similar manner to bootloader updates on other boards
 		watchdog_hw->scratch[UpdateFirmwareMagicWordIndex] = UpdateFirmwareMagicValue;
 		ResetProcessor();
@@ -371,7 +371,7 @@ namespace Platform
 # error Unsupported processor
 #endif
 
-#if !RP2040
+#if !RPXXXX
 		EraseAndReset();
 #endif
 	}
@@ -381,7 +381,7 @@ namespace Platform
 	{
 		ShutdownAll();									// turn everything off
 
-#if RP2040
+#if RPXXXX
 		// We don't need to update the bootloader
 #else
 		// Remove the bootloader protection and set the bootloader update flag
@@ -431,7 +431,7 @@ namespace Platform
 		return (switches == 0) ? CanId::Exp3HCFirmwareUpdateAddress : switches;
 #elif defined(TOOL1LC) || defined(TOOL1RR) || defined(F3PTB)
 		return CanId::ToolBoardDefaultAddress;
-#elif defined(SAMMYC21) || defined(RP2040)
+#elif defined(SAMMYC21) || RPXXXX
 		return CanId::SammyC21DefaultAddress;
 #elif defined(EXP1XD)
 		return CanId::Exp1XDBoardDefaultAddress;
@@ -660,7 +660,7 @@ void Platform::Init()
 	AnalogIn::EnableTemperatureSensor(0, tpFilter.CallbackFeedIntoFilter, CallbackParameter(&tpFilter), 1, 0);
 	tcFilter.Init(0);
 	AnalogIn::EnableTemperatureSensor(1, tcFilter.CallbackFeedIntoFilter, CallbackParameter(&tcFilter), 1, 0);
-#elif SAMC21 || RP2040
+#elif SAMC21 || RPXXXX
 	tsensFilter.Init(0);
 	AnalogIn::EnableTemperatureSensor(tsensFilter.CallbackFeedIntoFilter, CallbackParameter(&tsensFilter), 1);
 #else
@@ -681,7 +681,7 @@ void Platform::Init()
 	SetPinFunction(SSPIMisoPin, SSPIMisoPinPeriphMode);
 # if SAME5x || SAMC21
 	sharedSpi = new SharedSpiDevice(SspiSercomNumber, SspiDataInPad);
-# elif RP2040
+# elif RPXXXX
 	sharedSpi = new SharedSpiDevice(SspiSpiInstanceNumber);
 # else
 # error Unsupported processor
@@ -697,7 +697,7 @@ void Platform::Init()
 		SetPinFunction(I2CSCLPin, I2CSCLPinPeriphMode);
 # if SAME5x || SAMC21
 		sharedI2C = new SharedI2CMaster(I2CSercomNumber);
-# elif RP2040
+# elif RPXXXX
 		sharedI2C = new SharedI2CMaster(I2CInstanceNumber);
 # else
 # error Unsupported processor
@@ -749,7 +749,7 @@ void Platform::InitMinimal()
 	InitLeds();
 	InitVinMonitor();
 	InitialiseInterrupts();
-#if RP2040
+#if RPXXXX
 	serialUSB.Start(NoPin);
 #endif
 	CanInterface::Init(GetCanAddress(), UseAlternateCanPins, false);
@@ -792,7 +792,7 @@ void Platform::Spin()
 		case DeferredCommand::testUnalignedMemoryAccess:
 			deliberateError = true;
 			(void)Tasks::DoMemoryRead(reinterpret_cast<const uint32_t*>(
-#if RP2040
+#if RPXXXX
 										SRAM_BASE
 #else
 										HSRAM_ADDR
@@ -909,7 +909,7 @@ void Platform::Spin()
 		{
 			const int16_t temperatureTimes100 = (int16_t)((uint16_t)(tsensFilter.GetSum()/tsensFilter.NumAveraged()) ^ (1u << 15));
 			mcuTemperature.current = (float)temperatureTimes100 * 0.01;
-#elif RP2040
+#elif RPXXXX
 		if (tsensFilter.IsValid())
 		{
 			const float tempSensorAdcVoltage = (tsensFilter.GetSum()/tsensFilter.NumAveraged()) * (3.3/(float)(1u << AnalogIn::AdcBits));
@@ -1360,7 +1360,7 @@ GCodeResult Platform::DoDiagnosticTest(const CanMessageDiagnosticTest& msg, cons
 			reply.printf("Reading step timer 100 times took %.2fus", (double)((1'000'000.0f * (float)tim1)/(float)SystemCoreClock));
 		}
 
-#if !RP2040 || USE_SPICAN
+#if !RPXXXX || USE_SPICAN
 		// Also check the correspondence between the CAN timestamp timer and the step clock
 		{
 			uint32_t startClocks, endClocks;

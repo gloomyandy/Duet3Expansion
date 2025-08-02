@@ -27,7 +27,7 @@
 # include <Hardware/LISAccelerometer.h>
 #endif
 
-#if RP2040
+#if RPXXXX
 # include <hardware/structs/sio.h>
 #endif
 

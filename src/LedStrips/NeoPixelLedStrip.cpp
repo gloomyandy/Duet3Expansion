@@ -239,7 +239,7 @@ constexpr uint32_t TCY = NanosecondsToCycles(1200);
 #if SAMC21
 // When bit-banging Neopixels we can't afford to wait for instructions to be fetched from flash memory
 [[gnu::optimize("O2")]] __attribute__((section(".time_critical")))
-#elif RP2040
+#elif RPXXXX
 // When bit-banging Neopixels we can't afford to wait for instructions to be fetched from flash memory
 [[gnu::optimize("O3")]] __attribute__((section(".time_critical")))
 #endif
@@ -292,7 +292,7 @@ void NeoPixelLedStrip::BitBangDataNormal(const uint8_t *start, const uint8_t *en
 #if SAMC21
 // When bit-banging Neopixels we can't afford to wait for instructions to be fetched from flash memory
 [[gnu::optimize("O2")]] __attribute__((section(".time_critical")))
-#elif RP2040
+#elif RPXXXX
 // When bit-banging Neopixels we can't afford to wait for instructions to be fetched from flash memory
 [[gnu::optimize("O3")]] __attribute__((section(".time_critical")))
 #endif

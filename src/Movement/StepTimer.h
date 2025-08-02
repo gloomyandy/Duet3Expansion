@@ -10,7 +10,7 @@
 
 #include "RepRapFirmware.h"
 
-#if RP2040
+#if RPXXXX
 # include <hardware/timer.h>
 #endif
 
@@ -136,7 +136,7 @@ private:
 	static constexpr unsigned int MaxSyncCount = 10;
 };
 
-#if RP2040
+#if RPXXXX
 
 // On the RP2040 reading the timer is simple so we inline it
 inline StepTimer::Ticks StepTimer::GetTimerTicks() noexcept

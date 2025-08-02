@@ -11,7 +11,7 @@
 
 #include <Hardware/SoftwareReset.h>
 
-#if RP2040
+#if RPXXXX
 # include <CanSettings.h>
 #endif
 
@@ -55,7 +55,7 @@ public:
 
 	bool GetClosedLoopQuadratureDirection(bool& backwards) noexcept pre(page == NvmPage::closedLoop);
 	void SetClosedLoopQuadratureDirection(bool backwards) noexcept pre(page == NvmPage::closedLoop);
-#if RP2040
+#if RPXXXX
 	bool GetCanSettings(CanUserAreaData& canSettings) noexcept pre(page == NvmPage::common);
 	void SetCanSettings(CanUserAreaData& canSettings) noexcept pre(page == NvmPage::common);
 #endif
@@ -75,7 +75,7 @@ private:
 		uint16_t magic;
 		uint8_t thermistorLowCalibration[MaxCalibratedThermistors];
 		uint8_t thermistorHighCalibration[MaxCalibratedThermistors];
-#if RP2040
+#if RPXXXX
 		CanUserAreaData canSettings;
 		uint8_t spare[38-16];
 #else

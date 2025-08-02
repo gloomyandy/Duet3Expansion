@@ -23,7 +23,7 @@
 #include <Hardware/NonVolatileMemory.h>
 #include "CustomCommandHandler.h"
 
-#if !RP2040
+#if !RPXXXX
 # include <hpl_user_area.h>
 #endif
 
@@ -468,13 +468,9 @@ static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& rep
 		{
 			Platform::AppendBoardAndFirmwareDetails(reply);
 #if RP2040
-# if defined(__RP2040__)
 			const char *bootloaderVersionText = "RP2040";
-# elif defined(__RP2350__)
+#elif RP2350
 			const char *bootloaderVersionText = "RP2350";
-# else
-			const char *bootloaderVersionText = nullptr;
-# endif
 #else
 			// GCC 12.2 and 13.2 produce a spurious diagnostic for the following line of code, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105523
 #pragma GCC diagnostic push

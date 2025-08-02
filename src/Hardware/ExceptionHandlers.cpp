@@ -50,7 +50,7 @@ extern "C" [[noreturn]] void hardFaultDispatcher(const uint32_t *pulFaultStackAd
 }
 
 // The fault handler implementation calls a function called hardFaultDispatcher()
-#if RP2040
+#if RPXXXX
 extern "C" void isr_hardfault() noexcept __attribute__((naked));
 void isr_hardfault() noexcept
 #else
@@ -60,7 +60,7 @@ void HardFault_Handler() noexcept
 {
 	__asm volatile
 	(
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 		" mrs r0, msp												\n"
 		" mov r1, lr												\n"
 		" movs r2, #4												\n"
@@ -81,7 +81,7 @@ void HardFault_Handler() noexcept
 	);
 }
 
-#if !RP2040
+#if !RPXXXX
 
 extern "C" [[noreturn]] void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress)
 {
@@ -128,7 +128,7 @@ void OtherFault_Handler() noexcept
 {
 	__asm volatile
 	(
-#if SAMC21 || RP2040
+#if SAMC21 || RPXXXX
 		" mrs r0, msp												\n"
 		" mov r1, lr												\n"
 		" movs r2, #4												\n"
@@ -151,7 +151,7 @@ void OtherFault_Handler() noexcept
 
 // We could set up the following fault handlers to retrieve the program counter in the same way as for a Hard Fault,
 // however these exceptions are unlikely to occur, so for now we just report the exception type.
-#if RP2040
+#if RPXXXX
 extern "C" [[noreturn]] void isr_nmi() noexcept
 #else
 extern "C" [[noreturn]] void NMI_Handler() noexcept
