@@ -123,12 +123,7 @@ extern "C" [[noreturn]] void UpdateBootloaderTask(void * pvParameters) noexcept;
 #endif
 
 // We need to make malloc/free thread safe. We must use a recursive mutex for it.
-// RP2040 builds use standard malloc from newlib. Other builds use our own version of nano_mallocr.
-#if RPXXXX
-extern "C" void __malloc_lock(struct _reent *_r) noexcept
-#else
 extern "C" void GetMallocMutex() noexcept
-#endif
 {
 	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)		// don't take mutex if scheduler not started or suspended
 	{
@@ -136,11 +131,7 @@ extern "C" void GetMallocMutex() noexcept
 	}
 }
 
-#if RPXXXX
-extern "C" void __malloc_unlock(struct _reent *_r) noexcept
-#else
 extern "C" void ReleaseMallocMutex() noexcept
-#endif
 {
 	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)		// don't release mutex if scheduler not started or suspended
 	{

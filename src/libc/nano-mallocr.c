@@ -32,13 +32,6 @@
  * Interface documentation refer to malloc.c.
  */
 
-#if defined(__RP2040__)
-
-// This version doesn't work on the RP2040, probably because of the wrapper functions in the Pico SDK, so use the standard version in newlib.
-// It costs us some RAM for the reent structure, which is otherwise not needed.
-
-#else
-
 // Use this version of malloc to avoid pulling in the reent struct
 
 #if 0	// DC we don't want to pull in stdio
@@ -824,7 +817,4 @@ void* _malloc_r(struct _reent *reent_ptr, size_t n)
 }
 
 #endif
-
-#endif	// not RP2040
-
 // End
