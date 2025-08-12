@@ -88,7 +88,6 @@ constexpr float RecipFullScaleCurrent = Tmc5160SenseResistor/325.0;		// 1.0 divi
 // The SPI clock speed is a compromise:
 // - too high and polling the driver chips takes too much of the CPU time
 // - too low and we won't detect stalls quickly enough
-// TODO use the DIAG outputs to detect stalls instead
 // There are 40 bits to send per driver, so on the 3HC the total is 120 bits
 #if SUPPORT_CLOSED_LOOP || SUPPORT_PHASE_STEPPING
 # if defined(EXP1HCL) || defined(M23CL)
@@ -98,12 +97,13 @@ constexpr uint32_t DriversSpiClockFrequency = 4000000;		// 4MHz SPI clock (max w
 # endif
 
 constexpr uint32_t DriversDirectSleepMicroseconds = 80;		// how long the closed loop task sleeps for in each cycle
+constexpr uint32_t DriversDirectSleepClocks = (StepTimer::StepClockRate * DriversDirectSleepMicroseconds)/1000000;
 #else
 // With a 2MHz SPI clock, on the 3HC the TMC task takes about 25% of the CPU time. So we now use 500kHz. This means the SPI transfer will complete in a little over 240us.
 constexpr uint32_t DriversSpiClockFrequency = 500000;		// 500kHz SPI clock
 #endif
 
-constexpr uint32_t TransferTimeout = 2;						// any transfer should complete within 2 ticks @ 1ms/tick
+constexpr uint32_t TransferTimeout = 3;						// any transfer should complete within 2 ticks @ 1ms/tick. Need to allow one more in case a tick is about to happen.
 
 // GCONF register (0x00, RW)
 constexpr uint8_t REGNUM_GCONF = 0x00;
@@ -775,18 +775,18 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 
 GCodeResult TmcDriverState::GetAnyRegister(const StringRef& reply, uint8_t regNum) noexcept
 {
-	if (specialReadRegisterNumber == 0xFE)
+	if (specialReadRegisterNumber == 0xFE)		// this value indicates that the register has been read and the value stored
 	{
 		reply.printf("Register 0x%02x value 0x%08" PRIx32, regNum, readRegisters[ReadSpecial]);
 		specialReadRegisterNumber = 0xFF;
 		return GCodeResult::ok;
 	}
 
-	if (specialReadRegisterNumber == 0xFF)
+	if (specialReadRegisterNumber == 0xFF)		// this value indicates that we are read to accept a read register request
 	{
 		specialReadRegisterNumber = regNum;
 	}
-	return GCodeResult::notFinished;
+	return GCodeResult::notFinished;			// else a read is already in progress
 }
 
 GCodeResult TmcDriverState::SetAnyRegister(const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept
@@ -918,7 +918,7 @@ void TmcDriverState::SetCurrent(float current) noexcept
 float TmcDriverState::CalculateCurrent() const noexcept
 {
 	const uint32_t globalScaler = GetGlobalScaler();
-	const uint32_t gs = globalScaler == 0 ? 256 : globalScaler;
+	const uint32_t gs = (globalScaler == 0) ? 256 : globalScaler;
 	return (float)(gs * (GetIRun() + 1)) / (256 * 32 * RecipFullScaleCurrent);
 }
 
@@ -1076,7 +1076,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 	const uint32_t tcoolthrs = writeRegisters[WriteTcoolthrs] & ((1ul << 20) - 1u);
 	bool bdummy;
 	const float speed2 = ((float)GetHighestTmcClockSpeed() * GetMicrostepping(bdummy))/(256 * tcoolthrs * stepsPerMm);
-	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 " (%.1f mm/sec), coolstep threshold %" PRIu32 " (%.1f mm/sec)",
+	reply.catf("stall threshold %d, filter %s, full steps/sec %" PRIu32 " (%.1f mm/sec), coolstep threshold %" PRIu32 " (%.1f mm/sec)",
 				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed1, tcoolthrs, (double)speed2);
 }
 
@@ -1225,18 +1225,19 @@ void TmcDriverState::TransferFailed() noexcept
 }
 
 // State structures for all drivers
-static TmcDriverState driverStates[MaxSmartDrivers];
+static TmcDriverState driverStates[numTmc51xxDrivers];
 
 // TMC51xx management task
 static Task<TmcTaskStackWords> tmcTask;
 
-// On the SAME70 access to these DMA buffers must be correctly aligned because they are in non-cached memory.
-static volatile uint8_t sendData[5 * MaxSmartDrivers];
-static volatile uint8_t rcvData[5 * MaxSmartDrivers];
+// Declare the DMA buffers with the __nocache attribute for the SAME70. Access to these must be aligned.
+const size_t SpiDataSize = 5 * numTmc51xxDrivers;			// number of bytes in the SPI transfer to/from the TMC driver chain
+static volatile uint8_t tmcSendData[SpiDataSize];			// used to prepare regular read/write requests via SPI
+static volatile uint8_t tmcRcvData[SpiDataSize];
 
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-static volatile uint8_t phaseSendData[5 * MaxSmartDrivers];
-static volatile uint8_t altRcvData[5 * MaxSmartDrivers];
+static volatile uint8_t tmcPhaseSendData[SpiDataSize];		// used to send specific phase data
+static volatile uint8_t tmcAltRcvData[SpiDataSize];
 
 static uint32_t lastWakeupTime = 0;
 static StepTimer tmcTimer;
@@ -1261,12 +1262,7 @@ inline bool TmcDriverState::SetXdirect(uint32_t regVal) noexcept
 
 #endif
 
-// Set up the PDC or DMAC to send a register and receive the status, but don't enable it yet
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-static void SetupDMA(const volatile uint8_t *txData, const volatile uint8_t *rxData) noexcept
-#else
-static void SetupDMA() noexcept
-#endif
+static void InitialiseDMA() noexcept
 {
 #if SAME70
 	/* From the data sheet:
@@ -1325,13 +1321,8 @@ static void SetupDMA() noexcept
 						| XDMAC_CC_SAM_FIXED_AM
 						| XDMAC_CC_DAM_INCREMENTED_AM
 						| XDMAC_CC_PERID(TMC51xx_DmaRxPerid);
-		p_cfg.mbr_ubc = ARRAY_SIZE(rcvData);
+		p_cfg.mbr_ubc = SpiDataSize;
 		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(USART_TMC51xx->US_RHR));
-# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-		p_cfg.mbr_da = reinterpret_cast<uint32_t>(rxData);
-# else
-		p_cfg.mbr_da = reinterpret_cast<uint32_t>(rcvData);
-# endif
 		xdmac_configure_transfer(XDMAC, DmacChanTmcRx, &p_cfg);
 	}
 
@@ -1349,40 +1340,47 @@ static void SetupDMA() noexcept
 						| XDMAC_CC_SAM_INCREMENTED_AM
 						| XDMAC_CC_DAM_FIXED_AM
 						| XDMAC_CC_PERID(TMC51xx_DmaTxPerid);
-		p_cfg.mbr_ubc = ARRAY_SIZE(sendData);
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(txData);
-#else
-		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(sendData);
-#endif
+		p_cfg.mbr_ubc = SpiDataSize;
 		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&(USART_TMC51xx->US_THR));
 		xdmac_configure_transfer(XDMAC, DmacChanTmcTx, &p_cfg);
+	}
+#endif
+}
+
+// Set up the PDC or DMAC to send a register and receive the status, but don't enable it yet
+static void SetupDMA(const volatile uint8_t *txData, const volatile uint8_t *rxData) noexcept
+{
+#if SAME70
+	// Receive
+	{
+		xdmac_channel_disable(XDMAC, DmacChanTmcRx);
+		uint32_t mbr_da = reinterpret_cast<uint32_t>(rxData);
+		xdmac_channel_get_interrupt_status(XDMAC, DmacChanTmcRx);
+		xdmac_channel_set_destination_addr(XDMAC, DmacChanTmcRx, mbr_da);
+	}
+
+	// Transmit
+	{
+		xdmac_channel_disable(XDMAC, DmacChanTmcTx);
+		uint32_t mbr_sa = reinterpret_cast<uint32_t>(txData);
+		xdmac_channel_get_interrupt_status(XDMAC, DmacChanTmcRx);
+		xdmac_channel_set_source_addr(XDMAC, DmacChanTmcTx, mbr_sa);
 	}
 
 #elif SAME5x || SAMC21
 	DmacManager::DisableChannel(DmacChanTmcRx);
 	DmacManager::DisableChannel(DmacChanTmcTx);
-# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	DmacManager::SetSourceAddress(DmacChanTmcTx, (void*)txData);
-	DmacManager::SetDataLength(DmacChanTmcTx, 5 * MaxSmartDrivers);
+	DmacManager::SetDataLength(DmacChanTmcTx, SpiDataSize);
 	DmacManager::SetDestinationAddress(DmacChanTmcRx, (void*)rxData);
-	DmacManager::SetDataLength(DmacChanTmcRx, 5 * MaxSmartDrivers);
-# endif
+	DmacManager::SetDataLength(DmacChanTmcRx, SpiDataSize);
 #else
 	spiPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);		// disable the PDC
 
-# if SUPPORT_PHASE_STEPPING || SUPPORT_COSED_LOOP
 	spiPdc->PERIPH_TPR = reinterpret_cast<uint32_t>(txData);
-#else
-	spiPdc->PERIPH_TPR = reinterpret_cast<uint32_t>(sendData);
-#endif
-	spiPdc->PERIPH_TCR = ARRAY_SIZE(sendData);
-# if SUPPORT_PHASE_STEPPING || SUPPORT_COSED_LOOP
+	spiPdc->PERIPH_TCR = SpiDataSize;
 	spiPdc->PERIPH_RPR = reinterpret_cast<uint32_t>(rxData);
-# else
-	spiPdc->PERIPH_RPR = reinterpret_cast<uint32_t>(rcvData);
-# endif
-	spiPdc->PERIPH_RCR = ARRAY_SIZE(rcvData);
+	spiPdc->PERIPH_RCR = SpiDataSize;
 #endif
 }
 
@@ -1470,18 +1468,18 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 {
 	fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
 #if SAME70
-	xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcRx, 0xFFFFFFFF);
+	DmacManager::DisableCompletedInterrupt(DmacChanTmcRx);
 #endif
 	dmaFinishedReason = reason;
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-	// When in phase stepping or closed loop node we send the coil currents if any have changes since last time we sent them.
+	// When in phase stepping or closed loop mode we send the coil currents if any have changes since last time we sent them.
 	// Send a "normal" read or write request after the coil currents have been set.
-	// We don't care about the response from setting the motor currents so that is written to altRcvData so as to not overwrite rcvData
+	// We don't care about the response from setting the motor currents so that is written to tmcAltRcvData so as to not overwrite tmcRcvData
 	if (setCoilCurrents)								// if we just wrote the coil currents
 	{
 		setCoilCurrents = false;
 		const uint32_t start = GetCurrentCycles();		// get the time now so we can time the CS high signal
-		SetupDMA(sendData, altRcvData);					// set up the PDC or DMAC
+		SetupDMA(tmcSendData, tmcAltRcvData);			// set up the PDC or DMAC
 		dmaFinishedReason = DmaCallbackReason::none;
 		EnableEndOfTransferInterrupt();
 		DelayCycles(start, 2 * SystemCoreClockFreq/DriversSpiClockFrequency);	// keep CS high for 2 SPI clock cycles between transactions
@@ -1495,11 +1493,16 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 		// We run the SPI bus at high speeds so that motor currents get updated as quickly as possible.
 		// If we wake up as soon as the transfer has completed then we will use too much of the available CPU time.
 		// So schedule a wakeup call instead. Try to make the wakeup interval regular.
-		lastWakeupTime += (StepTimer::StepClockRate * DriversDirectSleepMicroseconds)/1000000;
-		if (tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime))
+		lastWakeupTime += DriversDirectSleepClocks;
+
 		{
-			lastWakeupTime = StepTimer::GetTimerTicks();
-			tmcTask.GiveFromISR(NotifyIndices::Tmc);
+			// If the DMA interrupt priority is better (lower number) than the step interrupt priority then we must disable interrupts here
+			AtomicCriticalSectionLocker lock;
+			if (tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime))
+			{
+				lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled();
+				tmcTask.GiveFromISR(NotifyIndices::Tmc);
+			}
 		}
 	}
 #else
@@ -1516,6 +1519,7 @@ static void TmcTimerCallback(CallbackParameter) noexcept
 
 extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 {
+	InitialiseDMA();
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	tmcTimer.SetCallback(TmcTimerCallback, (CallbackParameter)0);
 #endif
@@ -1541,14 +1545,14 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		{
 			// Handle the read response - data comes out of the drivers in reverse driver order
 #if SINGLE_DRIVER
-			driverStates[0].TransferSucceeded(const_cast<const uint8_t*>(rcvData));
+			driverStates[0].TransferSucceeded(const_cast<const uint8_t*>(tmcRcvData));
 			if (driversState == DriversState::initialising && !driverStates[0].UpdatePending())
 			{
 				fastDigitalWriteLow(GlobalTmc51xxEnablePin);
 				driversState = DriversState::ready;
 			}
 #else
-			const volatile uint8_t *readPtr = rcvData + 5 * numTmc51xxDrivers;
+			const volatile uint8_t *readPtr = tmcRcvData + 5 * numTmc51xxDrivers;
 			for (size_t drive = 0; drive < numTmc51xxDrivers; ++drive)
 			{
 				readPtr -= 5;
@@ -1584,19 +1588,19 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 
 		// Set up data to write. Driver 0 is the first in the SPI chain so we must write them in reverse order.
 #if SINGLE_DRIVER
-		driverStates[0].GetSpiCommand(const_cast<uint8_t*>(sendData));
+		driverStates[0].GetSpiCommand(const_cast<uint8_t*>(tmcSendData));
 
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		if (needToSetCoilCurrents)
 		{
 			needToSetCoilCurrents = false;
-			phaseSendData[0] = REGNUM_5160_X_DIRECT | 0x80;
-			StoreBEU32(const_cast<uint8_t*>(phaseSendData + 1), driverStates[0].GetPhaseToSet());
+			tmcPhaseSendData[0] = REGNUM_5160_X_DIRECT | 0x80;
+			StoreBEU32(const_cast<uint8_t*>(tmcPhaseSendData + 1), driverStates[0].GetPhaseToSet());
 			setCoilCurrents = true;
 		}
 # endif
 #else
-		volatile uint8_t *writeBufPtr = sendData + 5 * numTmc51xxDrivers;
+		volatile uint8_t *writeBufPtr = tmcSendData + 5 * numTmc51xxDrivers;
 		for (size_t i = 0; i < numTmc51xxDrivers; ++i)
 		{
 			writeBufPtr -= 5;
@@ -1607,7 +1611,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		if (needToSetCoilCurrents)
 		{
 			needToSetCoilCurrents = false;
-			writeBufPtr = phaseSendData + 5 * numTmc51xxDrivers;
+			writeBufPtr = tmcPhaseSendData + 5 * numTmc51xxDrivers;
 			for (size_t i = 0; i < numTmc51xxDrivers; ++i)
 			{
 				writeBufPtr -= 5;
@@ -1627,15 +1631,18 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			TaskCriticalSectionLocker lock;
 
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-			SetupDMA((setCoilCurrents) ? phaseSendData : sendData, rcvData);	// set up the PDC or DMAC
+			SetupDMA((setCoilCurrents) ? tmcPhaseSendData : tmcSendData, tmcRcvData);	// set up the PDC or DMAC
 #else
-			SetupDMA();											// set up the PDC or DMAC
+			SetupDMA(tmcSendData, tmcRcvData);											// set up the PDC or DMAC
 #endif
 			dmaFinishedReason = DmaCallbackReason::none;
 
 			AtomicCriticalSectionLocker lock2;
 
 			fastDigitalWriteLow(GlobalTmc51xxCSPin);			// set CS low
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+			tmcTimer.CancelCallbackFromIsr();					// in case the timer is still running from a previous timed-out transfer
+#endif
 			TaskBase::ClearCurrentTaskNotifyCount(NotifyIndices::Tmc);
 			EnableEndOfTransferInterrupt();
 			ResetSpi();
@@ -1644,11 +1651,13 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		}
 
 		// Wait for the end-of-transfer interrupt
-		timedOut = !TaskBase::TakeIndexed(NotifyIndices::Tmc, TransferTimeout);
+		(void)TaskBase::TakeIndexed(NotifyIndices::Tmc, TransferTimeout);
 		DisableEndOfTransferInterrupt();
 		DisableDma();
 
-		if (timedOut || dmaFinishedReason != DmaCallbackReason::complete)
+		// We don't care if the TakeIndexed call returned timeout, if the DMA completed then the transfer is OK
+		timedOut = (dmaFinishedReason != DmaCallbackReason::complete);
+		if (timedOut)
 		{
 			TmcDriverState::TransferTimedOut();
 			// If the transfer was interrupted then we will have written dud data to the drivers. So we should re-initialise them all.
@@ -1726,19 +1735,11 @@ void SmartDrivers::Init() noexcept
 	DmacManager::SetBtctrl(DmacChanTmcRx, DMAC_BTCTRL_VALID | DMAC_BTCTRL_EVOSEL_DISABLE | DMAC_BTCTRL_BLOCKACT_INT | DMAC_BTCTRL_BEATSIZE_BYTE
 								| DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_STEPSIZE_X1);
 	DmacManager::SetSourceAddress(DmacChanTmcRx, &(SERCOM_TMC51xx->SPI.DATA.reg));
-# if !(SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP)		// in phase stepping or closed loop mode we use two different receive data blocks
-	DmacManager::SetDestinationAddress(DmacChanTmcRx, rcvData);
-	DmacManager::SetDataLength(DmacChanTmcRx, ARRAY_SIZE(rcvData));
-# endif
 	DmacManager::SetTriggerSourceSercomRx(DmacChanTmcRx, SERCOM_TMC51xx_NUMBER);
 
 	DmacManager::SetBtctrl(DmacChanTmcTx, DMAC_BTCTRL_VALID | DMAC_BTCTRL_EVOSEL_DISABLE | DMAC_BTCTRL_BLOCKACT_INT | DMAC_BTCTRL_BEATSIZE_BYTE
 								| DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_STEPSIZE_X1);
 	DmacManager::SetDestinationAddress(DmacChanTmcTx, &(SERCOM_TMC51xx->SPI.DATA.reg));
-# if !(SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP)		// in phase stepping or closed loop mode we use two different transmit data blocks
-	DmacManager::SetSourceAddress(DmacChanTmcTx, sendData);
-	DmacManager::SetDataLength(DmacChanTmcTx, ARRAY_SIZE(sendData));
-#endif
 	DmacManager::SetTriggerSourceSercomTx(DmacChanTmcTx, SERCOM_TMC51xx_NUMBER);
 
 	DmacManager::SetInterruptCallback(DmacChanTmcRx, RxDmaCompleteCallback, CallbackParameter(0U));
