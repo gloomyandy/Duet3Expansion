@@ -2632,9 +2632,7 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 		if (msg == nullptr)
 		{
 			// DC 2025-08-13: it seems that the EIC can remember a stall from a previous move, even if the DIAG output is no longer high and we use level triggered mode.
-			// This causes an immediate interrupt when we enable the stall interrupt.
-			// Disabling the interrupt here clears any pending interrupt that we may have, because the code in CoreN2G clears the corresponding bit in the EIC INTFLAG register.
-			driverStates[driverNumber].DisableDiagInterrupt();
+			// So I have changed the EnablePinInterrupt function in CoreN2G (which is called by EnableDiagInterrupt) to clear any pending interrupt.
 			stallEndstopsEnabled.SetBit(driverNumber);
 			driverStates[driverNumber].EnableDiagInterrupt();
 			return GCodeResult::ok;
