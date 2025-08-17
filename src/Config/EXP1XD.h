@@ -162,9 +162,9 @@ constexpr PinDescription PinTable[] =
 #endif
 };
 
-static constexpr size_t NumPins = ARRAY_SIZE(PinTable);
-static constexpr size_t NumRealPins = 32 + 12;			// 32 pins on port A (some missing) and first 12 pins of port B
-static constexpr size_t NumVirtualPins = SUPPORT_OVERRIDE_STEP_PIN;
+constexpr size_t NumPins = ARRAY_SIZE(PinTable);
+constexpr size_t NumRealPins = 32 + 12;			// 32 pins on port A (some missing) and first 12 pins of port B
+constexpr size_t NumVirtualPins = SUPPORT_OVERRIDE_STEP_PIN;
 static_assert(NumPins == NumRealPins + NumVirtualPins);
 
 #if SUPPORT_OVERRIDE_STEP_PIN
