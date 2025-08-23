@@ -1528,7 +1528,9 @@ static void TmcTimerCallback(CallbackParameter) noexcept
 
 extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 {
+#if !TMC51xx_USES_SHARED_SPI
 	InitialiseDMA();
+#endif
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	tmcTimer.SetCallback(TmcTimerCallback, (CallbackParameter)0);
 #endif
@@ -1650,8 +1652,8 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		}
 		timedOut = false;
 # if TMC51xx_USES_SEPARATE_CS
-		writeBufPtr = sendData + 5 * numTmc51xxDrivers;
-		volatile uint8_t *readBufPtr = rcvData + 5 * numTmc51xxDrivers;
+		writeBufPtr = tmcSendData + 5 * numTmc51xxDrivers;
+		volatile uint8_t *readBufPtr = tmcRcvData + 5 * numTmc51xxDrivers;
 		for (size_t i = 0; i < numTmc51xxDrivers; ++i)
 		{
 			fastDigitalWriteLow(Tmc51xxCSPins[i]);			// set CS low
@@ -1662,7 +1664,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		}
 # else
 		fastDigitalWriteLow(GlobalTmc51xxCSPin);			// set CS low
-		spiDevice->TransceivePacket(const_cast<uint8_t*>(sendData), const_cast<uint8_t*>(rcvData), sizeof(sendData));
+		spiDevice->TransceivePacket(const_cast<uint8_t*>(tmcSendData), const_cast<uint8_t*>(tmcRcvData), sizeof(sendData));
 		fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
 # endif
 #else
@@ -1717,7 +1719,11 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 #endif
 		}
 #endif
+# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+# error PHASE stepping not implemented fully in this driver
+#else
 		delay(1);
+#endif
 	}
 }
 

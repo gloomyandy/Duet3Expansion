@@ -2329,8 +2329,9 @@ debugPrintf("Driver %u ok\n", driver);
 }
 
 //--------------------------- Public interface ---------------------------------
-
+#if HAS_STALL_DETECT
 static void DiagPinInterruptCallback(CallbackParameter p) noexcept;
+#endif
 
 // Initialise the driver interface and the drivers, leaving each drive disabled.
 // It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
