@@ -219,7 +219,7 @@ constexpr PinDescription PinTable[] =
 };
 
 constexpr size_t NumPins = ARRAY_SIZE(PinTable);
-static constexpr size_t NumRealPins = 30;				// 30 GPIO pins on RP2040
+constexpr size_t NumRealPins = 30;				// 30 GPIO pins on RP2040
 constexpr size_t NumVirtualPins = SUPPORT_LDC1612;
 
 static_assert(NumPins == NumRealPins + NumVirtualPins);
