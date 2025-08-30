@@ -199,8 +199,8 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"ate.d0.step"	},	// PB23 driver STEP
 };
 
-static constexpr size_t NumPins = ARRAY_SIZE(PinTable);
-static constexpr size_t NumRealPins = 32 + 24;			// 32 pins on port A (some missing), 24 on port B
+constexpr size_t NumPins = ARRAY_SIZE(PinTable);
+constexpr size_t NumRealPins = 32 + 24;			// 32 pins on port A (some missing), 24 on port B
 static_assert(NumPins == NumRealPins);					// no virtual pins in this table
 
 // Timer/counter used to generate step pulses and other sub-millisecond timings
@@ -225,10 +225,10 @@ constexpr DmaPriority DmacPrioAdcRx = 2;
 
 // Interrupt priorities, lower means higher priority. 0-2 can't make RTOS calls.
 const NvicPriority NvicPriorityStep = 3;				// step interrupt is next highest, it can preempt most other interrupts
+const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interrupts
 const NvicPriority NvicPriorityUart = 3;				// serial driver makes RTOS calls
 const NvicPriority NvicPriorityPins = 3;				// priority for GPIO pin interrupts
 const NvicPriority NvicPriorityCan = 4;
-const NvicPriority NvicPriorityDmac = 5;				// priority for DMA complete interrupts
 const NvicPriority NvicPriorityAdc = 5;
 
 #endif /* SRC_CONFIG_M23CL_H_ */

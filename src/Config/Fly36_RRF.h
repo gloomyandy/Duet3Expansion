@@ -253,8 +253,8 @@ constexpr PinDescription PinTable[] =
 };
 #endif
 
-static constexpr size_t NumPins = ARRAY_SIZE(PinTable);
-static constexpr size_t NumRealPins = 30;				// 30 GPIO pins on RP2040
+constexpr size_t NumPins = ARRAY_SIZE(PinTable);
+constexpr size_t NumRealPins = 30;				// 30 GPIO pins on RP2040
 static_assert(NumPins == NumRealPins);					// no virtual pins
 
 // Timer/counter used to generate step pulses and other sub-millisecond timings

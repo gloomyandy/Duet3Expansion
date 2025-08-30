@@ -1305,6 +1305,7 @@ void TmcDriverState::SetStallDetectThreshold(int sgThreshold) noexcept
 
 void TmcDriverState::SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept
 {
+	if (stepsPerSecond == 0) { stepsPerSecond = 1; }					// avoid divide-by-zero errors
 	UpdateRegister(WriteTcoolthrs, (NominalTmcClockSpeed + (128 * stepsPerSecond))/(256 * stepsPerSecond));
 }
 
@@ -2328,6 +2329,9 @@ debugPrintf("Driver %u ok\n", driver);
 }
 
 //--------------------------- Public interface ---------------------------------
+#if HAS_STALL_DETECT
+static void DiagPinInterruptCallback(CallbackParameter p) noexcept;
+#endif
 
 // Initialise the driver interface and the drivers, leaving each drive disabled.
 // It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
@@ -2441,11 +2445,15 @@ void SmartDrivers::Init() noexcept
 								, true			// assume that all drivers are TMC2240 for now
 #endif
 								);
+#if HAS_STALL_DETECT
+		AttachPinInterrupt(DriverDiagPins[drive], DiagPinInterruptCallback, InterruptMode::high, CallbackParameter(drive), false);
+#endif
 	}
 
 	driversState = DriversState::noPower;
 	tmcTask = new Task<TmcTaskStackWords>;
 	tmcTask->Create(TmcLoop, "TMC", nullptr, TaskPriority::TmcOpenLoop);
+
 }
 
 // Shut down the drivers and stop any related interrupts
@@ -2687,9 +2695,12 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 {
 	if (driverNumber < GetNumTmcDrivers())
 	{
+		// Enable the stall endstop for the specified driver, or report why it wont work
 		const char *_ecv_array _ecv_null const msg = driverStates[driverNumber].CheckStallDetectionEnabled(speed);
 		if (msg == nullptr)
 		{
+			// DC 2025-08-13: it seems that the EIC can remember a stall from a previous move, even if the DIAG output is no longer high and we use level triggered mode.
+			// So I have changed the EnablePinInterrupt function in CoreN2G (which is called by EnableDiagInterrupt) to clear any pending interrupt.
 			stallEndstopsEnabled.SetBit(driverNumber);
 			driverStates[driverNumber].EnableDiagInterrupt();
 			return GCodeResult::ok;
@@ -2699,13 +2710,27 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 	}
 	else
 	{
+		// Disable all stall endstops
 		stallEndstopsEnabled.Clear();
+		driverStallsToNotify.store(0);
 		for (TmcDriverState& ds : driverStates)
 		{
 			ds.DisableDiagInterrupt();
 		}
-		driverStallsToNotify = 0;
 		return GCodeResult::ok;
+	}
+}
+
+// ISR for Driver Diag pin interrupts
+static void DiagPinInterruptCallback(CallbackParameter p) noexcept
+{
+	const unsigned int driverNumber = p.u32;
+	if (stallEndstopsEnabled.IsBitSet(driverNumber))
+	{
+		stallEndstopsEnabled.ClearBit(driverNumber);
+		driverStates[driverNumber].DisableDiagInterrupt();
+		SmartDrivers::driverStallsToNotify |= (1u << driverNumber);
+		CanInterface::WakeAsyncSender();
 	}
 }
 

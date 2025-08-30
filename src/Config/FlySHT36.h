@@ -262,9 +262,9 @@ constexpr PinDescription PinTable[] =
 
 constexpr size_t NumPins = ARRAY_SIZE(PinTable);
 #if RP2040
-static constexpr size_t NumRealPins = 30;				// 30 GPIO pins on RP2040
+constexpr size_t NumRealPins = 30;				// 30 GPIO pins on RP2040
 #elif RP2350
-static constexpr size_t NumRealPins = 48;				// 48 GPIO pins on RP2350
+constexpr size_t NumRealPins = 48;				// 48 GPIO pins on RP2350
 #endif
 constexpr size_t NumVirtualPins = SUPPORT_LDC1612;
 
