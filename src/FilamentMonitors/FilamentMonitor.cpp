@@ -272,7 +272,7 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 /*static*/ void FilamentMonitor::Spin() noexcept
 {
 	CanMessageBuffer buf;
-	auto msg = buf.SetupRequestMessageNoRid<CanMessageFilamentMonitorsStatusNew2>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+	auto msg = buf.SetupRequestMessageNoRid<CanMessageFilamentMonitorsStatusV2>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 	size_t slotIndex = 0;
 	size_t firstDriveNotSent = NumDrivers;
 	Bitmap<uint32_t> driversReported;

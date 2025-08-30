@@ -436,7 +436,7 @@ void LaserFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
 }
 
 // Store collected data in a CAN message slot
-void LaserFilamentMonitor::GetLiveData(FilamentMonitorDataNew2& data) const noexcept
+void LaserFilamentMonitor::GetLiveData(FilamentMonitorDataV2& data) const noexcept
 {
 	data.ClearReservedFields();
 	const uint16_t positionRange = (sensorValue & TypeLaserLargeDataRangeBitMask) ? TypeLaserLargeRange : TypeLaserDefaultRange;

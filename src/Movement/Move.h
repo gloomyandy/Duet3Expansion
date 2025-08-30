@@ -132,7 +132,7 @@ public:
 	uint32_t ExtruderPrintingSince(size_t driver) const noexcept;					// When we started doing normal moves after the most recent extruder-only move
 
 	// Input shaping support
-	GCodeResult HandleInputShaping(const CanMessageSetInputShapingNew& msg, size_t dataLength, const StringRef& reply) noexcept;
+	GCodeResult HandleInputShaping(const CanMessageSetInputShapingV1& msg, size_t dataLength, const StringRef& reply) noexcept;
 
 	// Pressure advance
 	ExtruderShaper& GetExtruderShaper(size_t drive) noexcept { return dms[drive].extruderShaper; }
@@ -391,7 +391,7 @@ inline int32_t Move::GetPosition(size_t driver) const noexcept
 }
 
 // Handle a CAN request to set the input shaping parameters
-inline GCodeResult Move::HandleInputShaping(const CanMessageSetInputShapingNew& msg, size_t dataLength, const StringRef& reply) noexcept
+inline GCodeResult Move::HandleInputShaping(const CanMessageSetInputShapingV1& msg, size_t dataLength, const StringRef& reply) noexcept
 {
 #if SUPPORT_INPUT_SHAPING
 	return axisShaper.EutSetInputShaping(msg, dataLength, reply);

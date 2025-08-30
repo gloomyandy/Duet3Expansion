@@ -631,7 +631,7 @@ bool CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
 		return false;
 	}
 
-	auto msg = buf->SetupRequestMessageNoRid<CanMessageAnnounceNew>(boardAddress, currentMasterAddress);
+	auto msg = buf->SetupRequestMessageNoRid<CanMessageAnnounceV1>(boardAddress, currentMasterAddress);
 	msg->timeSinceStarted = millis();
 	msg->numDrivers = NumDrivers;
 	msg->usesUf2Binary = BOARD_USES_UF2_BINARY;
@@ -855,7 +855,7 @@ extern "C" [[noreturn]] void CanAsyncSenderLoop(void *) noexcept
 	for (;;)
 	{
 		// Set up a message ready
-		auto msg = buf.SetupRequestMessageNoRid<CanMessageInputChangedNew>(CanInterface::GetCanAddress(), currentMasterAddress);
+		auto msg = buf.SetupRequestMessageNoRid<CanMessageInputChangedV1>(CanInterface::GetCanAddress(), currentMasterAddress);
 		msg->states = 0;
 		msg->numHandles = 0;
 

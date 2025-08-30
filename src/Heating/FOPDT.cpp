@@ -15,7 +15,7 @@ FopDt::FopDt() noexcept
 }
 
 // Check the model parameters are sensible, if they are then save them and return true. If not then write an error message to reply and return false.
-bool FopDt::SetParameters(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept
+bool FopDt::SetParameters(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept
 {
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
 	const char *const err =

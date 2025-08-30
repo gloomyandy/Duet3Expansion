@@ -19,10 +19,10 @@
 class TemperatureSensor;
 class FopDt;
 struct CanMessageGeneric;
-struct CanMessageHeaterModelNewNew;
+struct CanMessageHeaterModelV2;
 struct CanMessageSetHeaterFaultDetectionParameters;
 struct CanMessageSetHeaterMonitors;
-struct CanMessageHeaterFeedForwardNew;
+struct CanMessageHeaterFeedForwardV1;
 struct CanMessageSensorTemperatures;
 struct CanMessageSetHeaterTemperature;
 struct CanMessageHeaterTuningCommand;
@@ -36,7 +36,7 @@ namespace Heat
 
 	GCodeResult ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	GCodeResult ProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
-	GCodeResult ProcessM307New(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept;
+	GCodeResult ProcessM307V1(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
 	GCodeResult SetFaultDetection(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept;
 	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;
 
@@ -50,7 +50,7 @@ namespace Heat
 	// Methods that relate to a particular heater
 	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
 	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept;
-	GCodeResult FeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept;
+	GCodeResult FeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept;
 
 	float GetAveragePWM(size_t heater) noexcept							// Return the running average PWM to the heater as a fraction in [0, 1].
 	pre(heater < NumTotalHeaters);

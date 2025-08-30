@@ -12,7 +12,7 @@
 
 #if SUPPORT_DRIVERS && SUPPORT_INPUT_SHAPING
 
-struct CanMessageSetInputShapingNew;
+struct CanMessageSetInputShapingV1;
 
 class AxisShaper
 {
@@ -20,7 +20,7 @@ public:
 	AxisShaper() noexcept;
 
 	// Handle a request from the master board to set input shaping parameters
-	GCodeResult EutSetInputShaping(const CanMessageSetInputShapingNew& msg, size_t dataLength, const StringRef& reply) noexcept;
+	GCodeResult EutSetInputShaping(const CanMessageSetInputShapingV1& msg, size_t dataLength, const StringRef& reply) noexcept;
 
 	size_t GetNumImpulses() const noexcept { return numImpulses; }
 	motioncalc_t GetImpulseSize(size_t n) const noexcept { return coefficients[n]; }
