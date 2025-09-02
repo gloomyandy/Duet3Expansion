@@ -1667,6 +1667,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		spiDevice->TransceivePacket(const_cast<uint8_t*>(tmcSendData), const_cast<uint8_t*>(tmcRcvData), sizeof(sendData));
 		fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
 # endif
+		spiDevice->Deselect();
 #else
 		// On the SAME5x the only way I have found to get reliable transfers and no timeouts is to disable SPI, enable DMA, and then enable SPI.
 		// Enabling SPI before DMA sometimes results in timeouts.
