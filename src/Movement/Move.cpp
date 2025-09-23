@@ -1283,17 +1283,13 @@ void Move::Interrupt() noexcept
 			{
 				// Force a break by updating the move start time.
 				++numHiccups;
-				uint32_t hiccupTimeInserted = 0;
 				for (uint32_t hiccupTime = MoveTiming::HiccupTime; ; hiccupTime += MoveTiming::HiccupIncrement)
 				{
-					hiccupTimeInserted += hiccupTime;
 					StepTimer::IncreaseMovementDelay(hiccupTime);
 
 					// Reschedule the next step interrupt. This time it should succeed if the hiccup time was long enough.
 					if (!ScheduleNextStepInterrupt())
 					{
-						//TODO tell the main board we are behind schedule
-						(void)hiccupTimeInserted;
 						return;
 					}
 					// The hiccup wasn't long enough, so go round the loop again
