@@ -281,7 +281,7 @@ bool ClosedLoop::EncoderCalibration(bool firstIteration) noexcept
 
 		positionCounter = 0;
 		state = EncoderCalibrationState::forwards;
-		// no break
+		[[fallthrough]];
 
 	case EncoderCalibrationState::forwards:
 		// Advancing slowly and recording positions
