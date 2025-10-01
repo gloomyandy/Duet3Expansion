@@ -100,7 +100,7 @@ constexpr size_t CanClockTaskStackWords =
 #if RP2040
 										400;		// to allow calls to debugPrintf
 #else
-										130;
+										140;		// 140 is enough (minimum is 133 on 3HC) when we enable CAN debugging
 #endif
 
 static Task<CanClockTaskStackWords> *canClockTask = nullptr;				// allocated dynamically to save RAM when updating the bootloader
