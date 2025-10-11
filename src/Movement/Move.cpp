@@ -741,20 +741,19 @@ void Move::PrepareForNextSteps(uint32_t now) noexcept
 	{
 		if (dms[0].NewSegment(now) != nullptr && dms[0].state != DMState::starting)
 		{
-# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-			if (dms[0].state == DMState::phaseStepping)
-			{
-				return;
-			}
-# endif
 			dms[0].driversCurrentlyUsed = dms[0].driversNormallyUsed;	// we previously set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
-			(void)dms[0].CalcNextStepTimeFull(now);					// calculate next step time
-			dms[0].directionChanged = true;							// force the direction to be set up
+# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+			if (dms[0].state != DMState::phaseStepping)
+# endif
+			{
+				(void)dms[0].CalcNextStepTimeFull(now);					// calculate next step time
+				dms[0].directionChanged = true;							// force the direction to be set up
+			}
 		}
 	}
 	else
 	{
-		(void)dms[0].CalcNextStepTime(now);							// calculate next step time, which may change the required direction
+		(void)dms[0].CalcNextStepTime(now);								// calculate next step time, which may change the required direction
 	}
 }
 
@@ -768,11 +767,14 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, uint32_t now) noexcept
 		{
 			if (dm2->NewSegment(now) != nullptr && dm2->state != DMState::starting)
 			{
-# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 				dm2->driversCurrentlyUsed = dm2->driversNormallyUsed;	// we previously set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
+# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+				if (dm2->state != DMState::phaseStepping)				// if we are phase stepping, skip the rest and proceed to the next DM
 # endif
-				(void)dm2->CalcNextStepTimeFull(now);					// calculate next step time
-				dm2->directionChanged = true;							// force the direction to be set up
+				{
+					(void)dm2->CalcNextStepTimeFull(now);				// calculate next step time
+					dm2->directionChanged = true;						// force the direction to be set up
+				}
 			}
 		}
 		else
