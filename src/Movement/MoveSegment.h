@@ -198,7 +198,7 @@ inline bool IsPositive(motioncalc_t f) noexcept
 {
 #if (SAMC21 || RP2040) && !USE_DOUBLE_MOTIONCALC && !defined(__ECV__)
 	// Nasty hack to avoid calling floating point subroutines on MCUs without a hardware FPU
-	// ARM uses IEEE format, which uses the MSB as a sign bit and encodes positive zero as all zeros. Therefore we can just test for > 0 when interpreted as an integer.
+	// ARM uses IEEE format, which uses the MSB as a sign bit and encodes positive zero as all zeros. Therefore we can just test for > 0 when interpreted as an integer if we ignore NaNs.
 # pragma GCC diagnostic push
 # pragma GCC diagnostic ignored "-Wstrict-aliasing"
 	return *reinterpret_cast<const int32_t*>(&f) > 0;
