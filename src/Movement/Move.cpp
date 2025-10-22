@@ -542,7 +542,6 @@ bool Move::AddMove(const CanMessageMovementLinearShaped& msg) noexcept
 	params.decelStartDistance =  1.0 - decelDistance;
 
 	MovementFlags segFlags;
-	segFlags.Clear();
 	segFlags.nonPrintingMove = !msg.usePressureAdvance;
 	segFlags.noShaping = !msg.useLateInputShaping;
 
