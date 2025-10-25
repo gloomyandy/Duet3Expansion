@@ -19,9 +19,9 @@ MoveSegment *MoveSegment::Allocate(MoveSegment *p_next) noexcept
 	MoveSegment * ms = freeList;
 	if (ms != nullptr)
 	{
-		freeList = ms->next;
+		freeList = ms->GetNext();
 		IrqRestore(iflags);
-		ms->next = p_next;
+		ms->nextAndFlags = reinterpret_cast<uint32_t>(p_next);
 	}
 	else
 	{
@@ -38,14 +38,14 @@ void MoveSegment::ReleaseAll(MoveSegment *item) noexcept
 	while (item != nullptr)
 	{
 		MoveSegment *itemToRelease = item;
-		item = item->next;
+		item = item->GetNext();
 		Release(itemToRelease);
 	}
 }
 
 void MoveSegment::DebugPrint() const noexcept
 {
-	debugPrintf("s=%" PRIu32 " t=%" PRIu32 " d=%.2f u=%.4e a=%.4e f=%02" PRIx32 "\n", startTime, duration, (double)distance, (double)CalcU(), (double)a, flags.all);
+	debugPrintf("s=%" PRIu32 " t=%" PRIu32 " d=%.2f u=%.4e a=%.4e f=%02" PRIx32 "\n", startTime, duration, (double)distance, (double)CalcU(), (double)a, GetFlags().all);
 }
 
 /*static*/ void MoveSegment::DebugPrintList(const MoveSegment *segs) noexcept
