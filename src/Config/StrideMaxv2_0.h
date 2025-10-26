@@ -48,7 +48,7 @@ constexpr size_t NumDrivers = 2;
 constexpr size_t MaxSmartDrivers = 2;
 constexpr float MaxTmc5160Current = 6300.0;
 constexpr uint32_t DefaultStandstillCurrentPercent = 71;
-constexpr float Tmc5160SenseResistor = 0.075;
+constexpr float Tmc5160SenseResistor = 0.050;
 
 constexpr Pin Tmc51xxEnablePins[] = {GpioPin(20), GpioPin(22)};
 constexpr Pin Tmc51xxCSPins[] = {GpioPin(1), GpioPin(21)};

@@ -32,26 +32,32 @@
 // This bit field is used in multiple contexts so that we can copy them efficiently from one context to another. Not all flags are used in all contexts.
 union MovementFlags
 {
+	// To conserve memory space on boards with less RAM such as TOOL1LC, we now combine the flags field in the MoveSegment with the next' field.
+	// This means that we need to choose flag bits which are not valid bits in the address of a MoveSegment.
+	// We can use the lowest 2 bits because a MoveSegment is always 4-byte aligned.
+	// On the processors we use, addresses above 0x40000000 are used for peripherals and core registers, so we can use he top 2 bits as well.
 	uint32_t all;												// this is to provide a means to clear all the flags in one go
 	struct
 	{
-		uint32_t nonPrintingMove : 1,							// true if the move that generated this segment does not have both forwards extrusion and associated axis movement; used for filament monitoring
-				 	 	 	 : 1,								// on main board this is checkEndstops - not required on expansion boards
-				 noShaping : 1,									// true if input shaping should be disabled for this move
-				 executing : 1,									// normally clear, set in a MoveSegment when the move starts to be executed
-				 isExtruder	: 1;								// true if this segment is for an extruder
+		uint32_t isExtruder			: 1,						// true if this segment is for an extruder
+				 nonPrintingMove	: 1,						// true if the move that generated this segment does not have both forwards extrusion and associated axis movement; used for filament monitoring
+				 	 	 	 	 	: 28,						// these bits might be valid in a RAM address
+				 noShaping			: 1,						// true if input shaping should be disabled for this move
+				 executing			: 1;						// normally clear, set in a MoveSegment when the move starts to be executed
 	};
 
-	constexpr void Clear() noexcept { all = 0; }
+	static constexpr uint32_t FlagsMask = 0xC0000003;			// mask of all the flag bits. *** WARNING! this must be kept in step with flag bits allocation, see above. ***
+	static constexpr uint32_t ExecutingBit = 0x80000000;		// just the 'executing' flag bit. *** WARNING! this must be kept in step with flag bits allocation, see above. ***
 
-	constexpr void Init() noexcept { all = 0; nonPrintingMove = true; }
+	constexpr MovementFlags() noexcept : all(0) { }
+	constexpr MovementFlags(uint32_t f) noexcept : all(f) { }
+
+	constexpr void InitNonPrinting() noexcept { all = 0; nonPrintingMove = true; }
 
 	// This operator sets checkingEndstops if either of the segments to be combined checks endstops, and sets nonPrintingMove if either of them is a non printing move
 	MovementFlags operator|(const MovementFlags other) const noexcept
 	{
-		MovementFlags ret;
-		ret.all = all | other.all;
-		return ret;
+		return MovementFlags(all | other.all);
 	}
 
 	MovementFlags& operator|=(const MovementFlags other) noexcept
@@ -62,8 +68,7 @@ union MovementFlags
 
 	MovementFlags AddIsExtruder() const noexcept
 	{
-		MovementFlags ret;
-		ret.all = all;
+		MovementFlags ret(all);
 		ret.isExtruder = true;
 		return ret;
 	}
@@ -82,7 +87,7 @@ public:
 
 	// Read the values of the flag bits
 	bool IsLinear() const noexcept { return a == 0; }		//TODO: should we ignore very small accelerations, to avoid rounding error in the calculation?
-	MovementFlags GetFlags() const noexcept { return flags; }
+	MovementFlags GetFlags() const noexcept { return MovementFlags(nextAndFlags & MovementFlags::FlagsMask); }
 
 #if 0 //SUPPORT_REMOTE_COMMANDS
 	bool IsRemote() const noexcept { return isRemote; }
@@ -128,7 +133,7 @@ public:
 	bool NormaliseAndCheckLinear(motioncalc_t distanceCarriedForwards, motioncalc_t& t0) noexcept;
 
 	// Set the 'executing' bit in the flags
-	void SetExecuting() noexcept { flags.executing = true; }
+	void SetExecuting() noexcept { nextAndFlags |= MovementFlags::ExecutingBit; }
 
 	// Get the next segment in this list
 	MoveSegment *GetNext() const noexcept;
@@ -160,8 +165,7 @@ protected:
 	static MoveSegment *freeList;							// list of recycled segment objects
 	static unsigned int numCreated;							// total number of segment objects created
 
-	MoveSegment *next;										// pointer to the next segment
-	MovementFlags flags;
+	uint32_t nextAndFlags;									// pointer to the next segment, also holds the flag bits
 	uint32_t startTime;										// when this segment should start, in movement clock ticks
 	uint32_t duration;										// the duration of this segment in movement ticks
 	motioncalc_t distance;									// the number of steps moved
@@ -173,7 +177,7 @@ private:
 
 // Create a new one, leaving the flags clear
 inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
-	: next(p_next)
+	: nextAndFlags(reinterpret_cast<uint32_t>(p_next))
 {
 	// remaining fields are not initialised
 }
@@ -251,43 +255,43 @@ inline bool MoveSegment::NormaliseAndCheckLinear(motioncalc_t distanceCarriedFor
 inline void MoveSegment::Release(MoveSegment *item) noexcept
 {
 	const auto iflags = IrqSave();
-	item->next = freeList;
+	item->nextAndFlags = reinterpret_cast<uint32_t>(freeList);
 	freeList = item;
 	IrqRestore(iflags);
 }
 
 inline MoveSegment *MoveSegment::GetNext() const noexcept
 {
-	return next;
+	return reinterpret_cast<MoveSegment*>(nextAndFlags & ~MovementFlags::FlagsMask);
 }
 
 inline void MoveSegment::SetNext(MoveSegment *p_next) noexcept
 {
-	next = p_next;
+	nextAndFlags = (nextAndFlags & MovementFlags::FlagsMask) | reinterpret_cast<uint32_t>(p_next);
 }
 
-// Set the parameters of this segment
+// Set the parameters of this segment. We assume the flags are clear initially.
 inline void MoveSegment::SetParameters(uint32_t p_startTime, uint32_t p_duration, motioncalc_t p_distance, motioncalc_t p_a, MovementFlags p_flags) noexcept
 {
 	startTime = p_startTime;
 	duration = p_duration;
 	distance = p_distance;
 	a = p_a;
-	flags = p_flags;
+	nextAndFlags |= p_flags.all & MovementFlags::FlagsMask;	
 }
 
 // Split this segment in two, returning a pointer to the new second part
 inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 {
-	MoveSegment *const secondSeg = Allocate(next);
+	MoveSegment *const secondSeg = Allocate(GetNext());
 	const motioncalc_t firstDistance = (CalcU() + (motioncalc_t)0.5 * a * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
-	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, a, flags);
+	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, a, GetFlags());
 #if SEGMENT_DEBUG
 	debugPrintf("split at %" PRIu32 ", fd=%.2f, sd=%.2f\n", firstDuration, (double)firstDistance, (double)(distance - firstDistance));
 #endif
 	duration = firstDuration;
 	distance = firstDistance;
-	next = secondSeg;
+	SetNext(secondSeg);
 	return secondSeg;
 }
 
@@ -301,7 +305,7 @@ inline void MoveSegment::Merge(motioncalc_t p_distance, motioncalc_t p_a, Moveme
 #endif
 	distance += p_distance;
 	a += p_a;
-	flags |= p_flags;
+	nextAndFlags |= (p_flags.all & MovementFlags::FlagsMask);
 }
 
 #endif /* SRC_MOVEMENT_MOVESEGMENT_H_ */
