@@ -33,6 +33,8 @@
 # include <hardware/watchdog.h>
 #if RP2040
 # include <hardware/structs/vreg_and_chip_reset.h>
+#elif RP2350
+# include <hardware/structs/powman.h>
 #endif 
 # include <hardware/structs/watchdog.h>
 #else
@@ -938,7 +940,43 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 		else
 #if RP2350
 		{
-			reply.cat("unknown not implemented");
+			const uint32_t reason2 = powman_hw->chip_reset;
+			if (reason2 & 0x1c000000)
+			{
+				reply.cat("watchdog ");
+			}
+			if (reason2 & 0x08280000)
+			{
+				reply.cat("debugger ");
+			}
+			if (reason2 & 0x04000000)
+			{
+				reply.cat("power glitch ");
+			}
+			if (reason2 & 0x02000000)
+			{
+				reply.cat("core powerdown ");
+			}
+			if (reason2 & 0x00040000)
+			{
+				reply.cat("RUN pin ");
+			}
+			if (reason2 & 0x00020000)
+			{
+				reply.cat("brownout ");
+			}
+			if (reason2 & 0x00010000)
+			{
+				reply.cat("power on ");
+			}
+			if (reason2 & 0x00000010)
+			{
+				reply.cat("rescue ");
+			}
+			if (reason2 & 0x00000001)
+			{
+				reply.cat("double tap ");
+			}
 		}
 #else
 		{
