@@ -31,7 +31,7 @@ void DriveMovement::Init(size_t drv) noexcept
 	nextDM = nullptr;
 #endif
 	segments = nullptr;
-	segmentFlags.Init();
+	segmentFlags.InitNonPrinting();
 #if SUPPORT_CLOSED_LOOP
 	closedLoopControl.InitInstance();
 #endif
@@ -94,7 +94,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		MoveSegment *seg = segments;				// capture volatile variable
 		if (seg == nullptr)
 		{
-			segmentFlags.Init();
+			segmentFlags.InitNonPrinting();
 			state = DMState::idle;					// if we have been round this loop already then we will have changed the state, so reset it to idle
 			return nullptr;
 		}
