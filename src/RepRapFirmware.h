@@ -93,7 +93,7 @@ inline motioncalc_t fabsm(motioncalc_t a) noexcept
 #elif (SAMC21 || RP2040) && !defined(__ECV__)
 # pragma GCC diagnostic push
 # pragma GCC diagnostic ignored "-Wstrict-aliasing"
-	*reinterpret_cast<int32_t*>(&a) &= 0x7FFFFFFF;	// just clear the sign bit
+	*reinterpret_cast<uint32_t*>(&a) &= 0x7FFFFFFF;	// just clear the sign bit
 	return a;
 # pragma GCC diagnostic pop
 #else
