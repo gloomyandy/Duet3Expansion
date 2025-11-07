@@ -1492,10 +1492,16 @@ void Move::SetMotorCurrent(size_t driver, float current) noexcept
 // TMC driver temperatures
 float Move::GetTmcDriversTemperature()
 {
+#if defined(TOOL1RR) || defined(F3PTB)
+	// TEMPORARY code until we have more general support for TMC2240 and other drivers that report temperature
+	// The TOOL1RR has a single TMC2240 driver so report the temperature of that
+	return SmartDrivers::GetDriverTemperature(0);
+#else
 	const LocalDriversBitmap mask = LocalDriversBitmap::MakeLowestNBits(MaxSmartDrivers);
 	return (temperatureShutdownDrivers.Intersects(mask)) ? 150.0
 			: (temperatureWarningDrivers.Intersects(mask)) ? 100.0
 				: 0.0;
+#endif
 }
 
 # if HAS_STALL_DETECT
