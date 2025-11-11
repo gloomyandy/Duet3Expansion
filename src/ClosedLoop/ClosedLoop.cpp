@@ -36,8 +36,6 @@
 using std::atomic;
 using std::numeric_limits;
 
-# include "Encoders/AS5047D.h"
-# include "Encoders/TLI5012B.h"
 # include "Encoders/QuadratureEncoderPdec.h"
 # include "Encoders/LinearCompositeEncoder.h"
 
@@ -278,6 +276,21 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 		// We set the mode to open loop earlier in this function so no need to do it here
 		DeleteObject(encoder);
 
+		// If the magnetic encoder type was provided, check that it is valid
+		MagneticEncoderType magEncoderType(MagneticEncoderType::as5047d);
+		{
+			String<StringLength20> magneticEncoderTypeString;
+			if (parser.GetStringParam('Y', magneticEncoderTypeString.GetRef()))
+			{
+				magEncoderType = MagneticEncoderType(magneticEncoderTypeString.c_str());
+				if (!magEncoderType.IsValid())
+				{
+					reply.printf("unrecognised magnetic encoder type '%s'", magneticEncoderTypeString.c_str());
+					return GCodeResult::error;
+				}
+			}
+		}
+
 		switch (tempEncoderType)
 		{
 		case EncoderType::none:
@@ -285,19 +298,13 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 			// encoder is already nullptr
 			break;
 
-		case EncoderType::rotaryAS5047:
-			encoder = new AS5047D(tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin);
+		case EncoderType::rotaryMagnetic:
+			encoder = CreateRotaryEncoder(magEncoderType, tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin);
 			CreateCalibrationTask();
 			break;
 
-#if defined(SUPPORT_TLI5012B)
-		case EncoderType::rotaryTLI5012:
-			encoder = new TLI5012B(tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin);
-			CreateCalibrationTask();
-			break;
-#endif
 		case EncoderType::linearComposite:
-			encoder = new LinearCompositeEncoder(tempCPR, tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin);
+			encoder = new LinearCompositeEncoder(tempCPR, tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin, magEncoderType);
 			CreateCalibrationTask();
 			break;
 

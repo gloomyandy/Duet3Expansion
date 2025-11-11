@@ -10,6 +10,10 @@
 #if SUPPORT_CLOSED_LOOP
 
 #include <Hardware/NonVolatileMemory.h>
+#include "AS5047D.h"
+#if SUPPORT_MT6835
+# include "MT6835.h"
+#endif
 
 AbsoluteRotaryEncoder::AbsoluteRotaryEncoder(uint32_t p_stepsPerRev, unsigned int p_resolutionBits) noexcept
 	: Encoder((1u << p_resolutionBits) / (float)p_stepsPerRev, p_stepsPerRev),
@@ -376,6 +380,22 @@ void AbsoluteRotaryEncoder::AppendLUTCorrections(const StringRef& reply) const n
 void AbsoluteRotaryEncoder::AppendCalibrationErrors(const StringRef& reply) const noexcept
 {
 	reply.catf("min %.1f, max %.1f, rms %.1f", (double)minCalibrationError, (double)maxCalibrationError, (double)rmsCalibrationError);
+}
+
+AbsoluteRotaryEncoder *CreateRotaryEncoder(MagneticEncoderType magEncoderType, uint32_t p_stepsPerRev, SharedSpiDevice& spiDev, Pin p_csPin) noexcept
+{
+	switch (magEncoderType.RawValue())
+	{
+
+#if SUPPORT_MT6835
+	case MagneticEncoderType::mt6835:
+		return MT6835(p_stepsPerRev, spiDev, EncoderCsPin);
+#endif
+
+	case MagneticEncoderType::as5047d:
+	default:			// default case should never happen so just keep the compiler happy
+		return new AS5047D(p_stepsPerRev, spiDev, EncoderCsPin);
+	}
 }
 
 #endif

@@ -25,7 +25,16 @@
 
 # if SUPPORT_CLOSED_LOOP
 
+#include <General/NamedEnum.h>
+
+NamedEnum(MagneticEncoderType, uint8_t, as5047d
+#if SUPPORT_MT6835
+	, mt6835
+#endif
+	);
+
 class NonVolatileMemory;
+class SharedSpiDevice;
 
 // Base class for absolute encoders. The encoder resolution(counts/revolution) must be a power of two.
 class AbsoluteRotaryEncoder : public Encoder
@@ -146,6 +155,8 @@ private:
 	unsigned int calibrationPhase;
 	int16_t calibrationData[MaxCalibrationDataPoints];
 };
+
+AbsoluteRotaryEncoder *CreateRotaryEncoder(MagneticEncoderType magEncoderType, uint32_t p_stepsPerRev, SharedSpiDevice& spiDev, Pin p_csPin) noexcept;
 
 # endif
 
