@@ -11,10 +11,10 @@
 
 #include <Hardware/NonVolatileMemory.h>
 
-LinearCompositeEncoder::LinearCompositeEncoder(float p_countsPerRev, uint32_t p_stepsPerRev, SharedSpiDevice &spiDev, Pin p_csPin) noexcept
+LinearCompositeEncoder::LinearCompositeEncoder(float p_countsPerRev, uint32_t p_stepsPerRev, SharedSpiDevice &spiDev, Pin p_csPin, MagneticEncoderType magEncoderType) noexcept
 	: Encoder((4 * p_countsPerRev)/(float)p_stepsPerRev, p_stepsPerRev)
 {
-	shaftEncoder = new AS5047D(p_stepsPerRev, spiDev, p_csPin);
+	shaftEncoder = CreateRotaryEncoder(magEncoderType, p_stepsPerRev, spiDev, p_csPin);
 	linEncoder = new QuadratureEncoderPdec((uint32_t)p_countsPerRev, p_stepsPerRev);
 }
 
