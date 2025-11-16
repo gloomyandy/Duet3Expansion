@@ -389,7 +389,7 @@ AbsoluteRotaryEncoder *CreateRotaryEncoder(MagneticEncoderType magEncoderType, u
 
 #if SUPPORT_MT6835
 	case MagneticEncoderType::mt6835:
-		return MT6835(p_stepsPerRev, spiDev, EncoderCsPin);
+		return new MT6835(p_stepsPerRev, spiDev, EncoderCsPin);
 #endif
 
 	case MagneticEncoderType::as5047d:
