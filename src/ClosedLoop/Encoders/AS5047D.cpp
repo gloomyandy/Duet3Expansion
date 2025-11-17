@@ -111,19 +111,21 @@ GCodeResult AS5047D::Init(const StringRef& reply) noexcept
 	return GCodeResult::error;
 }
 
+// Enable this encoder
 void AS5047D::Enable() noexcept
 {
 	IoPort::SetPinMode(csPin, OUTPUT_HIGH);
 	ClosedLoop::EnableEncodersSpi();
 }
 
+// Disable this encoder
 void AS5047D::Disable() noexcept
 {
 	IoPort::SetPinMode(csPin, OUTPUT_HIGH);
 	ClosedLoop::DisableEncodersSpi();
 }
 
-// Return the current position as reported by the encoder
+// Return the current position as reported by the encoder.  Return true if error, false if success.
 bool AS5047D::GetRawReading() noexcept
 {
 	if (spi.Select(0))			// get the mutex and set the clock rate
