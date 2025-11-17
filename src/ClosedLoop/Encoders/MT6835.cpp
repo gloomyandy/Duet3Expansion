@@ -67,7 +67,6 @@ static inline constexpr uint32_t NanoSecondsToClocks(uint32_t ns) noexcept
 }
 
 constexpr uint32_t Clocks300ns = NanoSecondsToClocks(300);
-constexpr uint32_t ClocksHalfSclk = SystemCoreClockFreq/(2 * MT6835ClockFrequency);
 
 MT6835::MT6835(uint32_t p_stepsPerRev, SharedSpiDevice& spiDev, Pin p_csPin) noexcept
 	: SpiEncoder(spiDev, MT6835ClockFrequency, SpiMode::mode3, false, p_csPin),
@@ -89,18 +88,18 @@ GCodeResult MT6835::Init(const StringRef& reply) noexcept
 			return GCodeResult::ok;
 		}
 
-		reply.copy("Encoder warning");
+		reply.copy("Encoder warning(s)");
 		if ((regs.status & 0x01) != 0)
 		{
-			reply.cat(": rotation over speed");
+			reply.cat(": rotation overspeed");
 		}
 		if ((regs.status & 0x02) != 0)
 		{
 			reply.cat(": magnet too weak");
-			}
+		}
 		if ((regs.status & 0x04) != 0)
 		{
-			reply.cat(": under voltage");
+			reply.cat(": undervoltage");
 		}
 		Enable();
 		return GCodeResult::warning;

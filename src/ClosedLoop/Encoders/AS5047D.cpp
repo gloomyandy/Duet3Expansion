@@ -33,7 +33,6 @@ static inline constexpr uint32_t NanoSecondsToClocks(uint32_t ns) noexcept
 }
 
 constexpr uint32_t Clocks350ns = NanoSecondsToClocks(350);
-constexpr uint32_t ClocksHalfSclk = SystemCoreClockFreq/(2 * AS5047ClockFrequency);
 
 // Adjust the top bit of a 16-bit word to make it even parity
 static inline constexpr uint16_t AddParityBit(uint16_t w) noexcept
