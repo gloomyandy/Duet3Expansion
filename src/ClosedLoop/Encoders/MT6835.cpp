@@ -70,7 +70,7 @@ constexpr uint32_t Clocks300ns = NanoSecondsToClocks(300);
 constexpr uint32_t ClocksHalfSclk = SystemCoreClockFreq/(2 * MT6835ClockFrequency);
 
 MT6835::MT6835(uint32_t p_stepsPerRev, SharedSpiDevice& spiDev, Pin p_csPin) noexcept
-	: SpiEncoder(spiDev, MT6835ClockFrequency, SpiMode::mode3, true, p_csPin),
+	: SpiEncoder(spiDev, MT6835ClockFrequency, SpiMode::mode3, false, p_csPin),
 	  AbsoluteRotaryEncoder(p_stepsPerRev, MT6835ResolutionBits)
 {
 }
@@ -190,7 +190,6 @@ void MT6835::AppendDiagnostics(const StringRef &reply) noexcept
 	StatusRegister regs;
 	if (GetDiagnosticRegisters(regs))
 	{
-		reply.catf(", agc %u", regs.status & 0x07);
 		if ((regs.status & 0x01) != 0)
 		{
 			reply.cat(", rotation over speed warning");
