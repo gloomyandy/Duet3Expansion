@@ -17,7 +17,7 @@
 class SharedSpiClient
 {
 public:
-	SharedSpiClient(SharedSpiDevice& dev, uint32_t clockFreq, SpiMode m, Pin p_csPin, bool polarity) noexcept;
+	SharedSpiClient(SharedSpiDevice& dev, uint32_t clockFreq, SpiMode m, Pin p_csPin, bool p_csActivePolarity) noexcept;
 
 	void SetCsPin(Pin p) noexcept { csPin = p; InitCsPin(); }
 	bool Select(uint32_t timeout) const noexcept;												// get SPI ownership and select the device, return true if successful
