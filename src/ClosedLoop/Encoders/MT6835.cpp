@@ -111,12 +111,14 @@ GCodeResult MT6835::Init(const StringRef& reply) noexcept
 	return GCodeResult::error;
 }
 
+// Enable the encoder
 void MT6835::Enable() noexcept
 {
 	IoPort::SetPinMode(csPin, OUTPUT_HIGH);
 	ClosedLoop::EnableEncodersSpi();
 }
 
+// Disable the encoder
 void MT6835::Disable() noexcept
 {
 	IoPort::SetPinMode(csPin, OUTPUT_HIGH);
@@ -211,7 +213,7 @@ void MT6835::AppendDiagnostics(const StringRef &reply) noexcept
 // Append short form status to a string. If there is an error then the user can use M122 to get more details.
 void MT6835::AppendStatus(const StringRef &reply) noexcept
 {
-	reply.lcatf("Magnetic encoder motor steps/rev %" PRIu32, stepsPerRev);
+	reply.lcatf("Magnetic encoder type MT6835, motor steps/rev %" PRIu32, stepsPerRev);
 	StatusRegister regs;
 	if (GetDiagnosticRegisters(regs))
 	{
