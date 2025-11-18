@@ -124,7 +124,7 @@ void AS5047D::Disable() noexcept
 	ClosedLoop::DisableEncodersSpi();
 }
 
-// Return the current position as reported by the encoder.  Return true if error, false if success.
+// This must set rawReading to a value between 0 and GetMaxValue()-1. Return true if successful, false if error.
 bool AS5047D::GetRawReading() noexcept
 {
 	if (spi.Select(0))			// get the mutex and set the clock rate
@@ -137,11 +137,11 @@ bool AS5047D::GetRawReading() noexcept
 		if (ok && CheckResponse(response))
 		{
 			rawReading = response & 0x3FFF;
-			return false;
+			return true;
 		}
 	}
 
-	return true;
+	return false;
 }
 
 // Get the diagnostic register and the error flags register

@@ -720,7 +720,7 @@ void ClosedLoop::AdjustTargetMotorSteps(float amount) noexcept
 void ClosedLoop::InstanceControlLoop(StepTimer::Ticks now, StepTimer::Ticks timeElapsed) noexcept
 {
 	// Read the current state of the drive. Do this even if we are not in closed loop mode.
-	if (encoder != nullptr && !encoder->TakeReading())
+	if (encoder != nullptr && encoder->TakeReading())
 	{
 		// Calculate and store the current error in full steps
 		hasMovementCommand = moveInstance->GetCurrentMotion(driverNumber, now, mParams);
@@ -1042,7 +1042,7 @@ void ClosedLoop::InstanceDiagnostics(size_t driver, const StringRef& reply) noex
 	reply.catf(", encoder type %s", GetEncoderType().ToString());
 	if (encoder != nullptr)
 	{
-		if (encoder->TakeReading())
+		if (!encoder->TakeReading())
 		{
 			reply.cat(", error reading encoder\n");
 		}
@@ -1094,8 +1094,8 @@ void ClosedLoop::ResetError() noexcept
 		TaskCriticalSectionLocker lock;
 
 		// Set the target position to the current position
-		const bool err = encoder->TakeReading();
-		(void)err;		//TODO handle error
+		const bool ok = encoder->TakeReading();
+		(void)ok;		//TODO handle error
 		errorDerivativeFilter.Reset();
 		speedFilter.Reset();
 		SetTargetToCurrentPosition();
@@ -1126,8 +1126,8 @@ bool ClosedLoop::SetClosedLoopEnabled(ClosedLoopMode mode, const StringRef &repl
 
 			// Temporarily calibrate the encoder zero position
 			// We assume that the motor is at the position given by its microstep counter. This may not be true e.g. if it has a brake that has not been disengaged.
-			const bool err = encoder->TakeReading();
-			if (err)
+			const bool ok = encoder->TakeReading();
+			if (!ok)
 			{
 				reply.copy("Error reading encoder");
 				return false;

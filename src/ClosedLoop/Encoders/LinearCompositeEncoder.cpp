@@ -24,18 +24,18 @@ LinearCompositeEncoder::~LinearCompositeEncoder()
 	delete shaftEncoder;
 }
 
-// Take a reading and store at least currentCount and currentPhasePosition. Return true if error, false if success.
+// Take a reading and store at least currentCount and currentPhasePosition. Return true if success, false if error.
 bool LinearCompositeEncoder::TakeReading() noexcept
 {
-	const bool shaftErr = shaftEncoder->TakeReading();
-	const bool linErr = linEncoder->TakeReading();
-	if (!shaftErr && !linErr)
+	const bool shaftOk = shaftEncoder->TakeReading();
+	const bool linOk = linEncoder->TakeReading();
+	if (shaftOk && linOk)
 	{
 		currentCount = linEncoder->GetCurrentCount();
 		currentPhasePosition = shaftEncoder->GetCurrentPhasePosition();
-		return false;
+		return true;
 	}
-	return true;
+	return false;
 }
 
 GCodeResult LinearCompositeEncoder::Init(const StringRef &reply) noexcept

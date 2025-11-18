@@ -125,39 +125,28 @@ void MT6835::Disable() noexcept
 }
 
 //---------------------------------------------------------------------------------------------------------------------------
-// Return the current position as reported by the encoder.  Return true if error, false if success.
+// This must set rawReading to a value between 0 and GetMaxValue()-1. Return true if successful, false if error.
 bool MT6835::GetRawReading() noexcept
 {
 	if (spi.Select(0))			// get the mutex and set the clock rate
 	{
-//		StatusRegister regs;
-		uint8_t crc;
-		uint8_t response[3];
-		const bool ok = DoSpiTransaction(MT6835_OP_Read, MT6835Reg_Angle1, response[0])
+		const uint8_t txBuffer[6] = { MT6835_OP_Read, MT6835Reg_Angle1, 0, 0, 0, 0 };		// read the 3 angle registers and the CRC in a single transaction
+		uint8_t rxBuffer[6];
+		IoPort::WriteDigital(csPin, false);
+		const bool ok = spi.TransceivePacket(txBuffer, rxBuffer, 6);
+		IoPort::WriteDigital(csPin, true);
+		spi.Deselect();			// release the mutex
 
-				&& (DelayCycles(GetCurrentCycles(), Clocks300ns),
-				DoSpiTransaction(MT6835_OP_Read, MT6835Reg_Angle2, response[1]))
-
-				&& (DelayCycles(GetCurrentCycles(), Clocks300ns),
-				DoSpiTransaction(MT6835_OP_Read, MT6835Reg_Angle3, response[2]))
-
-				&& (DelayCycles(GetCurrentCycles(), Clocks300ns),
-				DoSpiTransaction(MT6835_OP_Read, MT6835Reg_Angle4, crc));
-
-		spi.Deselect();			// release the mutex8
 		if (ok)
 		{
-//			regs.status = (response[2] & 0x07);
-
-			uint32_t temp_rawReading = (((uint32_t)response[0] << 13 |(uint32_t)response[1] << 5 | ((uint32_t)response[2] >> 3)));
-
+			const uint32_t temp_rawReading = ((uint32_t)rxBuffer[2] << 13) | ((uint32_t)rxBuffer[3] << 5) | ((uint32_t)rxBuffer[4] >> 3);
 			rawReading = temp_rawReading >> 7;
-
-			return false;
+			// regs.status = (response[5] & 0x07);
+			return true;
 		}
 	}
 
-	return true;
+	return false;
 }
 
 // Get the encoder status register returning true if success, false if error
@@ -165,13 +154,13 @@ bool MT6835::GetDiagnosticRegisters(StatusRegister& regs) noexcept
 {
 	if (spi.Select(0))			// get the mutex and set the clock rate
 	{
-		uint8_t response[3];
-		const bool ok = DoSpiTransaction(MT6835_OP_Read, MT6835Reg_Angle3, response[2]);
-
+		uint8_t response;
+		const bool ok = DoSpiTransaction(MT6835_OP_Read, MT6835Reg_Angle3, response);
 		spi.Deselect();			// release the mutex8
+
 		if (ok)
 		{
-			regs.status = (response[2] & 0x07);
+			regs.status = (response & 0x07);
 			return true;
 		}
 	}
@@ -191,7 +180,7 @@ void MT6835::AppendDiagnostics(const StringRef &reply) noexcept
 	{
 		if ((regs.status & 0x01) != 0)
 		{
-			reply.cat(", rotation over speed warning");
+			reply.cat(", rotation overspeed warning");
 		}
 		if ((regs.status & 0x02) != 0)
 		{
@@ -199,7 +188,7 @@ void MT6835::AppendDiagnostics(const StringRef &reply) noexcept
 		}
 		if ((regs.status & 0x04) != 0)
 		{
-			reply.cat(", under voltage warning");
+			reply.cat(", undervoltage warning");
 		}
 	}
 	else
@@ -215,10 +204,9 @@ void MT6835::AppendStatus(const StringRef &reply) noexcept
 	StatusRegister regs;
 	if (GetDiagnosticRegisters(regs))
 	{
-		reply.catf(", agc %u", regs.status & 0x07);
 		if ((regs.status & 0x01) != 0)
 		{
-			reply.cat(", rotation over speed warning");
+			reply.cat(", rotation overspeed warning");
 		}
 		if ((regs.status & 0x02) != 0)
 		{
@@ -226,7 +214,7 @@ void MT6835::AppendStatus(const StringRef &reply) noexcept
 		}
 		if ((regs.status & 0x04) != 0)
 		{
-			reply.cat(", under voltage warning");
+			reply.cat(", undervoltage warning");
 		}
 	}
 	else
@@ -235,26 +223,15 @@ void MT6835::AppendStatus(const StringRef &reply) noexcept
 	}
 }
 
-// Perform an SPI transaction. Caller must get ownership of the SPI device first and release it afterwards, possibly after doing multiple transactions.
-// Leave at least 300ns between multiple calls to this function.
+// Perform an SPI transaction to read a single 8-bit register. Caller must get ownership of the SPI device first and release it afterwards.
+// If making multiple calls to this function within a single select operation, toggle CS high for 300ns and then low again between calls.
 bool MT6835::DoSpiTransaction(uint8_t command, uint8_t address, uint8_t &response) noexcept
 {
-	IoPort::WriteDigital(csPin, false);
-
-	const uint8_t txBuffer[3] =
-		{	(uint8_t)(command),
-			(uint8_t)(address),
-			0
-		};
-
+	const uint8_t txBuffer[3] = { command, address, 0 };
 	uint8_t rxBuffer[3];
 
 	const bool ok = spi.TransceivePacket(txBuffer, rxBuffer, 3);
-
-	IoPort::WriteDigital(csPin, true);
-
 	response = (rxBuffer[2]);
-
 	return ok;
 }
 

@@ -45,7 +45,7 @@ public:
 
 	// Overridden virtual functions
 
-	// Take a reading and store at least currentCount and currentPhasePosition. Return true if error, false if success.
+	// Take a reading and store at least currentCount and currentPhasePosition. Return true if success, false if error.
 	bool TakeReading() noexcept override;
 
 	// Tell the encoder what the step phase is at the current count. Only applicable to relative encoders.
@@ -115,7 +115,7 @@ public:
 	bool IsReversed() const noexcept { return isBackwards; }
 
 protected:
-	// This must be defined to set rawReading to a value between 0 and one below GetMaxValue()
+	// This must set rawReading to a value between 0 and GetMaxValue()-1. Return true if successful, false if error.
 	virtual bool GetRawReading() noexcept = 0;
 
 	uint32_t rawReading = 0;				// the value read from the encoder

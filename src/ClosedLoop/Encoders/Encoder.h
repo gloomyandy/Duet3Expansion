@@ -34,7 +34,7 @@ public:
 	// Disable the encoder
 	virtual void Disable() noexcept = 0;
 
-	// Take a reading and store at least currentCount and currentPhasePosition. Return true if error, false if success.
+	// Take a reading and store at least currentCount and currentPhasePosition. Return true if success, false if error.
 	virtual bool TakeReading() noexcept = 0;
 
 	// Tell the encoder what the step phase is at the current count. Only applicable to relative encoders.
