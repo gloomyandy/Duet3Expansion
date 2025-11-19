@@ -16,23 +16,23 @@ constexpr unsigned int MT6835ResolutionBits = 14;
 
 // Operation Command Bits
 constexpr uint8_t MT6835_OP_None = 0b00000000;
-constexpr uint8_t MT6835_OP_Read = 0b00110000;			//Read one byte register
-constexpr uint8_t MT6835_OP_Write = 0b01100000;		//Write one byte register
-constexpr uint8_t MT6835_OP_Program = 0b11000000;		//Program EEPROM
-constexpr uint8_t MT6835_OP_Auto_Zero = 0b01010000;	//Auto Set Zero
-constexpr uint8_t MT6835_OP_Burst_Angle = 0b10100000;	//Burst read angle registers, address 0x003
+constexpr uint8_t MT6835_OP_Read = 0b00110000;			// Read one byte register
+constexpr uint8_t MT6835_OP_Write = 0b01100000;			// Write one byte register
+constexpr uint8_t MT6835_OP_Program = 0b11000000;		// Program EEPROM
+constexpr uint8_t MT6835_OP_Auto_Zero = 0b01010000;		// Auto Set Zero
+constexpr uint8_t MT6835_OP_Burst_Angle = 0b10100000;	// Burst read angle registers
 
 constexpr uint16_t MT6835_CRC = 0b100000111;
 
 constexpr uint16_t MT6835Write_ACK = 0x55;
 
-constexpr uint16_t MT6835Reg_UserID = 0x01; 	//USER_ID[7:0], free byte for user
+constexpr uint16_t MT6835Reg_UserID = 0x01; 	// USER_ID[7:0], free byte for user
 
 // Angle Data Registers
-constexpr uint8_t MT6835Reg_Angle1 = 0x03;	//ANGLE[20:13]
-constexpr uint8_t MT6835Reg_Angle2 = 0x04;	//ANGLE[12:5]
-constexpr uint8_t MT6835Reg_Angle3 = 0x05;	//Bits 7-3: ANGLE[4:0], Bits 2-0: STATUS[2:0]
-constexpr uint8_t MT6835Reg_Angle4 = 0x06;	//CRC[7:0], Redundant check of ANGLE and STATUS. Polynomial X^8 + X^2 + X + 1, MSB (ANGLE{20]) First
+constexpr uint8_t MT6835Reg_Angle1 = 0x03;		// ANGLE[20:13]
+constexpr uint8_t MT6835Reg_Angle2 = 0x04;		// ANGLE[12:5]
+constexpr uint8_t MT6835Reg_Angle3 = 0x05;		// Bits 7-3: ANGLE[4:0], Bits 2-0: STATUS[2:0]
+constexpr uint8_t MT6835Reg_Angle4 = 0x06;		// CRC[7:0], Redundant check of ANGLE and STATUS. Polynomial X^8 + X^2 + X + 1, MSB (ANGLE{20]) First
 constexpr uint8_t MT6835Reg_Status = 0x05;
 
 // Status bits Logic 1 for warning:
@@ -97,27 +97,28 @@ MT6835::MT6835(uint32_t p_stepsPerRev, SharedSpiDevice& spiDev, Pin p_csPin) noe
 // Initialise the encoder and enable it if successful. If there are any warnings or errors, put the corresponding message text in 'reply'.
 GCodeResult MT6835::Init(const StringRef& reply) noexcept
 {
-	// See if we can read sensible data from the encoder
-	StatusRegister regs;
-	if (GetDiagnosticRegisters(regs))
+	// See if we can read sensible data from the encoder.
+	// If the encoder is not present then the CRC check in GetAngleAndStatus will probably fail, unless the data read is all zeros.
+	uint32_t angle;
+	uint8_t status;
+	if (GetAngleAndStatus(angle, status))
 	{
-
-		if ((regs.status & 0x07) == 0)
+		if ((status & 0x07) == 0)
 		{
 			Enable();
 			return GCodeResult::ok;
 		}
 
 		reply.copy("Encoder warning(s)");
-		if ((regs.status & 0x01) != 0)
+		if ((status & 0x01) != 0)
 		{
 			reply.cat(": rotation overspeed");
 		}
-		if ((regs.status & 0x02) != 0)
+		if ((status & 0x02) != 0)
 		{
 			reply.cat(": magnet too weak");
 		}
-		if ((regs.status & 0x04) != 0)
+		if ((status & 0x04) != 0)
 		{
 			reply.cat(": undervoltage");
 		}
@@ -126,7 +127,7 @@ GCodeResult MT6835::Init(const StringRef& reply) noexcept
 
 	}
 
-	reply.copy("Failed to read encoder status register");
+	reply.copy("Encoder not found");
 	return GCodeResult::error;
 }
 
@@ -148,9 +149,42 @@ void MT6835::Disable() noexcept
 // This must set rawReading to a value between 0 and GetMaxValue()-1. Return true if successful, false if error.
 bool MT6835::GetRawReading() noexcept
 {
+	uint32_t angle;
+	uint8_t status;
+	if (GetAngleAndStatus(angle, status))
+	{
+		rawReading = angle >> 7;				// convert from 21 to 14 bits which is what the closed loop code currently expects
+		return true;
+	}
+
+	return false;
+}
+
+
+// Get diagnostic information and append it to a string
+void MT6835::AppendDiagnostics(const StringRef &reply) noexcept
+{
+	reply.catf("Encoder reverse polarity: %s", (IsReversed()) ? "yes" : "no");
+	reply.catf(", full rotations %" PRIi32, fullRotations);
+	reply.catf(", last angle %" PRIu32, currentAngle);
+	reply.catf(", minCorrection=%.1f, maxCorrection=%.1f", (double)minLUTCorrection, (double)maxLUTCorrection);
+	AppendEncoderStatus(reply);
+}
+
+// Append short form status to a string. If there is an error then the user can use M122 to get more details.
+void MT6835::AppendStatus(const StringRef &reply) noexcept
+{
+	reply.lcatf("Magnetic encoder type MT6835, motor steps/rev %" PRIu32, stepsPerRev);
+	AppendEncoderStatus(reply);
+}
+
+// Get both the raw angle and the status, with CRC check. Return true if successful, false if error.
+// We get both together because the status and low bits of the angle are in the same register, and by getting all together we can also check the CRC.
+bool MT6835::GetAngleAndStatus(uint32_t& angle, uint8_t& status) noexcept
+{
 	if (spi.Select(0))			// get the mutex and set the clock rate
 	{
-		const uint8_t txBuffer[6] = { MT6835_OP_Read, MT6835Reg_Angle1, 0, 0, 0, 0 };		// read the 3 angle registers and the CRC in a single transaction
+		const uint8_t txBuffer[6] = { MT6835_OP_Burst_Angle, MT6835Reg_Angle1, 0, 0, 0, 0 };		// read the 3 angle registers and the CRC in a single transaction
 		uint8_t rxBuffer[6];
 		IoPort::WriteDigital(csPin, false);
 		const bool ok = spi.TransceivePacket(txBuffer, rxBuffer, 6);
@@ -160,24 +194,16 @@ bool MT6835::GetRawReading() noexcept
 		if (ok)
 		{
 			// Check the CRC
-			uint8_t crc = Crc8Table[rxBuffer[2]];					// I am assuming the CRC is initialised to 0, the datasheet doesn't say
+			uint8_t crc = Crc8Table[rxBuffer[2]];					// the CRC is initialised to 0 (the datasheet doesn't specify)
 			crc = Crc8Table[crc ^ rxBuffer[3]];
 			crc = Crc8Table[crc ^ rxBuffer[4]];
-			if (crc != rxBuffer[5])									// I am assuming the CRC byte is not reflected, the datasheet doesn't say
+			if (crc != rxBuffer[5])									// the CRC byte is not reflected (the datasheet doesn't specify)
 			{
-				// Enable the following return when we have verified that we are using the correct CRC calculation; alternatively, add code to retry the transaction. For now just report in debug every 16384 times.
-				// return false;
-				static uint16_t counter = 0;
-				if ((counter & (16384 - 1)) == 0)
-				{
-					debugPrintf("Encoder CRC error, data %02x %02x %02x, calc %02x, rec'd %02x\n", rxBuffer[2], rxBuffer[3], rxBuffer[4], crc, rxBuffer[5]);
-				}
-				++counter;
+				return false;
 			}
 
-			const uint32_t temp_rawReading = ((uint32_t)rxBuffer[2] << 13) | ((uint32_t)rxBuffer[3] << 5) | ((uint32_t)rxBuffer[4] >> 3);
-			rawReading = temp_rawReading >> 7;
-			// regs.status = (response[5] & 0x07);					// if we want to save the status, this is how to extract it
+			angle = ((uint32_t)rxBuffer[2] << 13) | ((uint32_t)rxBuffer[3] << 5) | ((uint32_t)rxBuffer[4] >> 3);
+			status = rxBuffer[4] & 0x07;
 			return true;
 		}
 	}
@@ -185,44 +211,21 @@ bool MT6835::GetRawReading() noexcept
 	return false;
 }
 
-// Get the encoder status register returning true if success, false if error
-bool MT6835::GetDiagnosticRegisters(StatusRegister& regs) noexcept
+void MT6835::AppendEncoderStatus(const StringRef& reply) noexcept
 {
-	if (spi.Select(0))			// get the mutex and set the clock rate
+	uint32_t angle;
+	uint8_t status;
+	if (GetAngleAndStatus(angle, status))
 	{
-		uint8_t response;
-		const bool ok = DoSpiTransaction(MT6835_OP_Read, MT6835Reg_Angle3, response);
-		spi.Deselect();			// release the mutex8
-
-		if (ok)
-		{
-			regs.status = (response & 0x07);
-			return true;
-		}
-	}
-
-	return false;
-}
-
-// Get diagnostic information and append it to a string
-void MT6835::AppendDiagnostics(const StringRef &reply) noexcept
-{
-	reply.catf("Encoder reverse polarity: %s", (IsReversed()) ? "yes" : "no");
-	reply.catf(", full rotations %" PRIi32, fullRotations);
-	reply.catf(", last angle %" PRIu32, currentAngle);
-	reply.catf(", minCorrection=%.1f, maxCorrection=%.1f", (double)minLUTCorrection, (double)maxLUTCorrection);
-	StatusRegister regs;
-	if (GetDiagnosticRegisters(regs))
-	{
-		if ((regs.status & 0x01) != 0)
+		if ((status & 0x01) != 0)
 		{
 			reply.cat(", rotation overspeed warning");
 		}
-		if ((regs.status & 0x02) != 0)
+		if ((status & 0x02) != 0)
 		{
 			reply.cat(", magnet too weak");
 		}
-		if ((regs.status & 0x04) != 0)
+		if ((status & 0x04) != 0)
 		{
 			reply.cat(", undervoltage warning");
 		}
@@ -231,44 +234,6 @@ void MT6835::AppendDiagnostics(const StringRef &reply) noexcept
 	{
 		reply.cat(", failed to read encoder status");
 	}
-}
-
-// Append short form status to a string. If there is an error then the user can use M122 to get more details.
-void MT6835::AppendStatus(const StringRef &reply) noexcept
-{
-	reply.lcatf("Magnetic encoder type MT6835, motor steps/rev %" PRIu32, stepsPerRev);
-	StatusRegister regs;
-	if (GetDiagnosticRegisters(regs))
-	{
-		if ((regs.status & 0x01) != 0)
-		{
-			reply.cat(", rotation overspeed warning");
-		}
-		if ((regs.status & 0x02) != 0)
-		{
-			reply.cat(", magnet too weak");
-		}
-		if ((regs.status & 0x04) != 0)
-		{
-			reply.cat(", undervoltage warning");
-		}
-	}
-	else
-	{
-		reply.cat(", failed to read encoder status");
-	}
-}
-
-// Perform an SPI transaction to read a single 8-bit register. Caller must get ownership of the SPI device first and release it afterwards.
-// If making multiple calls to this function within a single select operation, toggle CS high for 300ns and then low again between calls.
-bool MT6835::DoSpiTransaction(uint8_t command, uint8_t address, uint8_t &response) noexcept
-{
-	const uint8_t txBuffer[3] = { command, address, 0 };
-	uint8_t rxBuffer[3];
-
-	const bool ok = spi.TransceivePacket(txBuffer, rxBuffer, 3);
-	response = (rxBuffer[2]);
-	return ok;
 }
 
 #endif

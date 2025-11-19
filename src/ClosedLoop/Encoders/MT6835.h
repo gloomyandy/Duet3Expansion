@@ -34,16 +34,9 @@ public:
 protected:
 	bool GetRawReading() noexcept override;
 
-
 private:
-	struct StatusRegister
-	{
-		uint8_t status;
-	};
-
-	bool DoSpiTransaction(uint8_t command, uint8_t address, uint8_t& response) noexcept;
-	bool GetDiagnosticRegisters(StatusRegister& regs) noexcept;
-	uint16_t MaskInput(uint32_t rawInput) noexcept;
+	bool GetAngleAndStatus(uint32_t& angle, uint8_t& status) noexcept;		// Get both the raw angle and the status, with CRC check
+	void AppendEncoderStatus(const StringRef& reply) noexcept;				// Read the status register and append any warnings
 };
 
 #endif
