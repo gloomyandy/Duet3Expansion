@@ -315,11 +315,15 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 
 		if (encoder != nullptr)
 		{
-			tuningError = encoder->MinimalTuningNeeded();
 			const GCodeResult rslt = encoder->Init(reply);
-			if (rslt == GCodeResult::ok)
+			if (rslt <= GCodeResult::warning)
 			{
+				tuningError = encoder->MinimalTuningNeeded();
 				encoder->LoadLUT(tuningError);
+			}
+			else
+			{
+				DeleteObject(encoder);
 			}
 			return rslt;
 		}
