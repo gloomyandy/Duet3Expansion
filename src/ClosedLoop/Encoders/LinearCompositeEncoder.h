@@ -21,7 +21,7 @@ public:
 	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<LinearCompositeEncoder>(); }
 	void operator delete(void* p) noexcept { FreelistManager::Release<LinearCompositeEncoder>(p); }
 
-	LinearCompositeEncoder(float p_countsPerRev, uint32_t p_stepsPerRev, SharedSpiDevice& spiDev, Pin p_csPin) noexcept;
+	LinearCompositeEncoder(float p_countsPerRev, uint32_t p_stepsPerRev, SharedSpiDevice& spiDev, Pin p_csPin, MagneticEncoderType magEncoderType) noexcept;
 	~LinearCompositeEncoder();
 
 	// Overridden virtual functions
@@ -95,7 +95,7 @@ private:
 	__attribute__((noinline)) void LoadQuadratureDirectionFromNVM(TuningErrors& tuningNeeded) noexcept;
 
 	QuadratureEncoderPdec *linEncoder;
-	AS5047D *shaftEncoder;
+	AbsoluteRotaryEncoder *shaftEncoder;
 };
 
 #endif	//SUPPORT_CLOSED_LOOP

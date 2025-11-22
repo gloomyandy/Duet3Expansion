@@ -12,8 +12,8 @@
 #include "IoPorts.h"
 
 // SharedSpiDevice class members
-SharedSpiClient::SharedSpiClient(SharedSpiDevice& dev, uint32_t clockFreq, SpiMode m, Pin p_csPin, bool polarity) noexcept
-	: device(dev), clockFrequency(clockFreq), csPin(p_csPin), mode(m), csActivePolarity(polarity)
+SharedSpiClient::SharedSpiClient(SharedSpiDevice& dev, uint32_t clockFreq, SpiMode m, Pin p_csPin, bool p_csActivePolarity) noexcept
+	: device(dev), clockFrequency(clockFreq), csPin(p_csPin), mode(m), csActivePolarity(p_csActivePolarity)
 {
 	InitCsPin();
 }

@@ -10,6 +10,10 @@
 #if SUPPORT_CLOSED_LOOP
 
 #include <Hardware/NonVolatileMemory.h>
+#include "AS5047D.h"
+#if SUPPORT_MT6835
+# include "MT6835.h"
+#endif
 
 AbsoluteRotaryEncoder::AbsoluteRotaryEncoder(uint32_t p_stepsPerRev, unsigned int p_resolutionBits) noexcept
 	: Encoder((1u << p_resolutionBits) / (float)p_stepsPerRev, p_stepsPerRev),
@@ -20,8 +24,8 @@ AbsoluteRotaryEncoder::AbsoluteRotaryEncoder(uint32_t p_stepsPerRev, unsigned in
 // Take a reading and store at least currentCount and currentPhasePosition. Return true if error, false if success.
 bool AbsoluteRotaryEncoder::TakeReading() noexcept
 {
-	bool err = GetRawReading();
-	if (!err)
+	const bool ok = GetRawReading();
+	if (ok)
 	{
 		uint32_t newAngle = rawReading;
 
@@ -42,7 +46,7 @@ bool AbsoluteRotaryEncoder::TakeReading() noexcept
 				}
 				else
 				{
-					// Note that we store an duplicate of correctionLUT[0] at the end to avoid having to wrap when we add 1 to windowStartIndex
+					// Note that we store a duplicate of correctionLUT[0] at the end to avoid having to wrap when we add 1 to windowStartIndex
 					newAngle = correctionLUT[windowStartIndex + 1] - (1u << resolutionToLutShiftFactor) + windowOffset;
 				}
 				newAngle &= (GetMaxValue() - 1);
@@ -77,7 +81,7 @@ bool AbsoluteRotaryEncoder::TakeReading() noexcept
 		currentCount = (fullRotations * (int32_t)GetMaxValue()) + (int32_t)currentAngle;
 	}
 
-	return err;
+	return ok;
 }
 
 // Clear the accumulated full rotations so as to get the count back to a smaller number
@@ -376,6 +380,22 @@ void AbsoluteRotaryEncoder::AppendLUTCorrections(const StringRef& reply) const n
 void AbsoluteRotaryEncoder::AppendCalibrationErrors(const StringRef& reply) const noexcept
 {
 	reply.catf("min %.1f, max %.1f, rms %.1f", (double)minCalibrationError, (double)maxCalibrationError, (double)rmsCalibrationError);
+}
+
+AbsoluteRotaryEncoder *CreateRotaryEncoder(MagneticEncoderType magEncoderType, uint32_t p_stepsPerRev, SharedSpiDevice& spiDev, Pin p_csPin) noexcept
+{
+	switch (magEncoderType.RawValue())
+	{
+
+#if SUPPORT_MT6835
+	case MagneticEncoderType::mt6835:
+		return new MT6835(p_stepsPerRev, spiDev, EncoderCsPin);
+#endif
+
+	case MagneticEncoderType::as5047d:
+	default:			// default case should never happen so just keep the compiler happy
+		return new AS5047D(p_stepsPerRev, spiDev, EncoderCsPin);
+	}
 }
 
 #endif
