@@ -2580,7 +2580,7 @@ void SmartDrivers::TurnDriversOff() noexcept
 #if TMC22xx_HAS_ENABLE_PINS && TMC22xx_VARIABLE_NUM_DRIVERS
 	for(size_t drive = 0; drive < GetNumTmcDrivers(); drive++)
 	{
-		IoPort::SetPinMode(DriverSelectPins[drive], OUTPUT_HIGH);
+		IoPort::SetPinMode(DriverEnablePins[drive], OUTPUT_HIGH);
 	}
 #endif
 
