@@ -36,8 +36,6 @@
 using std::atomic;
 using std::numeric_limits;
 
-# include "Encoders/AS5047D.h"
-# include "Encoders/TLI5012B.h"
 # include "Encoders/QuadratureEncoderPdec.h"
 # include "Encoders/LinearCompositeEncoder.h"
 
@@ -278,6 +276,21 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 		// We set the mode to open loop earlier in this function so no need to do it here
 		DeleteObject(encoder);
 
+		// If the magnetic encoder type was provided, check that it is valid
+		MagneticEncoderType magEncoderType(MagneticEncoderType::as5047d);
+		{
+			String<StringLength20> magneticEncoderTypeString;
+			if (parser.GetStringParam('Y', magneticEncoderTypeString.GetRef()))
+			{
+				magEncoderType = MagneticEncoderType(magneticEncoderTypeString.c_str());
+				if (!magEncoderType.IsValid())
+				{
+					reply.printf("unrecognised magnetic encoder type '%s'", magneticEncoderTypeString.c_str());
+					return GCodeResult::error;
+				}
+			}
+		}
+
 		switch (tempEncoderType)
 		{
 		case EncoderType::none:
@@ -285,19 +298,13 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 			// encoder is already nullptr
 			break;
 
-		case EncoderType::rotaryAS5047:
-			encoder = new AS5047D(tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin);
+		case EncoderType::rotaryMagnetic:
+			encoder = CreateRotaryEncoder(magEncoderType, tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin);
 			CreateCalibrationTask();
 			break;
 
-#if defined(SUPPORT_TLI5012B)
-		case EncoderType::rotaryTLI5012:
-			encoder = new TLI5012B(tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin);
-			CreateCalibrationTask();
-			break;
-#endif
 		case EncoderType::linearComposite:
-			encoder = new LinearCompositeEncoder(tempCPR, tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin);
+			encoder = new LinearCompositeEncoder(tempCPR, tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin, magEncoderType);
 			CreateCalibrationTask();
 			break;
 
@@ -308,11 +315,15 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 
 		if (encoder != nullptr)
 		{
-			tuningError = encoder->MinimalTuningNeeded();
 			const GCodeResult rslt = encoder->Init(reply);
-			if (rslt == GCodeResult::ok)
+			if (rslt <= GCodeResult::warning)
 			{
+				tuningError = encoder->MinimalTuningNeeded();
 				encoder->LoadLUT(tuningError);
+			}
+			else
+			{
+				DeleteObject(encoder);
 			}
 			return rslt;
 		}
@@ -713,7 +724,7 @@ void ClosedLoop::AdjustTargetMotorSteps(float amount) noexcept
 void ClosedLoop::InstanceControlLoop(StepTimer::Ticks now, StepTimer::Ticks timeElapsed) noexcept
 {
 	// Read the current state of the drive. Do this even if we are not in closed loop mode.
-	if (encoder != nullptr && !encoder->TakeReading())
+	if (encoder != nullptr && encoder->TakeReading())
 	{
 		// Calculate and store the current error in full steps
 		hasMovementCommand = moveInstance->GetCurrentMotion(driverNumber, now, mParams);
@@ -1035,7 +1046,7 @@ void ClosedLoop::InstanceDiagnostics(size_t driver, const StringRef& reply) noex
 	reply.catf(", encoder type %s", GetEncoderType().ToString());
 	if (encoder != nullptr)
 	{
-		if (encoder->TakeReading())
+		if (!encoder->TakeReading())
 		{
 			reply.cat(", error reading encoder\n");
 		}
@@ -1087,8 +1098,8 @@ void ClosedLoop::ResetError() noexcept
 		TaskCriticalSectionLocker lock;
 
 		// Set the target position to the current position
-		const bool err = encoder->TakeReading();
-		(void)err;		//TODO handle error
+		const bool ok = encoder->TakeReading();
+		(void)ok;		//TODO handle error
 		errorDerivativeFilter.Reset();
 		speedFilter.Reset();
 		SetTargetToCurrentPosition();
@@ -1119,8 +1130,8 @@ bool ClosedLoop::SetClosedLoopEnabled(ClosedLoopMode mode, const StringRef &repl
 
 			// Temporarily calibrate the encoder zero position
 			// We assume that the motor is at the position given by its microstep counter. This may not be true e.g. if it has a brake that has not been disengaged.
-			const bool err = encoder->TakeReading();
-			if (err)
+			const bool ok = encoder->TakeReading();
+			if (!ok)
 			{
 				reply.copy("Error reading encoder");
 				return false;

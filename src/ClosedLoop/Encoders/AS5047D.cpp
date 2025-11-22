@@ -33,7 +33,6 @@ static inline constexpr uint32_t NanoSecondsToClocks(uint32_t ns) noexcept
 }
 
 constexpr uint32_t Clocks350ns = NanoSecondsToClocks(350);
-constexpr uint32_t ClocksHalfSclk = SystemCoreClockFreq/(2 * AS5047ClockFrequency);
 
 // Adjust the top bit of a 16-bit word to make it even parity
 static inline constexpr uint16_t AddParityBit(uint16_t w) noexcept
@@ -111,19 +110,21 @@ GCodeResult AS5047D::Init(const StringRef& reply) noexcept
 	return GCodeResult::error;
 }
 
+// Enable this encoder
 void AS5047D::Enable() noexcept
 {
 	IoPort::SetPinMode(csPin, OUTPUT_HIGH);
 	ClosedLoop::EnableEncodersSpi();
 }
 
+// Disable this encoder
 void AS5047D::Disable() noexcept
 {
 	IoPort::SetPinMode(csPin, OUTPUT_HIGH);
 	ClosedLoop::DisableEncodersSpi();
 }
 
-// Return the current position as reported by the encoder
+// This must set rawReading to a value between 0 and GetMaxValue()-1. Return true if successful, false if error.
 bool AS5047D::GetRawReading() noexcept
 {
 	if (spi.Select(0))			// get the mutex and set the clock rate
@@ -136,11 +137,11 @@ bool AS5047D::GetRawReading() noexcept
 		if (ok && CheckResponse(response))
 		{
 			rawReading = response & 0x3FFF;
-			return false;
+			return true;
 		}
 	}
 
-	return true;
+	return false;
 }
 
 // Get the diagnostic register and the error flags register
@@ -239,7 +240,7 @@ void AS5047D::AppendDiagnostics(const StringRef &reply) noexcept
 // Append short form status to a string. If there is an error then the user can use M122 to get more details.
 void AS5047D::AppendStatus(const StringRef& reply) noexcept
 {
-	reply.lcatf("Magnetic encoder motor steps/rev %" PRIu32, stepsPerRev);
+	reply.lcatf("Magnetic encoder type AS5047D, motor steps/rev %" PRIu32, stepsPerRev);
 	DiagnosticRegisters regs;
 	if (GetDiagnosticRegisters(regs))
 	{

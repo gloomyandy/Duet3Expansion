@@ -70,7 +70,7 @@ constexpr float MaximumMotorCurrent = 1600.0;
 constexpr float MaximumStandstillCurrent = 1200.0;
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
-constexpr Pin DriverSelectPins[NumDrivers] = {GpioPin(20), GpioPin(5)};
+constexpr Pin DriverEnablePins[NumDrivers] = {GpioPin(20), GpioPin(5)};
 constexpr Pin Tmc22xxUartPins[NumDrivers] = {GpioPin(18), GpioPin(18)};
 
 constexpr Pin StepPins[NumDrivers] = { GpioPin(17), GpioPin(14) };

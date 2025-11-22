@@ -2433,7 +2433,7 @@ void SmartDrivers::Init() noexcept
 
 		driverStates[drive].Init(drive
 #if TMC22xx_HAS_ENABLE_PINS
-								, DriverSelectPins[drive]
+								, DriverEnablePins[drive]
 #endif
 #if TMC22xx_VARIABLE_NUM_DRIVERS && TMC22xx_MULTIPLE_UART_PINS
 								, Tmc22xxUartPins[drive]
@@ -2580,7 +2580,7 @@ void SmartDrivers::TurnDriversOff() noexcept
 #if TMC22xx_HAS_ENABLE_PINS && TMC22xx_VARIABLE_NUM_DRIVERS
 	for(size_t drive = 0; drive < GetNumTmcDrivers(); drive++)
 	{
-		IoPort::SetPinMode(DriverSelectPins[drive], OUTPUT_HIGH);
+		IoPort::SetPinMode(DriverEnablePins[drive], OUTPUT_HIGH);
 	}
 #endif
 
