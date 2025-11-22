@@ -17,7 +17,7 @@
 class SpiEncoder
 {
 public:
-	SpiEncoder(SharedSpiDevice& spiDev, uint32_t clockFreq, SpiMode m, bool polarity, Pin p_csPin) noexcept;
+	SpiEncoder(SharedSpiDevice& spiDev, uint32_t clockFreq, SpiMode m, bool p_csActivePolarity, Pin p_csPin) noexcept;
 
 protected:
 	SharedSpiClient spi;
