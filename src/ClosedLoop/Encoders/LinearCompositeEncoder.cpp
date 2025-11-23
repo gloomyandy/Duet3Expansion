@@ -15,7 +15,7 @@ LinearCompositeEncoder::LinearCompositeEncoder(float p_countsPerRev, uint32_t p_
 	: Encoder((4 * p_countsPerRev)/(float)p_stepsPerRev, p_stepsPerRev)
 {
 	shaftEncoder = CreateRotaryEncoder(magEncoderType, p_stepsPerRev, spiDev, p_csPin);
-	linEncoder = new QuadratureEncoderPdec(p_countsPerRev, p_stepsPerRev);
+	linEncoder = new QuadratureEncoderPdec((uint32_t)p_countsPerRev, p_stepsPerRev);
 }
 
 LinearCompositeEncoder::~LinearCompositeEncoder()

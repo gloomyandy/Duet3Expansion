@@ -309,7 +309,7 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 			break;
 
 		case EncoderType::rotaryQuadrature:
-			encoder = new QuadratureEncoderPdec(tempCPR, tempStepsPerRev);
+			encoder = new QuadratureEncoderPdec((uint32_t)tempCPR, tempStepsPerRev);
 			break;
 		}
 
