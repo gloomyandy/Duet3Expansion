@@ -37,9 +37,9 @@
 #endif
 
 #if SAME5x
-constexpr uint32_t CanUserAreaDataOffset = 512 - sizeof(CanUserAreaData);
+constexpr uint32_t CanUserAreaDataOffset = CanUserAreaDataOffset_SAME5x;
 #elif SAMC21
-constexpr uint32_t CanUserAreaDataOffset = 256 - sizeof(CanUserAreaData);
+constexpr uint32_t CanUserAreaDataOffset = CanUserAreaDataOffset_SAMC21;
 #endif
 
 #if SAMC21
