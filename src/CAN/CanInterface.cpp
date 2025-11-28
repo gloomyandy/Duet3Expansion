@@ -702,9 +702,9 @@ GCodeResult CanInterface::ChangeAddressAndDataRate(const CanMessageSetAddressAnd
 		{
 			CanTiming timing;
 			can0dev->GetLocalCanTiming(timing);
-			reply.printf("CAN bus speed %.1fkbps, tseg1 %.2f, jump width %.2f",
+			reply.printf("CAN bus speed %.1fkbps, sample point %.2f, jump width %.2f",
 							(double)((float)CanTiming::ClockFrequency/(1000 * timing.period)),
-							(double)((float)timing.tseg1/(float)timing.period),
+							(double)((float)(timing.tseg1 + 1)/(float)timing.period),
 							(double)((float)timing.jumpWidth/(float)timing.period));
 		}
 		return GCodeResult::ok;
