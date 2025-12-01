@@ -1664,7 +1664,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		}
 # else
 		fastDigitalWriteLow(GlobalTmc51xxCSPin);			// set CS low
-		spiDevice->TransceivePacket(const_cast<uint8_t*>(tmcSendData), const_cast<uint8_t*>(tmcRcvData), sizeof(sendData));
+		spiDevice->TransceivePacket(const_cast<uint8_t*>(tmcSendData), const_cast<uint8_t*>(tmcRcvData), sizeof(tmcSendData));
 		fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
 # endif
 		spiDevice->Deselect();
