@@ -55,6 +55,8 @@
 # include "F3PTB.h"
 #elif defined(FLYM2)
 # include "FlyM2.h"
+#elif defined(RP2350TEST)
+# include "RP2350Test.h"
 #else
 # error Board type not defined
 #endif
