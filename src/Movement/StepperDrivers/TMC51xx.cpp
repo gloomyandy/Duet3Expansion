@@ -30,7 +30,7 @@
 
 static inline Move& GetMoveInstance() noexcept { return reprap.GetMove(); }
 
-#elif defined(EXP3HC) || defined(EXP1HCL) || defined(M23CL) || defined(PITBV1_0) || defined(PITBV2_0) || defined(STRIDEMAXV2_0)
+#elif defined(EXP3HC) || defined(EXP1HCL) || defined(M23CL) || defined(PITBV1_0) || defined(PITBV2_0) || defined(STRIDEMAXV2_0) || defined(RP2350TEST)
 
 static inline Move& GetMoveInstance() noexcept { return *moveInstance; }
 

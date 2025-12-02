@@ -38,6 +38,48 @@
 
 #if SUPPORT_DRIVERS
 
+#if 1
+#define HAS_SMART_DRIVERS		1
+#define HAS_STALL_DETECT		1
+#define SINGLE_DRIVER			0
+#define TMC51xx_USES_SEPARATE_CS		0
+#define TMC51xx_USES_SEPARATE_ENABLE	0
+#define TMC51xx_USES_SHARED_SPI	1
+#define SUPPORT_SLOW_DRIVERS	0
+#define SUPPORT_DELTA_MOVEMENT	0
+
+#define SUPPORT_TMC51xx			1
+#define SUPPORT_TMC2660			0
+#define SUPPORT_TMC22xx			0
+#define SUPPORT_TMC2240			0
+#define SUPPORT_INPUT_SHAPING	1
+
+
+constexpr size_t NumDrivers = 1;
+constexpr size_t MaxSmartDrivers = 1;
+constexpr float MaxTmc5160Current = 2500.0;
+constexpr uint32_t DefaultStandstillCurrentPercent = 71;
+constexpr float Tmc5160SenseResistor = 0.075;
+
+#if TMC51xx_USES_SEPARATE_ENABLE
+constexpr Pin Tmc51xxEnablePins[] = {GpioPin(14)};
+#else
+constexpr Pin GlobalTmc51xxEnablePin = GpioPin(14);
+#endif
+#if TMC51xx_USES_SEPARATE_CS
+constexpr Pin Tmc51xxCSPins[] = {GpioPin(15)};
+#else
+constexpr Pin GlobalTmc51xxCSPin = GpioPin(15);
+#endif
+
+constexpr Pin DirectionPins[NumDrivers] = { GpioPin(6) };
+constexpr Pin StepPins[NumDrivers] = { GpioPin(7) };
+
+
+#define ACTIVE_HIGH_STEP		1		// 1 = active high, 0 = active low
+#define ACTIVE_HIGH_DIR			1		// 1 = active high, 0 = active low
+
+#else
 #define HAS_SMART_DRIVERS		1
 #define HAS_STALL_DETECT		1
 #define SINGLE_DRIVER			1
@@ -86,7 +128,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(27) };
 
 #define ACTIVE_HIGH_STEP		1		// 1 = active high, 0 = active low
 #define ACTIVE_HIGH_DIR			1		// 1 = active high, 0 = active low
-
+#endif
 #endif
 
 #define SUPPORT_THERMISTORS		1
@@ -123,7 +165,7 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico u
 constexpr Pin LedPins[] = { GpioPin(5) };
 constexpr bool LedActiveHigh = false;
 
-#if SUPPORT_SPI_SENSORS
+#if SUPPORT_SPI_SENSORS || TMC51xx_USES_SHARED_SPI
 
 // Shared SPI pin connections
 constexpr uint8_t SspiSpiInstanceNumber = 0;
