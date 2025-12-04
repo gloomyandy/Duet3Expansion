@@ -49,7 +49,6 @@
 #define SUPPORT_DELTA_MOVEMENT	0
 
 #define SUPPORT_TMC51xx			1
-#define TMC_TYPE                2240
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			0
 #define SUPPORT_TMC2240			1
@@ -58,8 +57,6 @@
 
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
-constexpr float MaxTmc5160Current = 2500.0;
-constexpr float Tmc5160SenseResistor = 0.075;
 
 // TMC2240 current sense resistor and scaling
 constexpr uint32_t Tmc2240CurrentRange = 0x03;								// which current range we set the TMC2240 to (3A)
@@ -67,7 +64,6 @@ constexpr uint32_t Tmc2240SlopeControl = 0x01;								// which slope control we 
 constexpr float Tmc2240Rref = 12.0;											// TMC2240 reference resistor in Kohms
 
 constexpr float MaximumMotorCurrent = 2000.0;		// TMC2240
-constexpr float MaxTmc2240Current = MaximumMotorCurrent;
 
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
