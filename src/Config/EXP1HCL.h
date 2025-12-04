@@ -114,6 +114,7 @@ constexpr Pin ButtonPins[] = { PortAPin(20) };
 
 // Encoder and quadrature decoder interface
 constexpr Pin EncoderCsPin = PortAPin(18);
+constexpr Pin MT6835CalPin = PortAPin(0);					// Pin spi.cs1 drives CAL on the MT6835 encoder board (version 2 EXP1HCL boards only)
 
 #if SUPPORT_I2C_SENSORS
 
