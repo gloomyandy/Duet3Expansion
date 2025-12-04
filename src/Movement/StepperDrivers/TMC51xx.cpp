@@ -30,7 +30,7 @@
 
 static inline Move& GetMoveInstance() noexcept { return reprap.GetMove(); }
 
-#elif defined(EXP3HC) || defined(EXP1HCL) || defined(M23CL) || defined(PITBV1_0) || defined(PITBV2_0) || defined(STRIDEMAXV2_0)
+#elif defined(EXP3HC) || defined(EXP1HCL) || defined(M23CL) || defined(PITBV1_0) || defined(PITBV2_0) || defined(STRIDEMAXV2_0) || defined(RP2350TEST)
 
 static inline Move& GetMoveInstance() noexcept { return *moveInstance; }
 
@@ -55,8 +55,13 @@ static inline Move& GetMoveInstance() noexcept { return *moveInstance; }
 #  include <SharedSpiClient.h>
 #endif
 
-//#define TMC_TYPE	5130
-#define TMC_TYPE	5160
+#if SUPPORT_TMC2240
+# define TMC_TYPE 2240
+#elif SUPPORT_5130
+# define TMC_TYPE 5130
+#else
+#define TMC_TYPE 5160
+#endif
 
 constexpr float MinimumMotorCurrent = 50.0;
 constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA for the open load status to be taken seriously
@@ -86,6 +91,14 @@ constexpr float SenseResistor = 0.11;						// 0.082R external + 0.03 internal
 // We now define MaxTmc5160Current and Tmc5160SenseResistor in the board configuration file because they vary between boards
 constexpr float MaximumStandstillCurrent = MaxTmc5160Current * 0.707;
 constexpr float RecipFullScaleCurrent = Tmc5160SenseResistor/325.0;		// 1.0 divided by full scale current in mA
+#elif TMC_TYPE == 2240
+// TMC2240 uses integrated current sense (ICS) with different full scale current calculation
+// KIFS values from datasheet for each CURRENT_RANGE (00->11.75, 01->24, 10->36, 11->36)
+constexpr float Tmc2240Kifs[4] = { 11.75f, 24.0f, 36.0f, 36.0f };
+// Full scale current: IFS = (KIFS × 1000) / Rref, where Rref is in kOhms
+constexpr float Tmc2240FullScaleCurrent = (Tmc2240Kifs[Tmc2240CurrentRange] * 1000.0f) / Tmc2240Rref; // in mA
+constexpr float RecipFullScaleCurrent = 1.0f / Tmc2240FullScaleCurrent;   // 1.0 divided by full scale current in mA
+constexpr float MaximumStandstillCurrent = MaximumMotorCurrent * 0.707f;  // unified board max current
 #endif
 
 // The SPI clock speed is a compromise:
@@ -143,6 +156,8 @@ constexpr uint32_t GCONF_TEST_MODE = 1 << 17;				// 0: Normal operation, 1: Enab
 constexpr uint32_t DefaultGConfReg = GCONF_DIAG0_STALL | GCONF_DIAG0_PUSHPULL;
 #elif TMC_TYPE == 5160
 constexpr uint32_t DefaultGConfReg = GCONF_5160_RECAL | GCONF_5160_MULTISTEP_FILT | GCONF_DIAG0_STALL | GCONF_DIAG0_PUSHPULL;
+#elif TMC_TYPE == 2240
+constexpr uint32_t DefaultGConfReg = GCONF_5160_MULTISTEP_FILT | GCONF_DIAG0_STALL | GCONF_DIAG0_PUSHPULL;
 #endif
 
 // General configuration and status registers
@@ -203,14 +218,25 @@ constexpr uint32_t DRVCONF_FILT_ISENSE_MASK = (3 << 20);	// Filter time constant
 															// 00: low – 100ns 01: – 200ns 10: – 300ns 11: high – 400ns
 															// Hint: Increase setting if motor chopper noise occurs due to cross-coupling of both coils. Reset Default = 0.
 constexpr uint32_t DefaultDrvConfReg = (2 << DRVCONF_BBMCLKS_SHIFT) | (2 << DRVCONF_OTSELECT_SHIFT);
+#endif
 
+#if TMC_TYPE == 2240
+constexpr uint8_t REGNUM_5160_DRVCONF = 0x0A;
+// DRV_CONF register for TMC2240 (different from 5160)
+constexpr uint32_t DRV_CONF2240_CURRENT_RANGE_SHIFT = 0;
+constexpr uint32_t DRV_CONF2240_CURRENT_RANGE_MASK = 0x03;										// 0 = 1A, 1 = 2A, 2 = 3A, 3 = 3A peak current
+constexpr uint32_t DRV_CONF2240_SLOPE_CONTROL_SHIFT = 4;
+constexpr uint32_t DRV_CONF2240_SLOPE_CONTROL_MASK = 0x03 << DRV_CONF2240_SLOPE_CONTROL_SHIFT;	// 0 = 100V/us, 1 = 200V/us, 2 = 400V/us, 3 = 800V/us
+constexpr uint32_t DefaultDrvConfReg = (Tmc2240CurrentRange << DRV_CONF2240_CURRENT_RANGE_SHIFT) | (Tmc2240SlopeControl << DRV_CONF2240_SLOPE_CONTROL_SHIFT);
+#endif
+
+// Common registers for both TMC5160 and TMC2240
+#if TMC_TYPE == 5160 || TMC_TYPE == 2240
 constexpr uint8_t REGNUM_5160_GLOBAL_SCALER = 0x0B;			// Global scaling of Motor current. This value is multiplied to the current scaling in order to adapt a drive to a
 															// certain motor type. This value should be chosen before tuning other settings, because it also influences chopper hysteresis.
 															// 0: Full Scale (or write 256) 1 … 31: Not allowed for operation 32 … 255: 32/256 … 255/256 of maximum current.
 															// Hint: Values >128 recommended for best results. Reset Default 0.
 constexpr uint32_t DefaultGlobalScalerReg = 0;				// until we use it as part of the current setting
-
-constexpr uint8_t REGNUM_5160_OFFSET_READ = 0x0B;			// Bits 8..15: Offset calibration result phase A (signed). Bits 0..7: Offset calibration result phase B (signed).
 
 constexpr uint8_t REGNUM_5160_X_DIRECT = 0x2D;				// Coil currents for direct mode. Bits 8..0: signed coil A current. Bits 24..16: signed coil B current.
 															// A maximal value of 255 in this register corresponds to a current of IHOLD
@@ -228,8 +254,14 @@ constexpr uint32_t IHOLDIRUN_IRUN_MASK = 0x1F << IHOLDIRUN_IRUN_SHIFT;
 constexpr uint32_t IHOLDIRUN_IHOLDDELAY_SHIFT = 16;
 constexpr uint32_t IHOLDIRUN_IHOLDDELAY_MASK = 0x0F << IHOLDIRUN_IHOLDDELAY_SHIFT;
 
+#if TMC_TYPE == 2240
+constexpr uint32_t IHOLDIRUN2240_IRUNDELAY_SHIFT = 24;		// TMC2240-specific IRUNDELAY field
+constexpr uint32_t IHOLDIRUN2240_IRUNDELAY_MASK = 0x0F << IHOLDIRUN2240_IRUNDELAY_SHIFT;
+constexpr uint32_t DefaultIholdIrunReg = (0 << IHOLDIRUN_IHOLD_SHIFT) | (0 << IHOLDIRUN_IRUN_SHIFT) | (2 << IHOLDIRUN_IHOLDDELAY_SHIFT) | (0x4 << IHOLDIRUN2240_IRUNDELAY_SHIFT);
+#else
 constexpr uint32_t DefaultIholdIrunReg = (0 << IHOLDIRUN_IHOLD_SHIFT) | (0 << IHOLDIRUN_IRUN_SHIFT) | (2 << IHOLDIRUN_IHOLDDELAY_SHIFT);
 															// approx. 0.5 sec motor current reduction to half power
+#endif
 
 constexpr uint8_t REGNUM_TPOWER_DOWN = 0x11;
 constexpr uint8_t REGNUM_TSTEP = 0x12;
@@ -271,7 +303,8 @@ constexpr uint32_t CHOPCONF_DISS2VS = 1 << 31;				// disable low side short prot
 
 #if TMC_TYPE == 5130
 constexpr uint32_t DefaultChopConfReg = (1 << CHOPCONF_TBL_SHIFT) | (3 << CHOPCONF_TOFF_SHIFT) | (5 << CHOPCONF_HSTRT_SHIFT) | CHOPCONF_5130_VSENSE_HIGH;
-#elif TMC_TYPE == 5160
+#elif TMC_TYPE == 5160 || TMC_TYPE == 2240
+// CHOPCONF fields align across 5160 and 2240 for these basics; use the same conservative defaults
 constexpr uint32_t DefaultChopConfReg = (1 << CHOPCONF_TBL_SHIFT) | (3 << CHOPCONF_TOFF_SHIFT) | (5 << CHOPCONF_HSTRT_SHIFT);
 #endif
 
@@ -304,11 +337,21 @@ constexpr unsigned int TMC_RR_STST_BIT_POS = 31;
 
 // PWMCONF register
 constexpr uint8_t REGNUM_PWMCONF = 0x70;
-
+#if TMC_TYPE == 2240
+constexpr uint32_t DefaultPwmConfReg = 0xC40C001D;			// this is the reset default - try it until we find something better
+#else
 constexpr uint32_t DefaultPwmConfReg = 0xC40C001E;			// this is the reset default - try it until we find something better
+#endif
 
 constexpr uint8_t REGNUM_PWM_SCALE = 0x71;
 constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
+
+#if TMC_TYPE == 2240
+// ADC registers (TMC2240-specific)
+constexpr uint8_t REGNUM_ADC_TEMP = 0x51;
+constexpr uint32_t ADC_TEMP_SHIFT = 0;
+constexpr uint32_t ADC_TEMP_MASK = 0x01FFF << ADC_TEMP_SHIFT;	// ADC temperature reading
+#endif
 
 // Common data
 static constexpr size_t numTmc51xxDrivers = MaxSmartDrivers;
@@ -436,8 +479,13 @@ public:
 	bool SetCurrentScaler(int8_t cs) noexcept;
 	uint8_t GetIRun() const noexcept { return (writeRegisters[WriteIholdIrun] & IHOLDIRUN_IRUN_MASK) >> IHOLDIRUN_IRUN_SHIFT; }
 	uint8_t GetIHold() const noexcept { return (writeRegisters[WriteIholdIrun] & IHOLDIRUN_IHOLD_MASK) >> IHOLDIRUN_IHOLD_SHIFT; }
+#if TMC_TYPE == 5160 || TMC_TYPE == 2240
 	uint32_t GetGlobalScaler() const noexcept { return writeRegisters[Write5160GlobalScaler]; }
+#endif
 	float CalculateCurrent() const noexcept;				// calculate what current the driver is actually using based on register values
+#if TMC_TYPE == 2240
+	float GetDriverTemperature() const noexcept;			// get driver temperature from ADC_TEMP register
+#endif
 
 	static void TransferTimedOut() noexcept { ++numTimeouts; }
 
@@ -472,6 +520,10 @@ private:
 	static constexpr unsigned int Write5160DrvConf = 10;	// driver timing
 	static constexpr unsigned int Write5160GlobalScaler = 11; // motor current scaling
 	static constexpr unsigned int NumWriteRegisters = 12;	// the number of registers that we write to
+#elif TMC_TYPE == 2240
+	static constexpr unsigned int Write5160DrvConf = 9;		// TMC2240 driver configuration (ICS current range and slope)
+	static constexpr unsigned int Write5160GlobalScaler = 10;	// motor current scaling
+	static constexpr unsigned int NumWriteRegisters = 11;	// the number of registers that we write to
 #else
 	static constexpr unsigned int NumWriteRegisters = 9;	// the number of registers that we write to
 #endif
@@ -479,7 +531,11 @@ private:
 
 	static const uint8_t WriteRegNumbers[NumWriteRegisters];	// the register numbers that we write to
 
+#if TMC_TYPE == 2240
+	static constexpr unsigned int NumReadRegisters = 6;		// the number of registers that we read from (includes ADC_TEMP)
+#else
 	static constexpr unsigned int NumReadRegisters = 5;		// the number of registers that we read from
+#endif
 	static const uint8_t ReadRegNumbers[NumReadRegisters];	// the register numbers that we read from
 
 	// Read register numbers, in same order as ReadRegNumbers
@@ -488,6 +544,9 @@ private:
 	static constexpr unsigned int ReadMsCnt = 2;
 	static constexpr unsigned int ReadPwmScale = 3;
 	static constexpr unsigned int ReadPwmAuto = 4;
+#if TMC_TYPE == 2240
+	static constexpr unsigned int ReadAdcTemp = 5;			// ADC_TEMP register for TMC2240
+#endif
 	static constexpr unsigned int ReadSpecial = NumReadRegisters;
 
 	static constexpr uint8_t NoRegIndex = 0xFF;				// this means no register updated, or no register requested
@@ -539,6 +598,8 @@ const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 	REGNUM_GSTAT,
 #if TMC_TYPE == 5160
 	REGNUM_5160_SHORTCONF,
+#endif
+#if TMC_TYPE == 5160 || TMC_TYPE == 2240
 	REGNUM_5160_DRVCONF,
 	REGNUM_5160_GLOBAL_SCALER,
 #endif
@@ -550,7 +611,10 @@ const uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 	REGNUM_DRV_STATUS,
 	REGNUM_MSCNT,
 	REGNUM_PWM_SCALE,
-	REGNUM_PWM_AUTO
+	REGNUM_PWM_AUTO,
+#if TMC_TYPE == 2240
+	REGNUM_ADC_TEMP
+#endif
 };
 
 uint16_t TmcDriverState::numTimeouts = 0;								// how many times a transfer timed out
@@ -572,6 +636,8 @@ pre(!driversPowered)
 	UpdateRegister(WriteGConf, DefaultGConfReg);
 #if TMC_TYPE == 5160
 	UpdateRegister(Write5160ShortConf, DefaultShortConfReg);
+#endif
+#if TMC_TYPE == 5160 || TMC_TYPE == 2240
 	UpdateRegister(Write5160DrvConf, DefaultDrvConfReg);
 	UpdateRegister(Write5160GlobalScaler, DefaultGlobalScalerReg);
 #endif
@@ -900,7 +966,7 @@ bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 DriverMode TmcDriverState::GetDriverMode() const noexcept
 {
 	return
-#if TMC_TYPE == 5160 && (SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP)
+#if (TMC_TYPE == 5160 || TMC_TYPE == 2240) && (SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP)
 		  ((writeRegisters[WriteGConf] & GCONF_DIRECT_MODE) != 0) ? DriverMode::direct :
 #endif
 		  ((writeRegisters[WriteGConf] & GCONF_STEALTHCHOP) != 0) ? DriverMode::stealthChop
@@ -914,7 +980,11 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 // Set the motor current
 void TmcDriverState::SetCurrent(float current) noexcept
 {
+#if TMC_TYPE == 5160
 	motorCurrent = static_cast<uint32_t>(constrain<float>(current, MinimumMotorCurrent, MaxTmc5160Current));
+#else
+	motorCurrent = static_cast<uint32_t>(constrain<float>(current, MinimumMotorCurrent, MaximumMotorCurrent));
+#endif
 	UpdateCurrent();
 }
 
@@ -924,6 +994,14 @@ float TmcDriverState::CalculateCurrent() const noexcept
 	const uint32_t gs = (globalScaler == 0) ? 256 : globalScaler;
 	return (float)(gs * (GetIRun() + 1)) / (256 * 32 * RecipFullScaleCurrent);
 }
+
+#if TMC_TYPE == 2240
+float TmcDriverState::GetDriverTemperature() const noexcept
+{
+	// TMC2240 datasheet: temperature = (ADC_TEMP - 2038) / 7.7
+	return (float)(((readRegisters[ReadAdcTemp] & ADC_TEMP_MASK) >> ADC_TEMP_SHIFT) - 2038) / 7.7f;
+}
+#endif
 
 void TmcDriverState::UpdateCurrent() noexcept
 {
@@ -936,7 +1014,9 @@ void TmcDriverState::UpdateCurrent() noexcept
 	const uint32_t iHoldCsBits = (32 * iHoldCurrent - 800)/1615;	// formula checked by simulation on a spreadsheet
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRunCsBits << IHOLDIRUN_IRUN_SHIFT) | (iHoldCsBits << IHOLDIRUN_IHOLD_SHIFT));
-#elif TMC_TYPE == 5160
+#elif TMC_TYPE == 5160 || TMC_TYPE == 2240
+	// Both 5160 and 2240 use GLOBAL_SCALER optimization with IHOLD_IRUN register
+	// RecipFullScaleCurrent differs per chip (external Rsense for 5160, ICS KIFS for 2240)
 	// See if we can set IRUN to 31 (or user defined value) and do the current adjustment in the global scaler
 	uint8_t iRun = (currentScaler < 0) ? 31 : (uint8_t)currentScaler;
 
@@ -1038,6 +1118,9 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 	ResetLoadRegisters();
 
 	reply.catf(", mspos %u, reads %u, writes %u timeouts %u", (unsigned int)(readRegisters[ReadMsCnt] & 1023), numReads, numWrites, numTimeouts);
+#if TMC_TYPE == 2240
+	reply.catf(", temp %.1fC", (double)GetDriverTemperature());
+#endif
 	numReads = numWrites = 0;
 	if (clearGlobalStats)
 	{
@@ -1990,10 +2073,10 @@ void SmartDrivers::TurnDriversOff() noexcept
 #if TMC51xx_USES_SEPARATE_ENABLE
 	for(size_t i = 0; i < numTmc51xxDrivers; i++)
 	{
-		digitalWrite(Tmc51xxEnablePins[i], true);				// disable the drivers
+		SetPinMode(Tmc51xxEnablePins[i], OUTPUT_HIGH);				// disable the drivers
 	}
 #else
-	digitalWrite(GlobalTmc51xxEnablePin, true);				// disable the drivers
+	SetPinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);				// disable the drivers
 #endif
 	driversState = DriversState::noPower;
 }
@@ -2158,6 +2241,13 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 		return GCodeResult::ok;
 	}
 }
+
+#if SUPPORT_TMC2240
+float SmartDrivers::GetDriverTemperature(size_t driver) noexcept
+{
+	return (driver < numTmc51xxDrivers) ? driverStates[driver].GetDriverTemperature() : 0.0;
+}
+#endif
 
 #endif
 
