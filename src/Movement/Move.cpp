@@ -1496,7 +1496,7 @@ void Move::SetMotorCurrent(size_t driver, float current) noexcept
 // TMC driver temperatures
 float Move::GetTmcDriversTemperature()
 {
-#if defined(TOOL1RR) || defined(F3PTB)
+#if defined(TOOL1RR) || defined(F3PTB) || SUPPORT_TMC2240
 	// TEMPORARY code until we have more general support for TMC2240 and other drivers that report temperature
 	// The TOOL1RR has a single TMC2240 driver so report the temperature of that
 	return SmartDrivers::GetDriverTemperature(0);

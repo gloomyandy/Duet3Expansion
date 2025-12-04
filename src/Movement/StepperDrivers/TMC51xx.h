@@ -58,6 +58,10 @@ namespace SmartDrivers
 
 	GCodeResult SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept;
 	extern std::atomic<uint16_t> driverStallsToNotify;
+
+#if SUPPORT_TMC2240
+	float GetDriverTemperature(size_t driver) noexcept;
+#endif
 };
 
 #endif

@@ -28,7 +28,7 @@
 
 static inline Move& GetMoveInstance() noexcept { return reprap.GetMove(); }
 
-#elif defined(EXP3HC) || defined(EXP1HCL) || defined(M23CL) || defined(PITBV1_0) || defined(PITBV2_0) || defined(STRIDEMAXV2_0) || defined(MNBN17R1_5) || defined(MNBN17R1_2)
+#elif defined(EXP3HC) || defined(EXP1HCL) || defined(M23CL) || defined(PITBV1_0) || defined(PITBV2_0) || defined(STRIDEMAXV2_0) || defined(RP2350TEST)
 
 static inline Move& GetMoveInstance() noexcept { return *moveInstance; }
 
@@ -254,10 +254,11 @@ constexpr uint32_t IHOLDIRUN_IHOLDDELAY_MASK = 0x0F << IHOLDIRUN_IHOLDDELAY_SHIF
 #if TMC_TYPE == 2240
 constexpr uint32_t IHOLDIRUN2240_IRUNDELAY_SHIFT = 24;		// TMC2240-specific IRUNDELAY field
 constexpr uint32_t IHOLDIRUN2240_IRUNDELAY_MASK = 0x0F << IHOLDIRUN2240_IRUNDELAY_SHIFT;
-#endif
-
+constexpr uint32_t DefaultIholdIrunReg = (0 << IHOLDIRUN_IHOLD_SHIFT) | (0 << IHOLDIRUN_IRUN_SHIFT) | (2 << IHOLDIRUN_IHOLDDELAY_SHIFT) | (0x4 << IHOLDIRUN2240_IRUNDELAY_SHIFT);
+#else
 constexpr uint32_t DefaultIholdIrunReg = (0 << IHOLDIRUN_IHOLD_SHIFT) | (0 << IHOLDIRUN_IRUN_SHIFT) | (2 << IHOLDIRUN_IHOLDDELAY_SHIFT);
 															// approx. 0.5 sec motor current reduction to half power
+#endif
 
 constexpr uint8_t REGNUM_TPOWER_DOWN = 0x11;
 constexpr uint8_t REGNUM_TSTEP = 0x12;
@@ -333,8 +334,11 @@ constexpr unsigned int TMC_RR_STST_BIT_POS = 31;
 
 // PWMCONF register
 constexpr uint8_t REGNUM_PWMCONF = 0x70;
-
+#if TMC_TYPE == 2240
+constexpr uint32_t DefaultPwmConfReg = 0xC40C001D;			// this is the reset default - try it until we find something better
+#else
 constexpr uint32_t DefaultPwmConfReg = 0xC40C001E;			// this is the reset default - try it until we find something better
+#endif
 
 constexpr uint8_t REGNUM_PWM_SCALE = 0x71;
 constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
@@ -1721,7 +1725,6 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			// Handle the read response - data comes out of the drivers in reverse driver order
 #if SINGLE_DRIVER
 			driverStates[0].TransferSucceeded(const_cast<const uint8_t*>(tmcRcvData));
-
 			if (driversState == DriversState::initialising && !driverStates[0].UpdatePending())
 			{
 				// Check driver version and enable if successful
@@ -2185,11 +2188,11 @@ void SmartDrivers::TurnDriversOff() noexcept
 	debugPrintf("TMC disabling separate enable pins (TurnDriversOff)\n");
 	for(size_t i = 0; i < numTmc51xxDrivers; i++)
 	{
-		digitalWrite(Tmc51xxEnablePins[i], true);				// disable the drivers
+		SetPinMode(Tmc51xxEnablePins[i], OUTPUT_HIGH);				// disable the drivers
 	}
 #else
 	debugPrintf("TMC disabling global enable pin (TurnDriversOff)\n");
-	digitalWrite(GlobalTmc51xxEnablePin, true);				// disable the drivers
+	SetPinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);				// disable the drivers
 #endif
 	driversState = DriversState::noPower;
 }

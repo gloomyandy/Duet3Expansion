@@ -49,6 +49,56 @@
 #define SUPPORT_DELTA_MOVEMENT	0
 
 #define SUPPORT_TMC51xx			1
+#define TMC_TYPE                2240
+#define SUPPORT_TMC2660			0
+#define SUPPORT_TMC22xx			0
+#define SUPPORT_TMC2240			1
+#define SUPPORT_INPUT_SHAPING	1
+
+
+constexpr size_t NumDrivers = 1;
+constexpr size_t MaxSmartDrivers = 1;
+constexpr float MaxTmc5160Current = 2500.0;
+constexpr float Tmc5160SenseResistor = 0.075;
+
+// TMC2240 current sense resistor and scaling
+constexpr uint32_t Tmc2240CurrentRange = 0x03;								// which current range we set the TMC2240 to (3A)
+constexpr uint32_t Tmc2240SlopeControl = 0x01;								// which slope control we set the TMC2240 to (200V/us)
+constexpr float Tmc2240Rref = 12.0;											// TMC2240 reference resistor in Kohms
+
+constexpr float MaximumMotorCurrent = 2000.0;		// TMC2240
+constexpr float MaxTmc2240Current = MaximumMotorCurrent;
+
+constexpr uint32_t DefaultStandstillCurrentPercent = 75;
+
+#if TMC51xx_USES_SEPARATE_ENABLE
+constexpr Pin Tmc51xxEnablePins[] = {GpioPin(14)};
+#else
+constexpr Pin GlobalTmc51xxEnablePin = GpioPin(14);
+#endif
+#if TMC51xx_USES_SEPARATE_CS
+constexpr Pin Tmc51xxCSPins[] = {GpioPin(15)};
+#else
+constexpr Pin GlobalTmc51xxCSPin = GpioPin(15);
+#endif
+
+constexpr Pin DirectionPins[NumDrivers] = { GpioPin(6) };
+constexpr Pin StepPins[NumDrivers] = { GpioPin(7) };
+
+
+#define ACTIVE_HIGH_STEP		1		// 1 = active high, 0 = active low
+#define ACTIVE_HIGH_DIR			1		// 1 = active high, 0 = active low
+#elif 0
+#define HAS_SMART_DRIVERS		1
+#define HAS_STALL_DETECT		1
+#define SINGLE_DRIVER			1
+#define TMC51xx_USES_SEPARATE_CS		0
+#define TMC51xx_USES_SEPARATE_ENABLE	0
+#define TMC51xx_USES_SHARED_SPI	1
+#define SUPPORT_SLOW_DRIVERS	0
+#define SUPPORT_DELTA_MOVEMENT	0
+
+#define SUPPORT_TMC51xx			1
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			0
 #define SUPPORT_TMC2240			0
