@@ -1990,10 +1990,10 @@ void SmartDrivers::TurnDriversOff() noexcept
 #if TMC51xx_USES_SEPARATE_ENABLE
 	for(size_t i = 0; i < numTmc51xxDrivers; i++)
 	{
-		digitalWrite(Tmc51xxEnablePins[i], true);				// disable the drivers
+		SetPinMode(Tmc51xxEnablePins[i], OUTPUT_HIGH);				// disable the drivers
 	}
 #else
-	digitalWrite(GlobalTmc51xxEnablePin, true);				// disable the drivers
+	SetPinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);				// disable the drivers
 #endif
 	driversState = DriversState::noPower;
 }
