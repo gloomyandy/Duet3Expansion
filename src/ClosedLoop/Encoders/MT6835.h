@@ -35,8 +35,8 @@ protected:
 	bool GetRawReading() noexcept override;
 
 private:
-	bool GetAngleAndStatus(uint32_t& angle, uint8_t& status) noexcept;		// Get both the raw angle and the status, with CRC check
-	void AppendEncoderStatus(const StringRef& reply) noexcept;				// Read the status register and append any warnings
+	bool GetAngleAndStatus(uint32_t& angle, uint8_t& status) noexcept;				// Get both the raw angle and the status, with CRC check
+	bool AppendEncoderStatus(const StringRef& reply, uint32_t& angle) noexcept;		// Read the angle and status registers and append any status warnings to 'reply'
 };
 
 #endif

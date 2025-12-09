@@ -40,10 +40,10 @@ public:
 	// Tell the encoder what the step phase is at the current count. Only applicable to relative encoders.
 	virtual void SetKnownPhaseAtCurrentCount(uint32_t phase) noexcept = 0;
 
-	// Get diagnostic information and append it to a string
+	// Get diagnostic information and append it to a string. Used by M122.
 	virtual void AppendDiagnostics(const StringRef& reply) noexcept = 0;
 
-	// Append brief encoder status as a string
+	// Append brief encoder status as a string. Used by M569.1.
 	virtual void AppendStatus(const StringRef& reply) noexcept = 0;
 
 	// Clear the accumulated full rotations so as to get the count back to a smaller number
