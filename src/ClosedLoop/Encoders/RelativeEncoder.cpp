@@ -13,7 +13,7 @@
 constexpr float MaxSlopeMismatch = 0.1;				// we want the forward and reverse measured CPS each to be within 10% of the average
 constexpr float MinimumSlope = 7.5/1024;			// we require at least 8 transitions (8 pulses) per step, but we may measure slightly lower than the true value
 
-// Take a reading and store at least currentCount and currentPhasePosition. Return true if error, false if success.
+// Take a reading and store at least currentCount and currentPhasePosition. Return true if success, false if error.
 bool RelativeEncoder::TakeReading() noexcept
 {
 	bool err;
@@ -25,7 +25,7 @@ bool RelativeEncoder::TakeReading() noexcept
 		if (currentAngle < 0) { currentAngle += countsPerRev; }
 		currentPhasePosition = (uint32_t)lrintf((currentAngle * phasesPerCount) + zeroCountPhasePosition) % 4095u;
 	}
-	return err;
+	return !err;
 }
 
 // Tell the encoder what the step phase is at a particular count, so that if currentCount was 'count' then currentPhasePosition would be calculated as 'phase'

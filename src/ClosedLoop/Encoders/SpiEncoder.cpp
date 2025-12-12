@@ -9,8 +9,8 @@
 
 #if SUPPORT_CLOSED_LOOP
 
-SpiEncoder::SpiEncoder(SharedSpiDevice& spiDev, uint32_t clockFreq, SpiMode m, bool polarity, Pin p_csPin)
-	: spi(spiDev, clockFreq, m, p_csPin, polarity), csPin(p_csPin)
+SpiEncoder::SpiEncoder(SharedSpiDevice& spiDev, uint32_t clockFreq, SpiMode m, bool p_csActivePolarity, Pin p_csPin)
+	: spi(spiDev, clockFreq, m, p_csPin, p_csActivePolarity), csPin(p_csPin)
 {
 	spi.SetCsPin(p_csPin);
 }

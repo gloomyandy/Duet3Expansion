@@ -32,7 +32,7 @@ public:
 
 	// Overridden virtual functions
 
-	// Take a reading and store at least currentCount and currentPhasePosition. Return true if error, false if success.
+	// Take a reading and store at least currentCount and currentPhasePosition. Return true if success, false if error.
 	bool TakeReading() noexcept override;
 
 	// Tell the encoder what the step phase is at the current count. Only applicable to relative encoders.
