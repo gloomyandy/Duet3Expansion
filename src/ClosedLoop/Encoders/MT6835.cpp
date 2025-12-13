@@ -97,6 +97,11 @@ MT6835::MT6835(uint32_t p_stepsPerRev, SharedSpiDevice& spiDev, Pin p_csPin) noe
 // Initialise the encoder and enable it if successful. If there are any warnings or errors, put the corresponding message text in 'reply'.
 GCodeResult MT6835::Init(const StringRef& reply) noexcept
 {
+	// Disable CAL mode. The prototype MT6835 boards have a 10K pulldown on the CAL pin, but that may not be sufficient
+	// to prevent it picking up noise from other conductors in the cable.
+	// This only works on version 2 EXP1HCL boards. Version 1 boards do not drive the CS1 pin.
+	IoPort::WriteDigital(MT6835CalPin, false);
+
 	// See if we can read sensible data from the encoder.
 	// If the encoder is not present then the CRC check in GetAngleAndStatus will probably fail, unless the data read is all zeros.
 	uint32_t angle;
@@ -168,14 +173,19 @@ void MT6835::AppendDiagnostics(const StringRef &reply) noexcept
 	reply.catf(", full rotations %" PRIi32, fullRotations);
 	reply.catf(", last angle %" PRIu32, currentAngle);
 	reply.catf(", minCorrection=%.1f, maxCorrection=%.1f", (double)minLUTCorrection, (double)maxLUTCorrection);
-	AppendEncoderStatus(reply);
+	uint32_t angle;
+	if (AppendEncoderStatus(reply, angle))
+	{
+		reply.catf(", raw angle %" PRIu32, angle);
+	}
 }
 
 // Append short form status to a string. If there is an error then the user can use M122 to get more details.
 void MT6835::AppendStatus(const StringRef &reply) noexcept
 {
 	reply.lcatf("Magnetic encoder type MT6835, motor steps/rev %" PRIu32, stepsPerRev);
-	AppendEncoderStatus(reply);
+	uint32_t angle;
+	AppendEncoderStatus(reply, angle);
 }
 
 // Get both the raw angle and the status, with CRC check. Return true if successful, false if error.
@@ -211,9 +221,10 @@ bool MT6835::GetAngleAndStatus(uint32_t& angle, uint8_t& status) noexcept
 	return false;
 }
 
-void MT6835::AppendEncoderStatus(const StringRef& reply) noexcept
+// Append the encoder status to a string. Also passes the angle back in case the caller wants it.
+// Return true if the status and angle were read successfully.
+bool MT6835::AppendEncoderStatus(const StringRef& reply, uint32_t& angle) noexcept
 {
-	uint32_t angle;
 	uint8_t status;
 	if (GetAngleAndStatus(angle, status))
 	{
@@ -229,11 +240,11 @@ void MT6835::AppendEncoderStatus(const StringRef& reply) noexcept
 		{
 			reply.cat(", undervoltage warning");
 		}
+		return true;
 	}
-	else
-	{
-		reply.cat(", failed to read encoder status");
-	}
+
+	reply.cat(", failed to read encoder status");
+	return false;
 }
 
 #endif
