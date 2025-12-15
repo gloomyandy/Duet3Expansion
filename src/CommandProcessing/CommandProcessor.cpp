@@ -436,29 +436,6 @@ static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& rep
 		reply.copy(BOOTLOADER_NAME);
 		break;
 
-	case CanMessageReturnInfo::typeM408:
-		// For now we ignore the parameter and always return the same set of info
-		// This command is currently only used by the ATE, which needs the board type and the voltages
-		reply.copy("{\"firmwareElectronics\":\"Duet 3 ");
-		reply.cat(BOARD_TYPE_NAME);
-		reply.cat("\"");
-#if HAS_VOLTAGE_MONITOR
-		{
-			const MinCurMax vinVoltage = Platform::GetPowerVoltages(false);
-			reply.catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}",
-						(double)vinVoltage.minimum, (double)vinVoltage.current, (double)vinVoltage.maximum);
-		}
-#endif
-#if HAS_12V_MONITOR
-		{
-			const MinCurMax v12Voltage = Platform::GetV12Voltages(false);
-			reply.catf(",\"v12\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}",
-						(double)v12Voltage.minimum, (double)v12Voltage.current, (double)v12Voltage.maximum);
-		}
-#endif
-		reply.cat('}');
-		break;
-
 	case CanMessageReturnInfo::typeBoardUniqueId:
 		Platform::GetUniqueId().AppendCharsToString(reply);
 		break;
