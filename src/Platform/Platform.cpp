@@ -237,15 +237,19 @@ namespace Platform
 	{
 		// Note, I2C interrupt priority is set up in the I2C driver
 
+#if SAME5x || SAMC21
+		if constexpr(CANInstanceNumber == 1)
+		{
+			NVIC_SetPriority(CAN1_IRQn, NvicPriorityCan);
+		}
+		else
+		{
+			NVIC_SetPriority(CAN0_IRQn, NvicPriorityCan);
+		}
+#endif
+
 #if SAME5x
 		NVIC_SetPriority(StepTcIRQn, NvicPriorityStep);
-# if defined(EXP3HC)
-		NVIC_SetPriority(CAN1_IRQn, NvicPriorityCan);
-# elif defined(EXP1HCL) || defined(M23CL) || defined(TOOL1RR) || defined(F3PTB)
-		NVIC_SetPriority(CAN0_IRQn, NvicPriorityCan);
-# else
-#  error CAN interrupt not specified
-# endif
 		// Set UART interrupt priority. Each SERCOM has up to 4 interrupts, numbered sequentially.
 # if NUM_SERIAL_PORTS >= 1
 		SetInterruptPriority(Serial0_IRQn, 4, NvicPriorityUart);
@@ -257,7 +261,6 @@ namespace Platform
 		SetInterruptPriority(EIC_0_IRQn, 16, NvicPriorityPins);
 #elif SAMC21
 		NVIC_SetPriority(StepTcIRQn, NvicPriorityStep);
-		NVIC_SetPriority(CAN0_IRQn, NvicPriorityCan);
 # if NUM_SERIAL_PORTS >= 1
 		NVIC_SetPriority(Serial0_IRQn, NvicPriorityUart);
 # endif
@@ -421,7 +424,7 @@ namespace Platform
 #if defined(EXP3HC)
 		const CanAddress switches = ReadBoardAddress();
 		return (switches == 0) ? CanId::Exp3HCFirmwareUpdateAddress : switches;
-#elif defined(TOOL1LC) || defined(TOOL1RR) || defined(F3PTB)
+#elif defined(TOOL1LC) || defined(TOOL1RR) || defined(F3PTB) || defined(TOOLINDX)
 		return CanId::ToolBoardDefaultAddress;
 #elif defined(SAMMYC21) || defined(RPI_PICO) || defined(FLY36RRF)
 		return CanId::SammyC21DefaultAddress;
@@ -725,7 +728,7 @@ void Platform::Init()
 	MFMHandler::Init(*sharedI2C);
 #endif
 
-	CanInterface::Init(GetCanAddress(), UseAlternateCanPins, true);
+	CanInterface::Init(GetCanAddress(), CANInstanceNumber, UseLaterCanPins, true);
 	lastPollTime = millis();
 }
 
@@ -738,7 +741,7 @@ void Platform::InitMinimal()
 #if RP2040
 	serialUSB.Start(NoPin);
 #endif
-	CanInterface::Init(GetCanAddress(), UseAlternateCanPins, false);
+	CanInterface::Init(GetCanAddress(), CANInstanceNumber, UseLaterCanPins, false);
 }
 
 void Platform::Spin()

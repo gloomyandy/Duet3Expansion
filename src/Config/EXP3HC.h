@@ -47,7 +47,8 @@
 #define USE_MPU					0
 #define USE_CACHE				1
 
-constexpr bool UseAlternateCanPins = false;
+constexpr unsigned int CANInstanceNumber = 1;
+constexpr bool UseLaterCanPins = false;
 
 constexpr size_t NumDrivers = 3;
 constexpr size_t MaxSmartDrivers = 3;

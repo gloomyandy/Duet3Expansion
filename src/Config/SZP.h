@@ -43,7 +43,8 @@
 
 #define DIAG_SERCOM_NUMBER		0		// which SERCOM device we use for debugging output
 
-constexpr bool UseAlternateCanPins = false;
+constexpr unsigned int CANInstanceNumber = 0;
+constexpr bool UseLaterCanPins = false;
 
 constexpr size_t MaxPortsPerHeater = 1;
 

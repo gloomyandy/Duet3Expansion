@@ -35,7 +35,8 @@
 
 constexpr size_t MaxPortsPerHeater = 1;
 
-constexpr bool UseAlternateCanPins = true;
+constexpr unsigned int CANInstanceNumber = 0;
+constexpr bool UseLaterCanPins = true;
 
 constexpr Pin BoardTypePins[] = { PortAPin(5), PortAPin(4) };
 constexpr Pin ButtonPins[] = { PortAPin(27) };

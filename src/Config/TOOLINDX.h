@@ -1,17 +1,17 @@
 /*
- * F3PTB.h
+ * TOOLINDX.h
  *
- *  Created on: 6 Oct 2023
+ *  Created on: 20 Dec 2025
  *      Author: David
  */
 
-#ifndef SRC_CONFIG_TOOL1RR_H_
-#define SRC_CONFIG_TOOL1RR_H_
+#ifndef SRC_CONFIG_TOOLINDX_H_
+#define SRC_CONFIG_TOOLINDX_H_
 
 #include <Hardware/PinDescription.h>
 
-#define BOARD_TYPE_NAME		"F3PTB"
-#define BOOTLOADER_NAME		"SAME5x"
+#define BOARD_TYPE_NAME		"TOOLINDX"
+#define BOOTLOADER_NAME		"SAME5x"	// temporary until we have the cmposite bootloader
 
 // General features
 #define HAS_VREF_MONITOR		1
@@ -74,15 +74,15 @@ constexpr uint32_t Tmc2240CurrentRange = 0x01;								// which current range we 
 constexpr uint32_t Tmc2240SlopeControl = 0x01;								// which slope control we set the TMC2240 to (200V/us)
 constexpr float Tmc2240Rref = 15.0;											// TMC2240 reference resistor in Kohms
 constexpr float DriverFullScaleCurrent = 24000/Tmc2240Rref;					// in mA, assuming we set the range bits in the DRV_CONF register to 0x01
-constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
+constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;			// with RRef = 15K this works out as 1.6A so this is the maximum current we can ask for
 
-#if 0
-// Current limits for thermal testing of the board
+#if 1
+// New current limits (RRF 3.6 and later)
 constexpr float MaximumMotorCurrent = 1600.0;
 constexpr float MaximumStandstillCurrent = 1130.0;
 #else
-// Proposed current limits for normal use
-constexpr float MaximumMotorCurrent = 1200.0;								// peak current per phase, only one phase gets this at a time
+// Original current limits for normal use (RRF 3.5.x and earlier)
+constexpr float MaximumMotorCurrent = 1000.0;								// peak current per phase, only one phase gets this at a time
 constexpr float MaximumStandstillCurrent = 800.0;							// peak current in a single phase at standstill
 #endif
 
@@ -95,10 +95,10 @@ constexpr Pin DriverDiagPins[NumDrivers] = { PortAPin(21) };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		0
-#define SUPPORT_LDC1612			0
+#define SUPPORT_LDC1612			1
 #define SUPPORT_AS5601			1											// support direct-connected magnetic filament monitor encoder chip
-#define SUPPORT_TCA6408A		0
-#define SUPPORT_DMA_NEOPIXEL	0											// can't get SERCOM SPI working due to output state when not transmitting - case opened with Microchip
+#define SUPPORT_TCA6408A		1											// support button and LEDs on filament monitor via TCA6408A chip
+#define SUPPORT_DMA_NEOPIXEL	1											// can't get SERCOM SPI working due to output state when not transmitting - case opened with Microchip
 
 #ifdef DEBUG
 # define SUPPORT_I2C_SENSORS	0											// in debug mode the SERCOM is used for debugging
@@ -114,13 +114,16 @@ constexpr Pin DriverDiagPins[NumDrivers] = { PortAPin(21) };
 #define USE_MPU					0
 #define USE_CACHE				1
 
-constexpr unsigned int CANInstanceNumber = 0;
-constexpr bool UseLaterCanPins = false;
+constexpr int CANInstanceNumber = 1;
+constexpr bool UseLaterCanPins = true;
 
 constexpr size_t MaxPortsPerHeater = 1;
 
-constexpr size_t NumThermistorInputs = 2;
+constexpr size_t NumThermistorInputs = 3;
 constexpr float DefaultThermistorSeriesR = 2200.0;
+constexpr float DefaultThermistorR25_TOOL1RR_temp2 = 10000;
+constexpr float DefaultThermistorBeta_TOOL1RR_temp2 = 3425.0;
+constexpr float DefaultThermistorC_TOOL1RR_temp2 = 1.68e-7;
 
 constexpr float VrefTopResistor = 27.0;
 constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / NumThermistorInputs) * 4700.0/((DefaultThermistorSeriesR / NumThermistorInputs) + 4700.0);
@@ -135,10 +138,10 @@ constexpr Pin LedPins[] = { PortAPin(30), PortAPin(31) };
 constexpr bool LedActiveHigh = false;
 
 constexpr Pin VinMonitorPin = PortAPin(2);
-constexpr float VinDividerRatio = (115.2 + 10.0)/10.0;
+constexpr float VinDividerRatio = (60.4 + 4.7)/4.7;
 constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;
 
-constexpr Pin TempSensePins[NumThermistorInputs] = { PortBPin(8), PortAPin(7) };
+constexpr Pin TempSensePins[NumThermistorInputs] = { PortBPin(8), PortAPin(7), PortAPin(11) };
 
 #if SUPPORT_I2C_SENSORS
 
@@ -160,6 +163,13 @@ constexpr GpioPinFunction I2CSCLPinPeriphMode = GpioPinFunction::C;
 constexpr Pin Lis3dhInt1Pin = PortAPin(27);
 #endif
 
+#if SUPPORT_LDC1612
+constexpr uint16_t LDC1612_I2CAddress = 0x2A;				// pin 4 is tied low
+constexpr unsigned int Ldc1612GClkNumber = 5;
+constexpr Pin LDC1612ClockGenPin = PortBPin(11);
+constexpr Pin LDC1612InterruptPin = PortAPin(25);
+#endif
+
 #if SUPPORT_AS5601
 constexpr uint16_t AS5601_I2CAddress = 0x36;				// I2C address of the AS5601
 #endif
@@ -168,6 +178,7 @@ constexpr uint16_t AS5601_I2CAddress = 0x36;				// I2C address of the AS5601
 constexpr uint16_t TCA6408A_I2CAddress = 0x20;				// I2C address of the TCA6408A (ADDR pin is tied to ground)
 #endif
 
+const auto sercom1cPad3 = SercomIo::sercom1c + SercomIo::pad3;
 const auto sercom5dpad0 = SercomIo::sercom5d + SercomIo::pad0;
 const auto sercom5dpad1 = SercomIo::sercom5d + SercomIo::pad1;
 
@@ -177,31 +188,31 @@ constexpr PinDescription PinTable[] =
 	//	TC					TCC					ADC					SERCOM in			SERCOM out	  Exint PinName
 	// Port A
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA00 driver ENN
-	{ TcOutput::tc2_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out1"			},	// PA01 OUT1
+	{ TcOutput::tc2_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out1"			},	// PA01 OUT0
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_0,	SercomIo::none,		SercomIo::none,		Nx,	"ate.vin"		},	// PA02 VIN monitor
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_1,	SercomIo::none,		SercomIo::none,		Nx, nullptr			},	// PA03 board type
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_4,	SercomIo::none,		SercomIo::none,		4,	"io1.in"		},	// PA04 IO1_IN
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_5,	SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA05 spare analog in (strain gauge?)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_4,	SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA04 spare analog in (strain gauge?)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_5,	SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA05 spare
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_6,	SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA06 VRefMon
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_7,	SercomIo::none,		SercomIo::none,		Nx,	"temp1"			},	// PA07 unused
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_7,	SercomIo::none,		SercomIo::none,		7,	"temp1"			},	// PA07 TEMP1
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA08 driver UART Tx
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA09 driver UART Rx
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"ate.d0.dir"	},	// PA10 driver DIR and reset jumper
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_11,	SercomIo::none,		SercomIo::none,		Nx,	nullptr			 },	// PA11 unused
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr 		},	// PA12 I2C SDA
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_11,	SercomIo::none,		SercomIo::none,		Nx,	"temp2,coiltemp" },	// PA11 TEMP2
+	{ TcOutput::none,	TccOutput::tcc1_2F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr 		},	// PA12 I2C SDA
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA13 I2C SCL
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA14 crystal
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA15 crystal
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		0,	"out1.tach"		},	// PA16 OUT1 tacho input
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA17 unused
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		2,	"out3.tach"		},	// PA18 OUT3 tacho input
-	{ TcOutput::tc3_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx, "out3"			},	// PA19 OUT3
-	{ TcOutput::none,	TccOutput::tcc1_4F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out2"			},	// PA20 OUT2
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		0,	"io3.in"		},	// PA16 IO1 in
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		1,	"io1.in"		},	// PA17 IO2 in
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		2,	"out1.tach"		},	// PA18 OUT2 tacho
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		sercom1cPad3,		Nx, "led"			},	// PA19 Neopixel out
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out2"			},	// PA20 OUT2
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		5,	"ate.d0.diag"	},	// PA21 driver DIAG
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA22 CAN0 Tx
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA23 CAN0 Rx
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA24 unused
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA25 unused
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		8,	"io2.in"		},	// PA24 IO3 in
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		9,	nullptr			},	// PA25 LDC1612 interrupt
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA26 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		11,	nullptr			},	// PA27 accelerometer interrupt
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA28 not on chip
@@ -212,16 +223,16 @@ constexpr PinDescription PinTable[] =
 	// Port B
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB00 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB01 not on chip
-	{ TcOutput::none,	TccOutput::tcc2_2F,	AdcInput::none,		SercomIo::none,		sercom5dpad0,		Nx, nullptr			},	// PB02 test pad, UART out available, PWM available
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_15,	sercom5dpad1,		SercomIo::none,		3, "io0.in"			},	// PB03 IO0 in, UART in available
+	{ TcOutput::none,	TccOutput::tcc2_2F,	AdcInput::none,		SercomIo::none,		sercom5dpad0,		Nx, "io0.out"		},	// PB02 IO0 out, UART available
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_15,	sercom5dpad1,		SercomIo::none,		3, "io0.in"			},	// PB03 IO0 in, UART available
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB04 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB05 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB06 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB07 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_2,	SercomIo::none,		SercomIo::none,		Nx,	"temp0"			},	// PB08 TEMP0
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_3,	SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB09 VSSA monitor
-	{ TcOutput::none,	TccOutput::tcc0_4F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out0"			},	// PB10 OUT0
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB11 unused
+	{ TcOutput::none,	TccOutput::tcc0_4F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out0"			},	// PB10 OUT1
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB11 GCLK for LDC1612
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB12 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB13 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB14 not on chip
@@ -295,4 +306,4 @@ const NvicPriority NvicPriorityPins = 3;				// priority for GPIO pin interrupts
 const NvicPriority NvicPriorityCan = 4;
 const NvicPriority NvicPriorityAdc = 5;
 
-#endif /* SRC_CONFIG_TOOL1RR_H_ */
+#endif /* SRC_CONFIG_TOOLINDX_H_ */

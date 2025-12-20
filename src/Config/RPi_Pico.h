@@ -87,7 +87,8 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(22) };
 
 #define PIN_TODO	GpioPin(NoPin)	//TEMPORARY! Used when we haven't assigned a pin yet.
 
-constexpr bool UseAlternateCanPins = false;
+constexpr unsigned int CANInstanceNumber = 0;		// not used for this configuration
+constexpr bool UseLaterCanPins = false;				// not used for this configuration
 
 constexpr size_t MaxPortsPerHeater = 1;
 
