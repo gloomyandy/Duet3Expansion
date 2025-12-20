@@ -7,7 +7,7 @@
 
 #include <Hardware/SharedI2CClient.h>
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 
 SharedI2CClient::SharedI2CClient(SharedI2CMaster& dev, uint16_t addr) noexcept : device(dev), address(addr)
 {

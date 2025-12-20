@@ -71,10 +71,10 @@ constexpr Pin DiagPins[NumDrivers] = { PortAPin(21) };
 #define SUPPORT_DMA_NEOPIXEL	0
 
 #ifdef DEBUG
-# define SUPPORT_I2C_SENSORS	0							// in debug mode the SERCOM is used for debugging
+# define NUM_I2C_CHANNELS		0							// in debug mode the SERCOM is used for debugging
 # define SUPPORT_LIS3DH			0
 #else
-# define SUPPORT_I2C_SENSORS	1
+# define NUM_I2C_CHANNELS		1
 # define SUPPORT_LIS3DH			1
 #endif
 
@@ -117,7 +117,7 @@ constexpr Pin ButtonPins[] = { PortAPin(20) };
 constexpr Pin EncoderCsPin = PortAPin(18);
 constexpr Pin MT6835CalPin = PortAPin(0);					// Pin spi.cs1 drives CAL on the MT6835 encoder board (version 2 EXP1HCL boards only)
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 
 // I2C using pins PA12,13
 constexpr uint8_t I2C0SercomNumber = 2;
@@ -134,7 +134,7 @@ constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::C;
 
 #if SUPPORT_LIS3DH
 
-# if SUPPORT_I2C_SENSORS
+# if NUM_I2C_CHANNELS != 0
 
 #  define ACCELEROMETER_USES_SPI			(0)				// accelerometer is connected via I2C
 constexpr Pin Lis3dhInt1Pin = PortAPin(20);					// same as io1.in

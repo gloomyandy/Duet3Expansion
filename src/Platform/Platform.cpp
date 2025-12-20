@@ -26,7 +26,7 @@
 #include <Math/Isqrt.h>
 #include <Version.h>
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 # include <Hardware/SharedI2CMaster.h>
 #endif
 
@@ -110,8 +110,8 @@ namespace Platform
 	SharedSpiDevice *sharedSpi = nullptr;
 #endif
 
-#if SUPPORT_I2C_SENSORS
-	SharedI2CMaster *sharedI2C = nullptr;
+#if NUM_I2C_CHANNELS != 0
+	SharedI2CMaster *sharedI2C[NUM_I2C_CHANNELS] = { 0 };
 #endif
 
 #if HAS_VOLTAGE_MONITOR
@@ -685,15 +685,21 @@ void Platform::Init()
 # endif
 #endif
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 # ifdef TOOL1LC
 	if (boardVariant != 0)
 # endif
 	{
 		SetPinFunction(I2C0SDAPin, I2C0SDAPinPeriphMode);
 		SetPinFunction(I2C0SCLPin, I2C0SCLPinPeriphMode);
-		sharedI2C = new SharedI2CMaster(I2C0SercomNumber);
+		sharedI2C[0] = new SharedI2CMaster(I2C0SercomNumber);
 	}
+#endif
+
+#if NUM_I2C_CHANNELS >= 2
+	SetPinFunction(I2C1SDAPin, I2C1SDAPinPeriphMode);
+	SetPinFunction(I2C1SCLPin, I2C1SCLPinPeriphMode);
+	sharedI2C[1] = new SharedI2CMaster(I2C1SercomNumber);
 #endif
 
 #ifdef ATEIO
@@ -712,7 +718,7 @@ void Platform::Init()
 # if ACCELEROMETER_USES_SPI
 		AccelerometerHandler::Init(*sharedSpi);
 # else
-		AccelerometerHandler::Init(*sharedI2C);
+		AccelerometerHandler::Init(GetSharedI2C(0));
 # endif
 	}
 #endif
@@ -722,12 +728,12 @@ void Platform::Init()
 	if (boardVariant != 0)
 # endif
 	{
-		ScanningSensorHandler::Init(*sharedI2C);
+		ScanningSensorHandler::Init(GetSharedI2C(0));
 	}
 #endif
 
 #if SUPPORT_AS5601
-	MFMHandler::Init(*sharedI2C);
+	MFMHandler::Init(GetSharedI2C(0));
 #endif
 
 	CanInterface::Init(GetCanAddress(), CANInstanceNumber, UseLaterCanPins, true);
@@ -1548,33 +1554,65 @@ uint8_t Platform::GetBoardVariant() noexcept
 #endif
 
 // Interrupt handlers
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 
 # if SAMC21
 #  ifndef I2C0_HANDLER
-#   error "I2C_HANDLER not defined"
+#   error "I2C0_HANDLER not defined"
 #  endif
 	void I2C0_HANDLER() noexcept
 	{
-		Platform::sharedI2C->Interrupt();
+		Platform::sharedI2C[0]->Interrupt();
 	}
 # elif SAME5x
 #  if !defined(I2C0_HANDLER0) || !defined(I2C0_HANDLER1) || !defined(I2C0_HANDLER3)
-#   error "I2C_HANDLER0, 1 or 3 not defined"
+#   error "I2C0_HANDLER0, 1 or 3 not defined"
 #  endif
 	void I2C0_HANDLER0() noexcept
 	{
-		Platform::sharedI2C->Interrupt();
+		Platform::sharedI2C[0]->Interrupt();
 	}
 
 	void I2C0_HANDLER1() noexcept
 	{
-		Platform::sharedI2C->Interrupt();
+		Platform::sharedI2C[0]->Interrupt();
 	}
 
 	void I2C0_HANDLER3() noexcept
 	{
-		Platform::sharedI2C->Interrupt();
+		Platform::sharedI2C[0]->Interrupt();
+	}
+# endif
+
+#endif
+
+#if NUM_I2C_CHANNELS >= 2
+
+# if SAMC21
+#  ifndef I2C1_HANDLER
+#   error "I2C1_HANDLER not defined"
+#  endif
+	void I2C1_HANDLER() noexcept
+	{
+		Platform::sharedI2C[1]->Interrupt();
+	}
+# elif SAME5x
+#  if !defined(I2C1_HANDLER0) || !defined(I2C1_HANDLER1) || !defined(I2C1_HANDLER3)
+#   error "I2C1_HANDLER0, 1 or 3 not defined"
+#  endif
+	void I2C1_HANDLER0() noexcept
+	{
+		Platform::sharedI2C[1]->Interrupt();
+	}
+
+	void I2C1_HANDLER1() noexcept
+	{
+		Platform::sharedI2C[1]->Interrupt();
+	}
+
+	void I2C1_HANDLER3() noexcept
+	{
+		Platform::sharedI2C[1]->Interrupt();
 	}
 # endif
 

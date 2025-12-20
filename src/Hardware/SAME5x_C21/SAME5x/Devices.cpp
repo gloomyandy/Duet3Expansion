@@ -77,7 +77,7 @@ void SerialPortDeinit(AsyncSerial*) noexcept
 # endif
 }
 
-# if !SUPPORT_I2C_SENSORS
+# if NUM_I2C_CHANNELS == 0
 
 // Sercom2 on port io1 can be used as a UART if it is not being used for I2C
 AsyncSerial uart0(2, 1, 512, 512, SerialPortInit, SerialPortDeinit);

@@ -10,7 +10,7 @@
 
 #include <RepRapFirmware.h>
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 
 #include <RTOSIface/RTOSIface.h>
 
@@ -25,7 +25,7 @@ public:
 	bool Take(uint32_t timeout) noexcept;		// get ownership of this I2C interface, return true if successful
 	void Release() noexcept;
 
-	void Diagnostics(const StringRef& reply) noexcept;
+	void Diagnostics(const StringRef& reply, unsigned int number) noexcept;
 
 	void Interrupt() noexcept;
 

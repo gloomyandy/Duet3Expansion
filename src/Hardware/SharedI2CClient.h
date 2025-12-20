@@ -10,7 +10,7 @@
 
 #include <RepRapFirmware.h>
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 
 #include "SharedI2CMaster.h"
 

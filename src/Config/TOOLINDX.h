@@ -95,10 +95,10 @@ constexpr Pin DriverDiagPins[NumDrivers] = { PortAPin(21) };
 #define SUPPORT_DMA_NEOPIXEL	1											// using QSPI for Neopixels
 
 #ifdef DEBUG
-# define SUPPORT_I2C_SENSORS	0											// in debug mode the SERCOM is used for debugging
+# define NUM_I2C_CHANNELS		0											// in debug mode the SERCOM is used for debugging
 # define SUPPORT_LIS3DH			0
 #else
-# define SUPPORT_I2C_SENSORS	1
+# define NUM_I2C_CHANNELS		2
 # define SUPPORT_LIS3DH			1
 #endif
 
@@ -133,7 +133,7 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;
 
 constexpr Pin TempSensePins[NumThermistorInputs] = { PortBPin(8), PortBPin(9), PortAPin(11) };
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS >= 1
 
 // I2C0 using pins PA22,23
 constexpr uint8_t I2C0SercomNumber = 3;
@@ -146,6 +146,10 @@ constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::C;
 # define I2C0_HANDLER2		SERCOM3_2_Handler
 # define I2C0_HANDLER3		SERCOM3_3_Handler
 
+#endif
+
+#if NUM_I2C_CHANNELS >= 2
+
 // I2C1 using pins PA12,13
 constexpr uint8_t I2C1SercomNumber = 4;
 constexpr Pin I2C1SDAPin = PortAPin(13);
@@ -156,6 +160,7 @@ constexpr GpioPinFunction I2C1SCLPinPeriphMode = GpioPinFunction::D;
 # define I2C1_HANDLER1		SERCOM4_1_Handler
 # define I2C1_HANDLER2		SERCOM4_2_Handler
 # define I2C1_HANDLER3		SERCOM4_3_Handler
+
 #endif
 
 #if SUPPORT_LIS3DH

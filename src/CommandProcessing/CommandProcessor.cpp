@@ -574,8 +574,11 @@ static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& rep
 #if SUPPORT_AS5601
 		MFMHandler::AppendDiagnostics(reply);
 #endif
-#if SUPPORT_I2C_SENSORS
-		Platform::GetSharedI2C().Diagnostics(reply);
+#if NUM_I2C_CHANNELS != 0
+		for (unsigned int i = 0; i < NUM_I2C_CHANNELS; ++i)
+		{
+			Platform::GetSharedI2C(i).Diagnostics(reply, i);
+		}
 #endif
 #if SUPPORT_DRIVERS
 		FilamentMonitor::GetDiagnostics(reply);

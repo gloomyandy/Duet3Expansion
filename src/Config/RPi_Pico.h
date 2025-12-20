@@ -78,7 +78,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(22) };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		0
-#define SUPPORT_I2C_SENSORS		0	//temporary
+#define NUM_I2C_CHANNELS		0	//temporary
 #define SUPPORT_LIS3DH			0	//temporary
 #define SUPPORT_DHT_SENSOR		0
 
@@ -125,7 +125,7 @@ constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::Spi;
 
 #endif
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 
 // I2C using pins GPIO8,9. If changing this, also change the available pins in the pin table.
 constexpr uint8_t I2CSercomNumber = 0;			// the I2C unit number we use
@@ -155,7 +155,7 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm2b,	AdcInput::none,		"gpio5"		},	// GPIO5
 	{ PwmOutput::pwm3a,	AdcInput::none,		"gpio6"		},	// GPIO6
 	{ PwmOutput::pwm3b,	AdcInput::none,		"gpio7"		},	// GPIO7
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 	{ PwmOutput::none,	AdcInput::none,		nullptr		},	// GPIO8 reserved for I2C SDA
 	{ PwmOutput::none,	AdcInput::none,		nullptr		},	// GPIO9 reserved for I2C SCL
 #else

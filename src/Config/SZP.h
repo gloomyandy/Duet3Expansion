@@ -32,7 +32,7 @@
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		0
-#define SUPPORT_I2C_SENSORS		1
+#define NUM_I2C_CHANNELS		1
 #define SUPPORT_LIS3DH			1
 #define SUPPORT_DHT_SENSOR		0
 #define SUPPORT_SDADC			1
@@ -73,7 +73,7 @@ constexpr Pin AnalogModeOutputPin = PortAPin(2);
 constexpr Pin LedPins[] = { PortAPin(30), PortAPin(31) };
 constexpr bool LedActiveHigh = false;
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 
 // I2C using pins PA16,17
 constexpr uint8_t I2C0SercomNumber = 1;

@@ -101,10 +101,10 @@ constexpr Pin DriverDiagPins[NumDrivers] = { PortAPin(21) };
 #define SUPPORT_DMA_NEOPIXEL	0											// can't get SERCOM SPI working due to output state when not transmitting - case opened with Microchip
 
 #ifdef DEBUG
-# define SUPPORT_I2C_SENSORS	0											// in debug mode the SERCOM is used for debugging
+# define NUM_I2C_CHANNELS		0											// in debug mode the SERCOM is used for debugging
 # define SUPPORT_LIS3DH			0
 #else
-# define SUPPORT_I2C_SENSORS	1
+# define NUM_I2C_CHANNELS		1
 # define SUPPORT_LIS3DH			1
 #endif
 
@@ -143,7 +143,7 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;
 
 constexpr Pin TempSensePins[NumThermistorInputs] = { PortBPin(8), PortAPin(7), PortAPin(11) };
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 
 // I2C using pins PA12,13
 constexpr uint8_t I2C0SercomNumber = 2;

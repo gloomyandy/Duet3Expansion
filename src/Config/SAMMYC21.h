@@ -68,7 +68,7 @@ constexpr Pin DirectionPins[NumDrivers] = { PortAPin(10) };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
-#define SUPPORT_I2C_SENSORS		1
+#define NUM_I2C_CHANNELS		1
 #define SUPPORT_LIS3DH			1
 #define SUPPORT_LDC1612			1
 #define SUPPORT_DHT_SENSOR		0
@@ -111,7 +111,7 @@ constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
 
 #endif
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 
 // I2C using pins PA22,23. If changing this, also change the available pins in the pin table.
 constexpr uint8_t I2C0SercomNumber = 3;
@@ -170,7 +170,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::tc4_1,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		3,	"pa19"		},	// PA19
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pa20"		},	// PA20
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pa21"		},	// PA21 LDC1612 INT
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA22 I2C
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA23 I2C
 #else
