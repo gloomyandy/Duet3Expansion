@@ -139,13 +139,15 @@ constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::C;
 
 #if SUPPORT_LIS3DH
 # define ACCELEROMETER_USES_SPI			(0)					// 0 if the accelerometer is connected via I2C, 1 if via SPI
+constexpr unsigned int Lis_I2CChannel = 0;
 constexpr bool Lis3dhAddressLsb = true;
 constexpr Pin Lis3dhInt1Pin = PortAPin(0);
 #endif
 
 #if SUPPORT_LDC1612
-constexpr Pin LDC1612ClockGenPin = PortAPin(23);
+constexpr unsigned int LDC1612_I2CChannel = 0;				//TODO which I2C?
 constexpr uint16_t LDC1612_I2CAddress = 0x2B;				// pin 4 is tied high on the Grove board
+constexpr Pin LDC1612ClockGenPin = PortAPin(23);
 constexpr Pin LDC1612InterruptPin = PortAPin(23);			// this is brought out to a test pad
 #endif
 

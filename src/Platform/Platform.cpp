@@ -718,7 +718,7 @@ void Platform::Init()
 # if ACCELEROMETER_USES_SPI
 		AccelerometerHandler::Init(*sharedSpi);
 # else
-		AccelerometerHandler::Init(GetSharedI2C(0));
+		AccelerometerHandler::Init(GetSharedI2C(Lis_I2CChannel));
 # endif
 	}
 #endif
@@ -728,7 +728,7 @@ void Platform::Init()
 	if (boardVariant != 0)
 # endif
 	{
-		ScanningSensorHandler::Init(GetSharedI2C(0));
+		ScanningSensorHandler::Init(GetSharedI2C(LDC1612_I2CChannel));
 	}
 #endif
 

@@ -88,12 +88,12 @@ constexpr Pin StepPins[NumDrivers] = { PortBPin(23) };
 constexpr Pin DirectionPins[NumDrivers] = { PortAPin(10) };
 constexpr Pin DriverDiagPins[NumDrivers] = { PortAPin(21) };
 
-#define SUPPORT_THERMISTORS		1
-#define SUPPORT_SPI_SENSORS		0											// SPI temperature sensors not supported
-#define SUPPORT_LDC1612			1
-#define SUPPORT_AS5601			0											// support direct-connected magnetic filament monitor encoder chip
-#define SUPPORT_DMA_NEOPIXEL	1											// using QSPI for Neopixels
-
+#define SUPPORT_THERMISTORS			1
+#define SUPPORT_SPI_SENSORS			0										// SPI temperature sensors not supported
+#define SUPPORT_LDC1612				1
+#define SUPPORT_TPiS_1T_1086_L5_5	1										// IR temperature sensor
+#define SUPPORT_AS5601				0										// support direct-connected magnetic filament monitor encoder chip
+#define SUPPORT_DMA_NEOPIXEL		1										// using QSPI for Neopixels
 #ifdef DEBUG
 # define NUM_I2C_CHANNELS		0											// in debug mode the SERCOM is used for debugging
 # define SUPPORT_LIS3DH			0
@@ -165,17 +165,25 @@ constexpr GpioPinFunction I2C1SCLPinPeriphMode = GpioPinFunction::D;
 
 #if SUPPORT_LIS3DH
 #  define ACCELEROMETER_USES_SPI			(0)				// accelerometer is connected via I2C
+constexpr unsigned int Lis_I2CChannel = 0;					//TODO which I2C?
 constexpr Pin Lis3dhInt1Pin = PortAPin(27);
 #endif
 
 #if SUPPORT_LDC1612
+constexpr unsigned int LDC1612_I2CChannel = 0;				//TODO which I2C?
 constexpr uint16_t LDC1612_I2CAddress = 0x2A;				// pin 4 is tied low
 constexpr unsigned int Ldc1612GClkNumber = 5;
 constexpr Pin LDC1612ClockGenPin = PortBPin(11);
 constexpr Pin LDC1612InterruptPin = PortBPin(10);
 #endif
 
+#if SUPPORT_TPiS_1T_1086_L5_5
+constexpr unsigned int TPiS_I2CChannel = 0;					//TODO which I2C?
+constexpr uint16_t TPiS_I2CAddress = 0x0C;
+#endif
+
 #if SUPPORT_AS5601
+constexpr unsigned int AS5601_I2CChannel = 0;					//TODO which I2C?
 constexpr uint16_t AS5601_I2CAddress = 0x36;				// I2C address of the AS5601
 #endif
 

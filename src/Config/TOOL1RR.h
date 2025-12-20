@@ -160,10 +160,12 @@ constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::C;
 
 #if SUPPORT_LIS3DH
 #  define ACCELEROMETER_USES_SPI			(0)				// accelerometer is connected via I2C
+constexpr unsigned int Lis_I2CChannel = 0;
 constexpr Pin Lis3dhInt1Pin = PortAPin(27);
 #endif
 
 #if SUPPORT_LDC1612
+constexpr unsigned int LDC1612_I2CChannel = 0;
 constexpr uint16_t LDC1612_I2CAddress = 0x2A;				// pin 4 is tied low
 constexpr unsigned int Ldc1612GClkNumber = 5;
 constexpr Pin LDC1612ClockGenPin = PortBPin(11);

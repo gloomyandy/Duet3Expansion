@@ -157,6 +157,7 @@ constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::C;
 
 #if SUPPORT_LIS3DH
 #  define ACCELEROMETER_USES_SPI			(0)				// accelerometer is connected via I2C
+constexpr unsigned int Lis_I2CChannel = 0;
 constexpr Pin Lis3dhInt1Pin = PortAPin(27);
 #endif
 

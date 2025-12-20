@@ -138,6 +138,7 @@ constexpr GpioPinFunction I2CSCLPinPeriphMode = GpioPinFunction::I2c;
 #endif
 
 #if SUPPORT_LIS3DH
+constexpr unsigned int Lis_I2CChannel = 0;
 constexpr Pin Lis3dhInt1Pin = GpioPin(10);
 #endif
 
