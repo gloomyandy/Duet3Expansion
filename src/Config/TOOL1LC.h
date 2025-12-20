@@ -128,12 +128,12 @@ constexpr bool LedActiveHighV11 = false;
 #if SUPPORT_I2C_SENSORS
 
 // I2C using pins PA16,17
-constexpr uint8_t I2CSercomNumber = 1;
-constexpr Pin I2CSDAPin = PortAPin(16);
-constexpr GpioPinFunction I2CSDAPinPeriphMode = GpioPinFunction::C;
-constexpr Pin I2CSCLPin = PortAPin(17);
-constexpr GpioPinFunction I2CSCLPinPeriphMode = GpioPinFunction::C;
-#define I2C_HANDLER		SERCOM1_Handler
+constexpr uint8_t I2C0SercomNumber = 1;
+constexpr Pin I2C0SDAPin = PortAPin(16);
+constexpr GpioPinFunction I2C0SDAPinPeriphMode = GpioPinFunction::C;
+constexpr Pin I2C0SCLPin = PortAPin(17);
+constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::C;
+#define I2C0_HANDLER		SERCOM1_Handler
 
 #endif
 

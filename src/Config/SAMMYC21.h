@@ -114,12 +114,12 @@ constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
 #if SUPPORT_I2C_SENSORS
 
 // I2C using pins PA22,23. If changing this, also change the available pins in the pin table.
-constexpr uint8_t I2CSercomNumber = 3;
-constexpr Pin I2CSDAPin = PortAPin(22);
-constexpr GpioPinFunction I2CSDAPinPeriphMode = GpioPinFunction::C;
-constexpr Pin I2CSCLPin = PortAPin(23);
-constexpr GpioPinFunction I2CSCLPinPeriphMode = GpioPinFunction::C;
-#define I2C_HANDLER		SERCOM3_Handler
+constexpr uint8_t I2C0SercomNumber = 3;
+constexpr Pin I2C0SDAPin = PortAPin(22);
+constexpr GpioPinFunction I2C0SDAPinPeriphMode = GpioPinFunction::C;
+constexpr Pin I2C0SCLPin = PortAPin(23);
+constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::C;
+#define I2C0_HANDLER		SERCOM3_Handler
 
 #endif
 

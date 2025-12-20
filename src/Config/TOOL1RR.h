@@ -146,15 +146,15 @@ constexpr Pin TempSensePins[NumThermistorInputs] = { PortBPin(8), PortAPin(7), P
 #if SUPPORT_I2C_SENSORS
 
 // I2C using pins PA12,13
-constexpr uint8_t I2CSercomNumber = 2;
-constexpr Pin I2CSDAPin = PortAPin(12);
-constexpr GpioPinFunction I2CSDAPinPeriphMode = GpioPinFunction::C;
-constexpr Pin I2CSCLPin = PortAPin(13);
-constexpr GpioPinFunction I2CSCLPinPeriphMode = GpioPinFunction::C;
-# define I2C_HANDLER0		SERCOM2_0_Handler
-# define I2C_HANDLER1		SERCOM2_1_Handler
-# define I2C_HANDLER2		SERCOM2_2_Handler
-# define I2C_HANDLER3		SERCOM2_3_Handler
+constexpr uint8_t I2C0SercomNumber = 2;
+constexpr Pin I2C0SDAPin = PortAPin(12);
+constexpr GpioPinFunction I2C0SDAPinPeriphMode = GpioPinFunction::C;
+constexpr Pin I2C0SCLPin = PortAPin(13);
+constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::C;
+# define I2C0_HANDLER0		SERCOM2_0_Handler
+# define I2C0_HANDLER1		SERCOM2_1_Handler
+# define I2C0_HANDLER2		SERCOM2_2_Handler
+# define I2C0_HANDLER3		SERCOM2_3_Handler
 
 #endif
 

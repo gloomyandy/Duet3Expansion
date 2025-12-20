@@ -240,7 +240,9 @@ namespace Platform
 #if SAME5x || SAMC21
 		if constexpr(CANInstanceNumber == 1)
 		{
+# if defined(CAN1_IRQn)
 			NVIC_SetPriority(CAN1_IRQn, NvicPriorityCan);
+# endif
 		}
 		else
 		{
@@ -688,9 +690,9 @@ void Platform::Init()
 	if (boardVariant != 0)
 # endif
 	{
-		SetPinFunction(I2CSDAPin, I2CSDAPinPeriphMode);
-		SetPinFunction(I2CSCLPin, I2CSCLPinPeriphMode);
-		sharedI2C = new SharedI2CMaster(I2CSercomNumber);
+		SetPinFunction(I2C0SDAPin, I2C0SDAPinPeriphMode);
+		SetPinFunction(I2C0SCLPin, I2C0SCLPinPeriphMode);
+		sharedI2C = new SharedI2CMaster(I2C0SercomNumber);
 	}
 #endif
 
@@ -1549,28 +1551,28 @@ uint8_t Platform::GetBoardVariant() noexcept
 #if SUPPORT_I2C_SENSORS
 
 # if SAMC21
-#  ifndef I2C_HANDLER
+#  ifndef I2C0_HANDLER
 #   error "I2C_HANDLER not defined"
 #  endif
-	void I2C_HANDLER() noexcept
+	void I2C0_HANDLER() noexcept
 	{
 		Platform::sharedI2C->Interrupt();
 	}
 # elif SAME5x
-#  if !defined(I2C_HANDLER0) || !defined(I2C_HANDLER1) || !defined(I2C_HANDLER3)
+#  if !defined(I2C0_HANDLER0) || !defined(I2C0_HANDLER1) || !defined(I2C0_HANDLER3)
 #   error "I2C_HANDLER0, 1 or 3 not defined"
 #  endif
-	void I2C_HANDLER0() noexcept
+	void I2C0_HANDLER0() noexcept
 	{
 		Platform::sharedI2C->Interrupt();
 	}
 
-	void I2C_HANDLER1() noexcept
+	void I2C0_HANDLER1() noexcept
 	{
 		Platform::sharedI2C->Interrupt();
 	}
 
-	void I2C_HANDLER3() noexcept
+	void I2C0_HANDLER3() noexcept
 	{
 		Platform::sharedI2C->Interrupt();
 	}
