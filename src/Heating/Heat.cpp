@@ -42,6 +42,10 @@ Licence: GPL
 # include <CommandProcessing/AccelerometerHandler.h>
 #endif
 
+#if SUPPORT_INDUCTIVE_HEATER
+# include "InductiveHeater.h"
+#endif
+
 #include <Platform/Tasks.h>
 
 // The task stack size must be large enough for calls to debugPrintf when a heater fault occurs.
@@ -53,6 +57,10 @@ namespace Heat
 {
 	// Private members
 	static Heater* heaters[MaxHeaters];							// A PID controller for each heater
+
+#if SUPPORT_INDUCTIVE_HEATER
+	InductiveHeater inductiveHeater;
+#endif
 
 	static TemperatureSensor * volatile sensorsRoot = nullptr;	// The sensor list, which must be maintained in sensor number order because the Heat task assumes that
 
@@ -193,6 +201,10 @@ void Heat::Init() noexcept
 	extrusionMinTemp = DefaultMinExtrusionTemperature;
 	retractionMinTemp = DefaultMinRetractionTemperature;
 	coldExtrude = false;
+
+#if SUPPORT_INDUCTIVE_HEATER
+	inductiveHeater.Init();
+#endif
 
 	heaterTask = new Task<HeaterTaskStackWords>;
 	heaterTask->Create(Heat::TaskLoop, "HEAT", nullptr, TaskPriority::HeatPriority);

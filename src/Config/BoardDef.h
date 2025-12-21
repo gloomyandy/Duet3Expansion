@@ -119,6 +119,10 @@ constexpr size_t NumDrivers = 0;
 # define SUPPORT_TPiS_1T_1086_L5_5		0
 #endif
 
+#ifndef SUPPORT_INDUCTIVE_HEATER
+# define SUPPORT_INDUCTIVE_HEATER		0
+#endif
+
 #ifndef USE_SPICAN
 # define USE_SPICAN						0
 #endif

@@ -94,6 +94,8 @@ constexpr Pin DriverDiagPins[NumDrivers] = { PortAPin(21) };
 #define SUPPORT_TPiS_1T_1086_L5_5	1										// IR temperature sensor
 #define SUPPORT_AS5601				0										// support direct-connected magnetic filament monitor encoder chip
 #define SUPPORT_DMA_NEOPIXEL		1										// using QSPI for Neopixels
+#define SUPPORT_INDUCTIVE_HEATER	1										// Bondtech INDX inductive heater support
+
 #ifdef DEBUG
 # define NUM_I2C_CHANNELS		0											// in debug mode the SERCOM is used for debugging
 # define SUPPORT_LIS3DH			0
@@ -163,8 +165,8 @@ constexpr GpioPinFunction I2C1SCLPinPeriphMode = GpioPinFunction::D;
 
 #endif
 
-#if SUPPORT_LIS3DH
-#  define ACCELEROMETER_USES_SPI			(0)				// accelerometer is connected via I2C
+#if SUPPORT_LIS3DH											// we actually use a LIS2DW
+# define ACCELEROMETER_USES_SPI			(0)					// accelerometer is connected via I2C
 constexpr unsigned int Lis_I2CChannel = 0;					//TODO which I2C?
 constexpr Pin Lis3dhInt1Pin = PortAPin(27);
 #endif
@@ -183,9 +185,19 @@ constexpr uint16_t TPiS_I2CAddress = 0x0C;
 #endif
 
 #if SUPPORT_AS5601
-constexpr unsigned int AS5601_I2CChannel = 0;					//TODO which I2C?
+constexpr unsigned int AS5601_I2CChannel = 0;				//TODO which I2C?
 constexpr uint16_t AS5601_I2CAddress = 0x36;				// I2C address of the AS5601
 #endif
+
+// Definitions for inductive heater support
+constexpr unsigned int InductiveHeaterOscTcNumber = 3;			// number of the TC we use to generate the ~120kHz signal to excite the resonant circuit
+constexpr unsigned int InductiveHeaterPwmTccNumber = 3;			// number of the TCC we use to generate the PWM signal that is gated with the osc signal
+constexpr unsigned int InductiveHeaterCCLNumber = 3;			// number of the CCL that we use to gate the TC and TCC output together
+constexpr unsigned int InductiveHeaterCCLOutPin = PortBPin(17);	// the CCL output pin that drive the inductive heater mosfet
+constexpr GpioPinFunction InductiveHeaterCCLOutPinPeriphMode = GpioPinFunction::N;
+
+TcCount16 * const InductiveHeaterOscTc = &(TC3->COUNT16);		// the TC we use
+Tcc * const InductiveHeaterPwmTcc = TCC3;						// the TCC we use
 
 // Table of pin functions that we are allowed to use
 constexpr PinDescription PinTable[] =
