@@ -190,8 +190,10 @@ constexpr uint16_t AS5601_I2CAddress = 0x36;				// I2C address of the AS5601
 #endif
 
 // Definitions for inductive heater support
-constexpr unsigned int InductiveHeaterOscTcNumber = 3;			// number of the TC we use to generate the ~120kHz signal to excite the resonant circuit
-constexpr unsigned int InductiveHeaterPwmTccNumber = 3;			// number of the TCC we use to generate the PWM signal that is gated with the osc signal
+constexpr unsigned int InductiveHeaterOscTcDeviceNumber = 3;	// number of the TC we use to generate the ~120kHz signal to excite the resonant circuit
+constexpr unsigned int InductiveHeaterOscTcOutputNumber = 1;	// which output from the TC we are using, must not be 0
+constexpr unsigned int InductiveHeaterPwmTccDeviceNumber = 3;	// number of the TCC we use to generate the PWM signal that is gated with the osc signal
+constexpr unsigned int InductiveHeaterPwmTccOutputNumber = 1;	// which output from the TCC we are using
 constexpr unsigned int InductiveHeaterCCLNumber = 3;			// number of the CCL that we use to gate the TC and TCC output together
 constexpr unsigned int InductiveHeaterCCLOutPin = PortBPin(17);	// the CCL output pin that drive the inductive heater mosfet
 constexpr GpioPinFunction InductiveHeaterCCLOutPinPeriphMode = GpioPinFunction::N;
