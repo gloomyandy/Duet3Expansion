@@ -213,13 +213,13 @@ void CanInterface::Init(CanAddress defaultBoardAddress, unsigned int whichPort, 
 	{
 		if (useLaterPins)
 		{
-			SetPinFunction(PortAPin(25), GpioPinFunction::G);
-			SetPinFunction(PortAPin(24), GpioPinFunction::G);
+			SetPinFunction(PortBPin(23), GpioPinFunction::G);
+			SetPinFunction(PortBPin(22), GpioPinFunction::G);
 		}
 		else
 		{
-			SetPinFunction(PortBPin(23), GpioPinFunction::G);
-			SetPinFunction(PortBPin(22), GpioPinFunction::G);
+			SetPinFunction(PortAPin(25), GpioPinFunction::G);
+			SetPinFunction(PortAPin(24), GpioPinFunction::G);
 		}
 	}
 	else					// using CAN1 (only one set of pins available on SAMC21G)
