@@ -240,7 +240,7 @@ namespace Platform
 #if SAME5x || SAMC21
 		if constexpr(CANInstanceNumber == 1)
 		{
-# if defined(CAN1_IRQn)
+# if defined(ID_CAN1)
 			NVIC_SetPriority(CAN1_IRQn, NvicPriorityCan);
 # endif
 		}
