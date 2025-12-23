@@ -32,13 +32,16 @@
 #define SUPPORT_LED_STRIPS		1
 #define SUPPORT_PIO_NEOPIXEL	1
 #define SUPPORT_INPUT_SHAPING	1
+#define NUM_HW_SPI_CHANNELS		0
+#define NUM_PIO_SPI_CHANNELS	1
+#define NUM_SPI_CHANNELS		(NUM_HW_SPI_CHANNELS + NUM_PIO_SPI_CHANNELS)
 
 // Drivers configuration
 #define SUPPORT_DRIVERS			1
 
 #if SUPPORT_DRIVERS
 
-#if 1
+#if 1 // TMC2240 using SPI driver
 #define HAS_SMART_DRIVERS		1
 #define HAS_STALL_DETECT		1
 #define SINGLE_DRIVER			1
@@ -77,6 +80,9 @@ constexpr Pin Tmc51xxCSPins[] = {GpioPin(15)};
 #else
 constexpr Pin GlobalTmc51xxCSPin = GpioPin(15);
 #endif
+#if TMC51xx_USES_SHARED_SPI
+constexpr unsigned int Tmc5160_SpiChannel = 0;
+#endif
 
 constexpr Pin DirectionPins[NumDrivers] = { GpioPin(6) };
 constexpr Pin StepPins[NumDrivers] = { GpioPin(7) };
@@ -84,7 +90,7 @@ constexpr Pin StepPins[NumDrivers] = { GpioPin(7) };
 
 #define ACTIVE_HIGH_STEP		1		// 1 = active high, 0 = active low
 #define ACTIVE_HIGH_DIR			1		// 1 = active high, 0 = active low
-#elif 0
+#elif 0 // Standard TMC5160 driver
 #define HAS_SMART_DRIVERS		1
 #define HAS_STALL_DETECT		1
 #define SINGLE_DRIVER			1
@@ -117,6 +123,9 @@ constexpr Pin Tmc51xxCSPins[] = {GpioPin(15)};
 #else
 constexpr Pin GlobalTmc51xxCSPin = GpioPin(15);
 #endif
+#if TMC51xx_USES_SHARED_SPI
+constexpr unsigned int Tmc5160_SpiChannel = 0;
+#endif
 
 constexpr Pin DirectionPins[NumDrivers] = { GpioPin(6) };
 constexpr Pin StepPins[NumDrivers] = { GpioPin(7) };
@@ -125,7 +134,7 @@ constexpr Pin StepPins[NumDrivers] = { GpioPin(7) };
 #define ACTIVE_HIGH_STEP		1		// 1 = active high, 0 = active low
 #define ACTIVE_HIGH_DIR			1		// 1 = active high, 0 = active low
 
-#else
+#else // TMC2209 driver
 #define HAS_SMART_DRIVERS		1
 #define HAS_STALL_DETECT		1
 #define SINGLE_DRIVER			1
@@ -211,16 +220,21 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico u
 constexpr Pin LedPins[] = { GpioPin(5) };
 constexpr bool LedActiveHigh = false;
 
-#if SUPPORT_SPI_SENSORS || TMC51xx_USES_SHARED_SPI
-
+#if NUM_HW_SPI_CHANNELS > 0
 // Shared SPI pin connections
 constexpr uint8_t SspiSpiInstanceNumber = 0;
-constexpr Pin SSPIMosiPin = GpioPin(3);
-constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPISclkPin = GpioPin(2);
-constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPIMisoPin = GpioPin(4);
-constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::Spi;
+constexpr Pin SSPI0MosiPin = GpioPin(3);
+constexpr GpioPinFunction SSPI0MosiPinPeriphMode = GpioPinFunction::Spi;
+constexpr Pin SSPI0SclkPin = GpioPin(2);
+constexpr GpioPinFunction SSPI0SclkPinPeriphMode = GpioPinFunction::Spi;
+constexpr Pin SSPI0MisoPin = GpioPin(4);
+constexpr GpioPinFunction SSPI0MisoPinPeriphMode = GpioPinFunction::Spi;
+#endif
+
+#if NUM_PIO_SPI_CHANNELS > 0
+constexpr Pin SPIOSPI0MosiPin = GpioPin(3);
+constexpr Pin SPIOSPI0SclkPin = GpioPin(2);
+constexpr Pin SPIOSPI0MisoPin = GpioPin(4);
 #endif
 
 #if SUPPORT_I2C_SENSORS
@@ -236,6 +250,7 @@ constexpr GpioPinFunction I2CSCLPinPeriphMode = GpioPinFunction::I2c;
 #if SUPPORT_LIS3DH
 
 #define ACCELEROMETER_USES_SPI			(1)					// 0 if the accelerometer is connected via I2C, 1 if via SPI
+constexpr unsigned int Lis_SpiChannel = 0;
 constexpr Pin Lis3dhCsPin = GpioPin(12);
 constexpr Pin Lis3dhInt1Pin = GpioPin(25);
 

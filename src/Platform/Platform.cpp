@@ -106,8 +106,8 @@ namespace Platform
 	static uint8_t boardVariant = 0;
 #endif
 
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO) || TMC51xx_USES_SHARED_SPI
-	SharedSpiDevice *sharedSpi = nullptr;
+#if NUM_SPI_CHANNELS > 0
+	SharedSpiDevice *sharedSpi[NUM_SPI_CHANNELS];
 #endif
 
 #if SUPPORT_I2C_SENSORS
@@ -674,15 +674,27 @@ void Platform::Init()
 	}
 #endif
 
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO) || TMC51xx_USES_SHARED_SPI
-	// Set the pin functions
-	SetPinFunction(SSPIMosiPin, SSPIMosiPinPeriphMode);
-	SetPinFunction(SSPISclkPin, SSPISclkPinPeriphMode);
-	SetPinFunction(SSPIMisoPin, SSPIMisoPinPeriphMode);
+#if NUM_SPI_CHANNELS > 0
 # if SAME5x || SAMC21
-	sharedSpi = new SharedSpiDevice(SspiSercomNumber, SspiDataInPad);
+	// Set the pin functions
+	SetPinFunction(SSPI0MosiPin, SSPI0MosiPinPeriphMode);
+	SetPinFunction(SSPI0SclkPin, SSPI0SclkPinPeriphMode);
+	SetPinFunction(SSPI0MisoPin, SSPI0MisoPinPeriphMode);
+	sharedSpi[0] = new SharedSpiDevice(SspiSercomNumber, SspiDataInPad);
 # elif RPXXXX
-	sharedSpi = new SharedSpiDevice(SspiSpiInstanceNumber);
+	{
+		size_t spichan = 0;
+#  if NUM_HW_SPI_CHANNELS > 0
+	// Set the pin functions
+	SetPinFunction(SSPI0MosiPin, SSPI0MosiPinPeriphMode);
+	SetPinFunction(SSPI0SclkPin, SSPI0SclkPinPeriphMode);
+	SetPinFunction(SSPI0MisoPin, SSPI0MisoPinPeriphMode);
+	sharedSpi[spichan++] = new SharedHWSpiDevice(SspiSpiInstanceNumber);
+#  endif
+#  if NUM_PIO_SPI_CHANNELS > 0
+	sharedSpi[spichan++] = new SharedPIOSpiDevice();
+#  endif
+	}
 # else
 # error Unsupported processor
 # endif
@@ -706,7 +718,7 @@ void Platform::Init()
 #endif
 
 #ifdef ATEIO
-	ExtendedAnalog::Init(*sharedSpi);					// must init sharedSpi before calling this
+	ExtendedAnalog::Init(GetSharedSpi(ExtendedAdc_SpiChan));					// must init sharedSpi before calling this
 #endif
 
 	uniqueId.SetFromCurrentBoard();
@@ -719,7 +731,7 @@ void Platform::Init()
 # endif
 	{
 # if ACCELEROMETER_USES_SPI
-		AccelerometerHandler::Init(*sharedSpi);
+		AccelerometerHandler::Init(GetSharedSpi(Lis_SpiChannel));
 # else
 		AccelerometerHandler::Init(*sharedI2C);
 # endif

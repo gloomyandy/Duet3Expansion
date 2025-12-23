@@ -68,6 +68,7 @@ constexpr Pin DirectionPins[NumDrivers] = { PortAPin(10) };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
+#define NUM_SPI_CHANNELS		1
 #define SUPPORT_I2C_SENSORS		1
 #define SUPPORT_LIS3DH			1
 #define SUPPORT_LDC1612			1
@@ -101,12 +102,12 @@ constexpr bool LedActiveHigh = true;
 // Shared SPI using pins PA16,17,18. If changing this, also change the available pins in the pin table.
 constexpr uint8_t SspiSercomNumber = 1;
 constexpr uint32_t SspiDataInPad = 2;
-constexpr Pin SSPIMosiPin = PortAPin(16);
-constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::C;
-constexpr Pin SSPISclkPin = PortAPin(17);
-constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::C;
-constexpr Pin SSPIMisoPin = PortAPin(18);
-constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
+constexpr Pin SSPI0MosiPin = PortAPin(16);
+constexpr GpioPinFunction SSPI0MosiPinPeriphMode = GpioPinFunction::C;
+constexpr Pin SSPI0SclkPin = PortAPin(17);
+constexpr GpioPinFunction SSPI0SclkPinPeriphMode = GpioPinFunction::C;
+constexpr Pin SSPI0MisoPin = PortAPin(18);
+constexpr GpioPinFunction SSPI0MisoPinPeriphMode = GpioPinFunction::C;
 
 #endif
 

@@ -1833,7 +1833,7 @@ void SmartDrivers::Init() noexcept
 #endif
 
 #if TMC51xx_USES_SHARED_SPI
-	spiDevice = new SharedSpiClient(*Platform::sharedSpi, DriversSpiClockFrequency, SpiMode::mode3, NoPin, false);
+	spiDevice = new SharedSpiClient(Platform::GetSharedSpi(Tmc5160_SpiChannel), DriversSpiClockFrequency, SpiMode::mode3, NoPin, false);
 #else
 	SetPinFunction(TMC51xxMosiPin, TMC51xxMosiPinPeriphMode);
 	SetPinFunction(TMC51xxMisoPin, TMC51xxMisoPinPeriphMode);

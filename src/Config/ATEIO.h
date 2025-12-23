@@ -24,6 +24,7 @@
 #define SUPPORT_DRIVERS			0
 #define SUPPORT_THERMISTORS		0
 #define SUPPORT_SPI_SENSORS		0
+#define NUM_SPI_CHANNELS		1
 #define SUPPORT_I2C_SENSORS		0
 #define SUPPORT_DHT_SENSOR		0
 #define SUPPORT_SDADC			1
@@ -45,14 +46,15 @@ constexpr bool LedActiveHigh = false;
 // Shared SPI
 constexpr uint8_t SspiSercomNumber = 1;
 constexpr uint32_t SspiDataInPad = 3;
-constexpr Pin SSPIMosiPin = PortAPin(16);
-constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::C;
-constexpr Pin SSPISclkPin = PortAPin(17);
-constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::C;
-constexpr Pin SSPIMisoPin = PortAPin(19);
-constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
+constexpr Pin SSPI0MosiPin = PortAPin(16);
+constexpr GpioPinFunction SSPI0MosiPinPeriphMode = GpioPinFunction::C;
+constexpr Pin SSPI0SclkPin = PortAPin(17);
+constexpr GpioPinFunction SSPI0SclkPinPeriphMode = GpioPinFunction::C;
+constexpr Pin SSPI0MisoPin = PortAPin(19);
+constexpr GpioPinFunction SSPI0MisoPinPeriphMode = GpioPinFunction::C;
 
 constexpr Pin ExtendedAdcCsPin = PortAPin(18);
+constexpr unsigned int ExtendedAdc_SpiChan = 0;
 
 // Table of pin functions that we are allowed to use
 constexpr PinDescription PinTable[] =

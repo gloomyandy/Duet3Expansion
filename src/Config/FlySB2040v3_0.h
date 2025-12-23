@@ -113,6 +113,9 @@ constexpr Pin DriverDiagPins[NumDrivers] = { NoPin };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
+#define NUM_HW_SPI_CHANNELS		1
+#define NUM_PIO_SPI_CHANNELS	0
+#define NUM_SPI_CHANNELS		(NUM_HW_SPI_CHANNELS + NUM_PIO_SPI_CHANNELS)
 #define SUPPORT_I2C_SENSORS		1
 #define SUPPORT_LIS3DH			1
 #define SUPPORT_DHT_SENSOR		0
@@ -146,16 +149,16 @@ constexpr Pin ButtonPins[] = { PIN_TODO };
 constexpr Pin LedPins[] = { GpioPin(5) };
 constexpr bool LedActiveHigh = false;
 
-#if SUPPORT_SPI_SENSORS
-
+#if NUM_SPI_CHANNELS > 0
+constexpr unsigned int Temperature_SpiChannel = 0;
 // Shared SPI pin connections
 constexpr uint8_t SspiSpiInstanceNumber = 0;
-constexpr Pin SSPIMosiPin = GpioPin(3);
-constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPISclkPin = GpioPin(2);
-constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPIMisoPin = GpioPin(4);
-constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::Spi;
+constexpr Pin SSPI0MosiPin = GpioPin(3);
+constexpr GpioPinFunction SSPI0MosiPinPeriphMode = GpioPinFunction::Spi;
+constexpr Pin SSPI0SclkPin = GpioPin(2);
+constexpr GpioPinFunction SSPI0SclkPinPeriphMode = GpioPinFunction::Spi;
+constexpr Pin SSPI0MisoPin = GpioPin(4);
+constexpr GpioPinFunction SSPI0MisoPinPeriphMode = GpioPinFunction::Spi;
 #endif
 
 #if SUPPORT_I2C_SENSORS
@@ -171,6 +174,7 @@ constexpr GpioPinFunction I2CSCLPinPeriphMode = GpioPinFunction::I2c;
 #if SUPPORT_LIS3DH
 
 #define ACCELEROMETER_USES_SPI			(1)					// 0 if the accelerometer is connected via I2C, 1 if via SPI
+constexpr unsigned int Lis_SpiChannel = 0;
 constexpr Pin Lis3dhCsPin = GpioPin(12);
 constexpr Pin Lis3dhInt1Pin = GpioPin(25);
 

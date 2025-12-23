@@ -18,7 +18,7 @@
 # include "ClosedLoop/ClosedLoop.h"
 #endif
 
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO) || TMC51xx_USES_SHARED_SPI
+#if NUM_SPI_CHANNELS > 0
 # include <Hardware/SharedSpiDevice.h>
 #endif
 
@@ -99,9 +99,9 @@ class IoPort;
 namespace Platform
 {
 	// Public functions
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO) || TMC51xx_USES_SHARED_SPI
-	extern SharedSpiDevice *sharedSpi;
-	inline SharedSpiDevice& GetSharedSpi() noexcept { return *sharedSpi; }
+# if NUM_SPI_CHANNELS > 0
+	extern SharedSpiDevice *sharedSpi[NUM_SPI_CHANNELS];
+	inline SharedSpiDevice& GetSharedSpi(unsigned int n) noexcept { return *sharedSpi[n]; }
 #endif
 
 #if SUPPORT_I2C_SENSORS
