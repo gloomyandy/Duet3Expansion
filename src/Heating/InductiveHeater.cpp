@@ -45,15 +45,14 @@ void InductiveHeater::Init() noexcept
 		volatile Tcc *const tccdev = Timers::TccDevices[InductiveHeaterOscTccDeviceNumber];
 		hri_tcc_clear_CTRLA_ENABLE_bit(tccdev);
 		hri_tcc_set_CTRLA_SWRST_bit(tccdev);
+		// Warning: the following code is FRAGILE. The TCC is prone to hanging up if the following code is changed, for example adding wait_for_sync calls.
 		tccdev->CTRLA.bit.PRESCALER = oscPrescaler;
 		tccdev->CTRLA.bit.RESOLUTION = 0;
-		tccdev->WAVE.bit.WAVEGEN = TCC_WAVE_WAVEGEN_NPWM_Val;
-//		hri_tcc_wait_for_sync(tccdev, TCC_SYNCBUSY_WAVE);
-		tccdev->PER.bit.PER = oscTimerPeriod - 1;
+		hri_tcc_write_WAVE_WAVEGEN_bf(tccdev, TCC_WAVE_WAVEGEN_NPWM_Val);
 		tccdev->PERBUF.bit.PERBUF = oscTimerPeriod - 1;
-		tccdev->CC[InductiveHeaterOscTccOutputNumber].bit.CC = oscMarkCount - 1;
+		tccdev->PER.bit.PER = oscTimerPeriod - 1;
 		tccdev->CCBUF[InductiveHeaterOscTccOutputNumber].bit.CCBUF = oscMarkCount - 1;
-		delayMicroseconds(10);												// without a delay here the programming doesn't work. 5us is not long enough, 10us is.
+		tccdev->CC[InductiveHeaterOscTccOutputNumber].bit.CC = oscMarkCount - 1;
 		hri_tcc_set_CTRLA_ENABLE_bit(tccdev);
 		tccdev->CTRLBSET.reg = TC_CTRLBSET_CMD_RETRIGGER;					// if we don't do this then there is a delay before PWM starts
 	}
