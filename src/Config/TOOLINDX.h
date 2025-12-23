@@ -191,15 +191,13 @@ constexpr uint16_t AS5601_I2CAddress = 0x36;				// I2C address of the AS5601
 
 // Definitions for inductive heater support
 constexpr unsigned int InductiveHeaterOscTcDeviceNumber = 3;	// number of the TC we use to generate the ~120kHz signal to excite the resonant circuit
-constexpr unsigned int InductiveHeaterOscTcOutputNumber = 1;	// which output from the TC we are using, must not be 0
 constexpr unsigned int InductiveHeaterPwmTccDeviceNumber = 3;	// number of the TCC we use to generate the PWM signal that is gated with the osc signal
 constexpr unsigned int InductiveHeaterPwmTccOutputNumber = 1;	// which output from the TCC we are using
 constexpr unsigned int InductiveHeaterCCLNumber = 3;			// number of the CCL that we use to gate the TC and TCC output together
 constexpr unsigned int InductiveHeaterCCLOutPin = PortBPin(17);	// the CCL output pin that drive the inductive heater mosfet
 constexpr GpioPinFunction InductiveHeaterCCLOutPinPeriphMode = GpioPinFunction::N;
 
-TcCount16 * const InductiveHeaterOscTc = &(TC3->COUNT16);		// the TC we use
-Tcc * const InductiveHeaterPwmTcc = TCC3;						// the TCC we use
+constexpr Pin UsbNotCanSelectPin = PortBPin(31);
 
 // Table of pin functions that we are allowed to use
 constexpr PinDescription PinTable[] =
@@ -216,7 +214,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA07 SPI0 MISO
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA08 NP out (QSPI D0)
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pa9"			},	// PA09 unused
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pa10"			},	// PA10 unused
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		10,	nullptr			},	// PA10 ADC DRDY
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_11,	SercomIo::none,		SercomIo::none,		Nx,	"temp2,chambertemp" },	// PA11 on-board thermistor
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr 		},	// PA12 I2C1 SCL (sercom4)
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA13 I2C1 SDA
@@ -248,7 +246,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_7,	SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB05 Heater voltage feedback
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_8,	SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB06 Heater current
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		7,	nullptr			},	// PB07 Driver diag
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_2,	SercomIo::none,		SercomIo::none,		Nx,	"temp0"			},	// PB08 INDX thermistor case temperature
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_2,	SercomIo::none,		SercomIo::none,		Nx,	"temp0"			},	// PB08 case temperature thermistor
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_3,	SercomIo::none,		SercomIo::none,		Nx,	"temp1"			},	// PB09 LDC coil temperature
 	{ TcOutput::none,	TccOutput::tcc0_4F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		10,	nullptr			},	// PB10 LDC interrupt
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB11 LDC1612 clock (GCLK5)
@@ -271,7 +269,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB28 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB29 not on chip
 	{ TcOutput::none,	TccOutput::tcc4_0F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB30 Heater PWM if using external gating, else unused
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB31 USB/!CAN enable
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB31 USB/!CAN select
 
 	// Virtual pins
 #if SUPPORT_LIS3DH

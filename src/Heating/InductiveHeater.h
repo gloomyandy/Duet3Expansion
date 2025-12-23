@@ -22,10 +22,11 @@ public:
 	void SetPwm(float pwm) noexcept;									// set the PWM value in the range 0..1
 
 private:
-	static constexpr uint32_t ResonantFrequency = 120'000;				//TODO set the correct value here
-	static constexpr uint32_t PwmFrequencyDivisor = 1000;				// high enough for good resolution, low enough for fast response
+	static constexpr uint32_t OscResonantFrequency = 120'000;			//TODO set the correct value here
+	static constexpr uint32_t PwmFrequencyDivisor = 512;				// high enough for good resolution, low enough for fast response
+	static constexpr float OscMarkSpaceRatio = 0.4;						// the mark/space ratio for the heater FET drive
 
-	uint32_t oscTimerTop;
+	uint32_t oscTimerPeriod;
 	uint32_t pwmTimerTop;
 };
 

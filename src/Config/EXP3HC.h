@@ -120,6 +120,20 @@ constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::C;
 constexpr Pin SSPIMisoPin = PortCPin(19);
 constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
 
+#if 0	// temporary inductive heater test
+
+#define SUPPORT_INDUCTIVE_HEATER		(1)
+
+// Definitions for inductive heater support
+constexpr unsigned int InductiveHeaterOscTcDeviceNumber = 3;	// number of the TC we use to generate the ~120kHz signal to excite the resonant circuit
+constexpr unsigned int InductiveHeaterPwmTccDeviceNumber = 3;	// number of the TCC we use to generate the PWM signal that is gated with the osc signal
+constexpr unsigned int InductiveHeaterPwmTccOutputNumber = 1;	// which output from the TCC we are using
+constexpr unsigned int InductiveHeaterCCLNumber = 3;			// number of the CCL that we use to gate the TC and TCC output together
+constexpr unsigned int InductiveHeaterCCLOutPin = PortBPin(17);	// the CCL output pin that drive the inductive heater mosfet
+constexpr GpioPinFunction InductiveHeaterCCLOutPinPeriphMode = GpioPinFunction::N;
+
+#endif
+
 constexpr auto sercom1cPad0 = SercomIo::sercom1c + SercomIo::pad0;
 constexpr auto sercom1cPad1 = SercomIo::sercom1c + SercomIo::pad1;
 constexpr auto sercom3cPad0 = SercomIo::sercom3c + SercomIo::pad0;
