@@ -125,13 +125,11 @@ constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
 #define SUPPORT_INDUCTIVE_HEATER		(1)
 
 // Definitions for inductive heater support
-constexpr unsigned int InductiveHeaterOscTcDeviceNumber = 3;	// number of the TC we can use to generate the ~120kHz signal to excite the resonant circuit
-
-constexpr unsigned int InductiveHeaterOscTccDeviceNumber = 0;	// number of the TCC we can use to generate the ~120kHz signal to excite the resonant circuit
+constexpr unsigned int InductiveHeaterOscTccDeviceNumber = 3;	// number of the TCC we can use to generate the ~120kHz signal to excite the resonant circuit. May be a 16-bit TCC.
 constexpr unsigned int InductiveHeaterOscTccOutputNumber = 0;	// which output from the TCC we are using
 
-constexpr unsigned int InductiveHeaterPwmTccDeviceNumber = 3;	// number of the TCC we use to generate the PWM signal that is gated with the osc signal
-constexpr unsigned int InductiveHeaterPwmTccOutputNumber = 1;	// which output from the TCC we are using
+constexpr unsigned int InductiveHeaterPwmTccDeviceNumber = 0;	// number of the TCC we use to generate the PWM signal that is gated with the osc signal. Must be a 24-bit TCC.
+constexpr unsigned int InductiveHeaterPwmTccOutputNumber = 0;	// which output from the TCC we are using
 constexpr unsigned int InductiveHeaterCCLNumber = 3;			// number of the CCL that we use to gate the TC and TCC output together
 constexpr unsigned int InductiveHeaterCCLOutPin = PortBPin(17);	// the CCL output pin that drive the inductive heater mosfet
 constexpr unsigned int InductiveHeaterAuxCCLNumber = 0;			// number of the second CCL that we need to use to gate two TCCs together
@@ -160,7 +158,11 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::tc0_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out4"			},	// PA05
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_6,	SercomIo::none,		SercomIo::none,		6,	"io0.in"		},	// PA06
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_7,	SercomIo::none,		SercomIo::none,		7,	"spi.cs2"		},	// PA07
+#if SUPPORT_INDUCTIVE_HEATER
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out5"			},	// PA08
+#else
 	{ TcOutput::none,	TccOutput::tcc0_0F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out5"			},	// PA08
+#endif
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		9,	"ate.d0.diag0"	},	// PA09 driver0 diag0
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_10,	SercomIo::none,		SercomIo::none,		Nx,	"ate.vin"		},	// PA10 VINmon
 	{ TcOutput::tc1_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out6"			},	// PA11
@@ -202,7 +204,11 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB13 CANrx
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"spi.cs3"		},	// PB14 don't allow DHT11 on this pin, no EXINT
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		15,	"spi.cs1"		},	// PB15
+#if SUPPORT_INDUCTIVE_HEATER
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		sercom5cPad0,		Nx,	"io1.out,uart1.tx"	},	// PB16
+#else
 	{ TcOutput::none,	TccOutput::tcc3_0F,	AdcInput::none,		SercomIo::none,		sercom5cPad0,		Nx,	"io1.out,uart1.tx"	},	// PB16
+#endif
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		sercom5cPad1,		SercomIo::none,		Nx,	"uart1.rx"		},	// PB17
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB18 board type 0
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		3,	"out4.tach"		},	// PB19

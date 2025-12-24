@@ -4,7 +4,7 @@
  *  Created on: 21 Dec 2025
  *      Author: David
  *
- *  Support for the inductive heater in the Bondtech INDX system
+ *  Support for inductive heaters
  */
 
 #ifndef SRC_HEATING_INDUCTIVEHEATER_H_
@@ -27,7 +27,7 @@ private:
 	static constexpr float OscMarkSpaceRatio = 0.4;						// the mark/space ratio for the heater FET drive
 
 	uint32_t oscTimerPeriod;
-	uint32_t pwmTimerTop;
+	uint32_t pwmTimerPeriod;
 };
 
 #endif
