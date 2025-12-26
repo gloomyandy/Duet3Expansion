@@ -15,10 +15,10 @@
 
 constexpr uint16_t LisAddresses[] =
 {
-	0b0011000,						// LIS3DH or LIS2DW with SDO/SA0 connected to ground, address 0x30/0x32
-	0b0011001,						// LIS3DH or LIS2DW with SDO/SA0 connected to Vcc, address 0x32/0x33
-	0b0011110,						// LIS3DSH with SEL grounded
-	0b0011101						// LIS3DSH with SEL connected to Vcc
+	0b001'1000,						// LIS3DH or LIS2DW with SDO/SA0 connected to ground, address 0x30/0x32
+	0b001'1001,						// LIS3DH or LIS2DW with SDO/SA0 connected to Vcc, address 0x32/0x33
+	0b001'1110,						// LIS3DSH with SEL grounded
+	0b001'1101						// LIS3DSH with SEL connected to Vcc
 };
 
 constexpr uint8_t FifoInterruptLevel = 24;							// how full the FIFO must get before we want an interrupt
