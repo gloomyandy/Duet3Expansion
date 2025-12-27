@@ -27,7 +27,7 @@ public:
 	void Poll() noexcept;												// update the output and read the inputs
 
 private:
-	enum class TCA6408ARegister
+	enum class TCA6408ARegister : uint8_t
 	{
 		input = 0, output, polarityInversion, config					// these are all 8-bit registers
 	};
