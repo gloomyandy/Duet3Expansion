@@ -120,7 +120,7 @@ constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::C;
 constexpr Pin SSPIMisoPin = PortCPin(19);
 constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
 
-#if 1	// temporary inductive heater test
+#if 0	// temporary inductive heater code test
 
 #define SUPPORT_INDUCTIVE_HEATER		(1)
 
