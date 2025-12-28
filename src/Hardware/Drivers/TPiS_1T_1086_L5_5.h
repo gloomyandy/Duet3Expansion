@@ -24,6 +24,7 @@ public:
 	bool TakeReading() noexcept;
 	float GetAmbientTemperature() const noexcept { return ambientTemperatureDegK - 273.15; }
 	float GetObjectTemperature() const noexcept { return objectTemperatureDegK - 273.15; }
+	bool IsInitialised() const noexcept { return initialised; }
 
 private:
 	static constexpr uint32_t TPis_I2C_timeout = 25;					// timeout in milliseconds when waiting to acquire the I2C bus

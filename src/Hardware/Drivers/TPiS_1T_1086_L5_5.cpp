@@ -11,7 +11,7 @@
 
 #include <CanMessageGenericParser.h>
 
-TPiS_1T_1086_L5_5::TPiS_1T_1086_L5_5(SharedI2CMaster& master)
+TPiS_1T_1086_L5_5::TPiS_1T_1086_L5_5(SharedI2CMaster& master) noexcept
 	: device(master, TPiS_I2CAddress)
 {
 }
