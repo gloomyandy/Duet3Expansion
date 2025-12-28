@@ -19,7 +19,7 @@ Licence: GPL
 ****************************************************************************************************/
 
 #include "Heat.h"
-#include "Heater.h"
+#include "ResistiveHeater.h"
 #include <Platform/Platform.h>
 #include <Platform/TaskPriorities.h>
 #include <Movement/Move.h>
@@ -464,7 +464,7 @@ GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef&
 		std::swap(oldHeater, heaters[heater]);
 		delete oldHeater;
 
-		Heater *newHeater = new LocalHeater(heater);
+		Heater *newHeater = new ResistiveHeater(heater);
 		const GCodeResult rslt = newHeater->ConfigurePortAndSensor(pinName.c_str(), freq, sensorNumber, reply);
 		if (Succeeded(rslt))
 		{
