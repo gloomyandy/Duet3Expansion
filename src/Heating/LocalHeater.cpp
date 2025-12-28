@@ -45,7 +45,6 @@ static bool tuningCycleComplete;
 LocalHeater::LocalHeater(unsigned int heaterNum) noexcept : Heater(heaterNum), mode(HeaterMode::off)
 {
 	LocalHeater::ResetHeater();
-	SetHeater(0.0);							// set up the pin even if the heater is not enabled (for PCCB)
 
 	// Time the sensor was last sampled.  During startup, we use the current
 	// time as the initial value so as to not trigger an immediate warning from the Tick ISR.
@@ -54,11 +53,6 @@ LocalHeater::LocalHeater(unsigned int heaterNum) noexcept : Heater(heaterNum), m
 
 LocalHeater::~LocalHeater()
 {
-	LocalHeater::SwitchOff();
-	for (auto& port : ports)
-	{
-		port.Release();
-	}
 }
 
 float LocalHeater::GetTemperature() const noexcept
@@ -69,14 +63,6 @@ float LocalHeater::GetTemperature() const noexcept
 float LocalHeater::GetAccumulator() const noexcept
 {
 	return iAccumulator;
-}
-
-void LocalHeater::SetHeater(float power) const noexcept
-{
-	for (auto& port : ports)
-	{
-		port.WriteAnalog(power);
-	}
 }
 
 void LocalHeater::ResetHeater() noexcept
@@ -94,35 +80,8 @@ void LocalHeater::ResetHeater() noexcept
 }
 
 // Configure the heater port and the sensor number
-GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) noexcept
+GCodeResult LocalHeater::ConfigureSensor(unsigned int sn, const StringRef& reply) noexcept
 {
-	if constexpr (MaxPortsPerHeater == 1)
-	{
-		if (!ports[0].AssignPort(portName, reply, PinUsedBy::heater, PinAccess::pwm))
-		{
-			return GCodeResult::error;
-		}
-	}
-	else
-	{
-		PinAccess access[MaxPortsPerHeater];
-		IoPort* portAddrs[MaxPortsPerHeater];
-		for (size_t i = 0; i < MaxPortsPerHeater; ++i)
-		{
-			access[i] = PinAccess::pwm;
-			portAddrs[i] = &ports[i];
-		}
-		if (IoPort::AssignPorts(portName, reply, PinUsedBy::heater, MaxPortsPerHeater, portAddrs, access) == 0)
-		{
-			return GCodeResult::error;
-		}
-
-	}
-
-	for (auto& port : ports)
-	{
-		port.SetFrequency(freq);
-	}
 	SetSensorNumber(sn);
 	if (Heat::FindSensor(sn).IsNull())
 	{
@@ -138,30 +97,8 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 	return GCodeResult::ok;
 }
 
-GCodeResult LocalHeater::SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept
-{
-	for (auto& port : ports)
-	{
-		port.SetFrequency(freq);
-	}
-	return GCodeResult::ok;
-}
-
 GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const noexcept
 {
-	reply.printf("Heater %u pin(s) ", GetHeaterNumber());
-	ports[0].AppendPinName(reply);
-	if constexpr (MaxPortsPerHeater > 1)
-	{
-		for (size_t i = 1; i < MaxPortsPerHeater && ports[i].IsValid(); ++i)
-		{
-			reply.cat('+');
-			ports[i].AppendPinName(reply, false);
-		}
-	}
-
-	ports[0].AppendFrequency(reply);
-
 	if (GetSensorNumber() >= 0)
 	{
 		reply.catf(", sensor %d", GetSensorNumber());

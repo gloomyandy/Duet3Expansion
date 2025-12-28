@@ -27,8 +27,6 @@ public:
 	LocalHeater(unsigned int heaterNum);
 	~LocalHeater();
 
-	GCodeResult ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) noexcept override;
-	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept override;
 	GCodeResult ReportDetails(const StringRef& reply) const noexcept override;
 
 	void Spin() noexcept override;								// Called in a tight loop to keep things running
@@ -44,20 +42,22 @@ public:
 	static bool GetTuningCycleData(CanMessageHeaterTuningReport& msg);	// get a heater tuning cycle report, if we have one
 
 protected:
+	virtual void SetHeater(float power) const noexcept = 0;		// Power is a fraction in [0,1]
+
 	void ResetHeater() noexcept override;
 	HeaterMode GetMode() const noexcept override { return mode; }
 	GCodeResult SwitchOn(const StringRef& reply) noexcept override;		// Turn the heater on and set the mode
 	GCodeResult UpdateModel(const StringRef& reply) noexcept override;	// Called when the heater model has been changed
 
+	GCodeResult ConfigureSensor(unsigned int sn, const StringRef& reply) noexcept;
+
 private:
-	void SetHeater(float power) const noexcept;					// Power is a fraction in [0,1]
 	TemperatureError ReadTemperature() noexcept;				// Read and store the temperature of this heater
 	void DoTuningStep() noexcept;								// Called on each temperature sample when auto tuning
 	float GetExpectedHeatingRate() const noexcept;				// Get the minimum heating rate we expect
 	void RaiseHeaterFault(HeaterFaultType type, const char *format, ...) noexcept;
 	void UpdateHeaterMode(float targetTemperature) noexcept;	// Determine and if necessary change the current heater mode
 
-	PwmPort ports[MaxPortsPerHeater];							// The port(s) that drive the heater
 	float temperature;											// The current temperature
 	float previousTemperatures[NumPreviousTemperatures];		// The temperatures of the previous NumDerivativeSamples measurements, used for calculating the derivative
 	size_t previousTemperatureIndex;							// Which slot in previousTemperature we fill in next
