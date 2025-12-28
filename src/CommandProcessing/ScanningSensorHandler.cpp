@@ -14,7 +14,7 @@
 
 #include <InputMonitors/InputMonitor.h>
 #include <Hardware/SharedI2CMaster.h>
-#include <Hardware/LDC1612.h>
+#include <Hardware/Drivers/LDC1612.h>
 #include <CanMessageFormats.h>
 #include <AnalogIn.h>
 #include <Movement/StepTimer.h>

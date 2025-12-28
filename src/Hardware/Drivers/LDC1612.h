@@ -12,7 +12,7 @@
 
 #if SUPPORT_LDC1612
 
-#include "SharedI2CClient.h"
+#include <Hardware/SharedI2CClient.h>
 
 // LDC1612 class
 class LDC1612 : public SharedI2CClient
