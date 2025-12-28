@@ -18,7 +18,7 @@
 class I2CTemperatureSensor : public TemperatureSensor
 {
 protected:
-	I2CTemperatureSensor(unsigned int sensorNum, const char *name, unsigned int i2cNumber, uint16_t address);
+	I2CTemperatureSensor(unsigned int sensorNum, const char *name, unsigned int i2cNumber, uint16_t address) noexcept;
 
 	SharedI2CClient device;
 };
