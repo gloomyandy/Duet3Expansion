@@ -63,7 +63,7 @@ private:
     float compHumidity;    			/*< Compensated humidity */
 };
 
-// This class represents a DHT humidity sensor
+// This class represents a BME280 pressure sensor
 class BME280PressureSensor : public AdditionalOutputSensor
 {
 public:
@@ -76,7 +76,7 @@ private:
 	static SensorTypeDescriptor typeDescriptor;
 };
 
-// This class represents a DHT humidity sensor
+// This class represents a BME280 humidity sensor
 class BME280HumiditySensor : public AdditionalOutputSensor
 {
 public:
