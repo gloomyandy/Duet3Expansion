@@ -42,7 +42,7 @@ public:
 	static bool GetTuningCycleData(CanMessageHeaterTuningReport& msg);	// get a heater tuning cycle report, if we have one
 
 protected:
-	virtual void SetHeater(float power) const noexcept = 0;		// Power is a fraction in [0,1]
+	virtual void SetHeater(float power) noexcept = 0;			// Power is a fraction in [0,1]
 
 	void ResetHeater() noexcept override;
 	HeaterMode GetMode() const noexcept override { return mode; }

@@ -77,7 +77,7 @@ GCodeResult ResistiveHeater::SetPwmFrequency(PwmFrequency freq, const StringRef&
 	return GCodeResult::ok;
 }
 
-void ResistiveHeater::SetHeater(float power) const noexcept
+void ResistiveHeater::SetHeater(float power) noexcept
 {
 	for (auto& port : ports)
 	{

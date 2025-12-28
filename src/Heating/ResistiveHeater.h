@@ -10,7 +10,7 @@
 
 #include "LocalHeater.h"
 
-class ResistiveHeater : public LocalHeater
+class ResistiveHeater final : public LocalHeater
 {
 public:
 	ResistiveHeater(unsigned int heaterNum) noexcept;
@@ -21,7 +21,7 @@ public:
 	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept override;
 
 protected:
-	void SetHeater(float power) const noexcept;					// Power is a fraction in [0,1]
+	void SetHeater(float power) noexcept;						// Power is a fraction in [0,1]
 
 private:
 	PwmPort ports[MaxPortsPerHeater];							// The port(s) that drive the heater
