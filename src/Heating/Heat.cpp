@@ -19,7 +19,7 @@ Licence: GPL
 ****************************************************************************************************/
 
 #include "Heat.h"
-#include "ResistiveHeater.h"
+#include "LocalHeater.h"
 #include <Platform/Platform.h>
 #include <Platform/TaskPriorities.h>
 #include <Movement/Move.h>
@@ -40,10 +40,6 @@ Licence: GPL
 
 #if SUPPORT_LIS3DH
 # include <CommandProcessing/AccelerometerHandler.h>
-#endif
-
-#if SUPPORT_INDUCTIVE_HEATER
-# include "InductiveHeater.h"
 #endif
 
 #include <Platform/Tasks.h>
@@ -471,11 +467,9 @@ GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef&
 
 		WriteLocker lock(heatersLock);
 
-		Heater *oldHeater = nullptr;
-		std::swap(oldHeater, heaters[heater]);
-		delete oldHeater;
+		DeleteObject(heaters[heater]);
 
-		Heater *newHeater = new ResistiveHeater(heater);
+		Heater *newHeater = new LocalHeater(heater);
 		const GCodeResult rslt = newHeater->ConfigurePortAndSensor(pinName.c_str(), freq, sensorNumber, reply);
 		if (Succeeded(rslt))
 		{
