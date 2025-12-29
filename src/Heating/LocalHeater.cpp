@@ -209,7 +209,7 @@ void LocalHeater::Spin() noexcept
 		badTemperatureCount = 0;
 		if ((previousTemperaturesGood & (1u << (NumPreviousTemperatures - 1))) != 0)
 		{
-			const float tentativeDerivative = ((float)SecondsToMillis/HeatSampleIntervalMillis) * (temperature - previousTemperatures[previousTemperatureIndex])
+			const float tentativeDerivative = ((float)SecondsToMillis/Heat::NormalHeaterPollInterval) * (temperature - previousTemperatures[previousTemperatureIndex])
 							/ (float)(NumPreviousTemperatures);
 			// Some sensors give occasional temperature spikes. We don't expect the temperature to increase by more than 10C/second.
 			if (fabsf(tentativeDerivative) <= 10.0)
@@ -267,7 +267,7 @@ void LocalHeater::Spin() noexcept
 							if (actualTemperatureRise < expectedTemperatureRise * ((IsBedOrChamber()) ? MinBedTemperatureRiseFactor : MinToolTemperatureRiseFactor))
 							{
 								++heatingFaultCount;
-								if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
+								if (heatingFaultCount * Heat::NormalHeaterPollInterval > GetMaxHeatingFaultTime() * SecondsToMillis)
 								{
 									RaiseHeaterFault(HeaterFaultType::temperatureRisingTooSlowly,
 														"expected %.2f" DEGREE_SYMBOL "C/sec measured %.2f" DEGREE_SYMBOL "C/sec",
@@ -292,7 +292,7 @@ void LocalHeater::Spin() noexcept
 				if (fabsf(error) > GetMaxTemperatureExcursion() && temperature > MaxAmbientTemperature)
 				{
 					++heatingFaultCount;
-					if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
+					if (heatingFaultCount * Heat::NormalHeaterPollInterval > GetMaxHeatingFaultTime() * SecondsToMillis)
 					{
 						RaiseHeaterFault(HeaterFaultType::exceededAllowedExcursion,
 											"target %.1f" DEGREE_SYMBOL "C actual %.1f" DEGREE_SYMBOL "C",
@@ -358,7 +358,7 @@ void LocalHeater::Spin() noexcept
 					{
 						TaskCriticalSectionLocker lock;					// avoid a race with tasks that implement feedforward
 						iAccumulator = constrain<float>
-										(iAccumulator + (error * params.kP * params.recipTi * HeatSampleIntervalMillis * MillisToSeconds),
+										(iAccumulator + (error * params.kP * params.recipTi * Heat::NormalHeaterPollInterval * MillisToSeconds),
 											0.0, GetModel().GetMaxPwm());
 						lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, GetModel().GetMaxPwm());
 					}
@@ -419,7 +419,7 @@ void LocalHeater::Spin() noexcept
 
 		// Set the heater power and update the average PWM
 		SetHeater(lastPwm);
-		constexpr float avgFactor = HeatSampleIntervalMillis/(HeatPwmAverageTime * SecondsToMillis);
+		constexpr float avgFactor = Heat::NormalHeaterPollInterval/(HeatPwmAverageTime * SecondsToMillis);
 		averagePWM = (averagePWM * (1.0 - avgFactor)) + (lastPwm * avgFactor);
 
 		// For temperature sensors which do not require frequent sampling and averaging,

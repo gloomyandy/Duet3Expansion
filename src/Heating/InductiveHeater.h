@@ -4,7 +4,7 @@
  *  Created on: 21 Dec 2025
  *      Author: David
  *
- *  Support for inductive heaters
+ *  Support for inductive heater
  */
 
 #ifndef SRC_HEATING_INDUCTIVEHEATER_H_
@@ -14,12 +14,15 @@
 
 #if SUPPORT_INDUCTIVE_HEATER
 
-class InductiveHeater
+#include "LocalHeater.h"
+
+class InductiveHeater final : public LocalHeater
 {
 public:
-	InductiveHeater() noexcept;
-	void Init() noexcept;												// set up the timers etc. and turn the output off
-	void SetPwm(float pwm) noexcept;									// set the PWM value in the range 0..1
+	InductiveHeater(unsigned int heaterNum) noexcept;
+
+protected:
+	void SetHeater(float power) noexcept override;						// Power is a fraction in [0,1]
 
 private:
 	static constexpr uint32_t OscResonantFrequency = 120'000;			//TODO set the correct value here

@@ -195,7 +195,12 @@ constexpr unsigned int AS5601_I2CChannel = 0;					//TODO which I2C?
 constexpr uint16_t AS5601_I2CAddress = 0x36;					// I2C address of the AS5601
 #endif
 
+#if SUPPORT_INDUCTIVE_HEATER
+
 // Definitions for inductive heater support
+
+#define HEATER_POLL_RATE_MULTIPLIER		(10)					// how many times faster we run the temperature control loop than the standard 4Hz. Preferably a divisor of HeatSampleIntervalMillis.
+
 constexpr unsigned int InductiveHeaterOscTccDeviceNumber = 3;	// number of the TC we use to generate the ~120kHz signal to excite the resonant circuit
 constexpr unsigned int InductiveHeaterOscTccOutputNumber = 0;	// which output from the TCC we are using
 constexpr unsigned int InductiveHeaterPwmTccDeviceNumber = 0;	// number of the TCC we use to generate the PWM signal that is gated with the osc signal
@@ -206,6 +211,9 @@ constexpr unsigned int InductiveHeaterAuxCCLNumber = 0;			// number of the secon
 
 constexpr GpioPinFunction InductiveHeaterCCLOutPinPeriphMode = GpioPinFunction::N;
 
+#endif
+
+// Misc definitions
 constexpr Pin UsbNotCanSelectPin = PortBPin(31);
 
 // Table of pin functions that we are allowed to use

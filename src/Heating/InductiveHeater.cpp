@@ -4,13 +4,14 @@
  *  Created on: 21 Dec 2025
  *      Author: David
  *
- *  Support for inductive heaters
+ *  Support for inductive heater
  */
 
 #include "InductiveHeater.h"
 
 #if SUPPORT_INDUCTIVE_HEATER
 
+#include <Platform/Platform.h>
 #include <Timers.h>
 
 #if SAME5x
@@ -25,12 +26,8 @@
 # error Unsupported processor
 #endif
 
-InductiveHeater::InductiveHeater() noexcept
-{
-	// Nothing needed here yet, we do the work in the Init function
-}
-
-void InductiveHeater::Init() noexcept
+InductiveHeater::InductiveHeater(unsigned int heaterNum) noexcept
+	: LocalHeater(heaterNum)
 {
 	// Set up the oscillator TCC to generate a square wave at the coil resonant frequency
 	EnableTccClock(InductiveHeaterOscTccDeviceNumber, GclkNum120MHz);	// use the 120MHz GCLK to get the best frequency setting resolution
@@ -109,14 +106,14 @@ void InductiveHeater::Init() noexcept
 	// TEST: set fixed PWM value
 	delay(100);						// we need to complete at least 1 cycle to allow the previous PER value to go
 	const float val = 0.2;
-	SetPwm(val);
+	InductiveHeater::SetHeater(val);
 #endif
 }
 
 // Set the PWM value in the range 0..1
-void InductiveHeater::SetPwm(float pwm) noexcept
+void InductiveHeater::SetHeater(float power) noexcept
 {
-	const uint32_t ccIdeal = (uint32_t)(pwm * (float)pwmTimerPeriod);
+	const uint32_t ccIdeal = (uint32_t)(power * (float)pwmTimerPeriod);
 	const uint32_t cc = ccIdeal - (ccIdeal % oscTimerPeriod);
 	volatile Tcc *const tccdev = Timers::TccDevices[InductiveHeaterPwmTccDeviceNumber];
 	tccdev->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = cc;

@@ -115,6 +115,10 @@ constexpr size_t NumDrivers = 0;
 # define SUPPORT_TCA6408A				0
 #endif
 
+#ifndef SUPPORT_LP5817
+# define SUPPORT_LP5817					0
+#endif
+
 #ifndef SUPPORT_TPiS_1T_1086_L5_5
 # define SUPPORT_TPiS_1T_1086_L5_5		0
 #endif
@@ -129,6 +133,10 @@ constexpr size_t NumDrivers = 0;
 
 #ifndef BOARD_USES_UF2_BINARY
 # define BOARD_USES_UF2_BINARY			0
+#endif
+
+#ifndef HEATER_POLL_RATE_MULTIPLIER
+# define HEATER_POLL_RATE_MULTIPLIER	(1)			// how many times faster we run the temperature control loop than the standard 4Hz
 #endif
 
 #endif /* SRC_CONFIG_BOARDDEF_H_ */

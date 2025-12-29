@@ -47,6 +47,8 @@
 #define USE_MPU					0
 #define USE_CACHE				1
 
+#define SUPPORT_INDUCTIVE_HEATER		(0)		// enables temporary support for testing inductive heater code
+
 constexpr unsigned int CANInstanceNumber = 1;
 constexpr bool UseLaterCanPins = false;
 
@@ -120,9 +122,7 @@ constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::C;
 constexpr Pin SSPIMisoPin = PortCPin(19);
 constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
 
-#if 0	// temporary inductive heater code test
-
-#define SUPPORT_INDUCTIVE_HEATER		(1)
+#if SUPPORT_INDUCTIVE_HEATER	// temporary inductive heater code test
 
 // Definitions for inductive heater support
 constexpr unsigned int InductiveHeaterOscTccDeviceNumber = 3;	// number of the TCC we can use to generate the ~120kHz signal to excite the resonant circuit. May be a 16-bit TCC.

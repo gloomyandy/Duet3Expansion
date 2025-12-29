@@ -73,6 +73,8 @@ namespace Heat
 
 	void NewDriverFault() noexcept;
 	void NewHeaterFault() noexcept;
+
+	constexpr uint32_t NormalHeaterPollInterval = HeatSampleIntervalMillis / HEATER_POLL_RATE_MULTIPLIER;
 };
 
 #endif /* SRC_HEATING_HEAT_H_ */

@@ -9,8 +9,8 @@
 
 #if SUPPORT_AS5601
 
-#include <Hardware/AS5601.h>
-#include <Hardware/TCA6408A.h>
+#include <Hardware/Drivers/AS5601.h>
+#include <Hardware/Drivers/TCA6408A.h>
 #include <Platform/TaskPriorities.h>
 #include <InputMonitors/InputMonitor.h>
 

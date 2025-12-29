@@ -25,7 +25,7 @@ class LP5817 : public SharedI2CClient
 public:
 	LP5817(SharedI2CMaster& dev) noexcept;
 
-	// Currently we only  support colours for which each LED is either on or off
+	// Currently we only support colours for which each LED is either on or off
 	enum LedColour : uint8_t
 	{
 		black = 0,
