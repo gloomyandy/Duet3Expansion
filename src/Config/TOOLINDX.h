@@ -298,16 +298,22 @@ constexpr PinDescription PinTable[] =
 #if SUPPORT_AS5601
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"i2c.mfm"		},	// AS5601+TCA6408A filament monitor connected via I2C
 #endif
+#if SUPPORT_INDUCTIVE_HEATER
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx, "nozzleheat"	},	// inductive heater
+#endif
 };
 
 constexpr size_t NumPins = ARRAY_SIZE(PinTable);
 constexpr size_t NumRealPins = 32 + 32;			// 32 pins on port A (some missing), 32 on port B (some missing)
-constexpr size_t NumVirtualPins = SUPPORT_LIS3DH + SUPPORT_LDC1612 + SUPPORT_AS5601;
+constexpr size_t NumVirtualPins = SUPPORT_LIS3DH + SUPPORT_LDC1612 + SUPPORT_AS5601 + SUPPORT_INDUCTIVE_HEATER;
 
 static_assert(NumPins == NumRealPins + NumVirtualPins);
 
 #if SUPPORT_AS5601
-constexpr Pin MfmPin = NumRealPins + SUPPORT_LIS3DH + SUPPORT_LDC1612;				// pin number when the user selects magnetic filament monitor on I2C bus
+constexpr Pin MfmPin = NumRealPins + SUPPORT_LIS3DH + SUPPORT_LDC1612;									// pin number when the user selects magnetic filament monitor on I2C bus
+#endif
+#if SUPPORT_INDUCTIVE_HEATER
+constexpr Pin InductiveHeaterPin = NumRealPins + SUPPORT_LIS3DH + SUPPORT_LDC1612 + SUPPORT_AS5601;		// pin number when the user selects the inductive nozzle heater
 #endif
 
 // Timer/counter used to generate step pulses and other sub-millisecond timings

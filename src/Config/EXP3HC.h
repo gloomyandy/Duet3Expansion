@@ -258,11 +258,19 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PC29 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PC30 not on 100-pin chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PC31 not on 100-pin chip
+#if SUPPORT_INDUCTIVE_HEATER
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx, "nozzleheat"	},	// inductive heater
+#endif
 };
 
 constexpr size_t NumPins = ARRAY_SIZE(PinTable);
-constexpr size_t NumRealPins = 3 * 32;					// 32 pins on each of ports A, B, C
-static_assert(NumPins == NumRealPins);					// no virtual pins in this table
+constexpr size_t NumRealPins = 3 * 32;								// 32 pins on each of ports A, B, C
+constexpr size_t NumVirtualPins = SUPPORT_INDUCTIVE_HEATER;
+static_assert(NumPins == NumRealPins + NumVirtualPins);
+
+#if SUPPORT_INDUCTIVE_HEATER
+constexpr Pin InductiveHeaterPin = NumRealPins;						// pin number when the user selects the inductive nozzle heater
+#endif
 
 // Timer/counter used to generate step pulses and other sub-millisecond timings
 TcCount32 * const StepTc = &(TC6->COUNT32);

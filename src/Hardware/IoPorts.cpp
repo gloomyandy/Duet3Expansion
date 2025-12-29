@@ -360,13 +360,18 @@ void IoPort::AppendBasicDetails(const StringRef& str) const noexcept
 	{
 		str.catf(" pin ");
 		AppendPinName(str);
-		if (logicalPinModes[pin] == INPUT_PULLUP)
+#if SUPPORT_INDUCTIVE_HEATER
+		if (pin != InductiveHeaterPin)
+#endif
 		{
-			str.cat(", pullup enabled");
-		}
-		else if (logicalPinModes[pin] == INPUT)
-		{
-			str.cat(", pullup disabled");
+			if (logicalPinModes[pin] == INPUT_PULLUP)
+			{
+				str.cat(", pullup enabled");
+			}
+			else if (logicalPinModes[pin] == INPUT)
+			{
+				str.cat(", pullup disabled");
+			}
 		}
 	}
 	else
@@ -584,7 +589,11 @@ PwmPort::PwmPort() noexcept
 // Append the frequency if the port is valid
 void PwmPort::AppendFrequency(const StringRef& str) const noexcept
 {
-	if (IsValid())
+	if (IsValid()
+#if SUPPORT_INDUCTIVE_HEATER
+		&& pin != InductiveHeaterPin
+#endif
+	   )
 	{
 		str.catf(" frequency %uHz", frequency);
 	}
@@ -612,9 +621,9 @@ void PwmPort::WriteAnalog(float pwm) const noexcept
 			for (size_t i = 0; i < NumDrivers; i++)
 			{
 				fastDigitalWriteHigh(StepPins[i]);
-#if DIFFERENTIAL_STEPPER_OUTPUTS
+# if DIFFERENTIAL_STEPPER_OUTPUTS
 				fastDigitalWriteLow(InvertedStepPins[i]);
-#endif
+# endif
 			}
 		}
 		else
@@ -622,15 +631,24 @@ void PwmPort::WriteAnalog(float pwm) const noexcept
 			for (size_t i = 0; i < NumDrivers; i++)
 			{
 				fastDigitalWriteLow(StepPins[i]);
-#if DIFFERENTIAL_STEPPER_OUTPUTS
+# if DIFFERENTIAL_STEPPER_OUTPUTS
 				fastDigitalWriteHigh(InvertedStepPins[i]);
-#endif
+# endif
 			}
 			moveInstance->EnableStepPins();
 		}
 		return;
 	}
 #endif
+
+#if SUPPORT_INDUCTIVE_HEATER
+	if (pin == InductiveHeaterPin)
+	{
+		Platform::SetInductiveHeaterPwm(pwm);
+		return;
+	}
+#endif
+
 	IoPort::WriteAnalog(pin, ((totalInvert) ? 1.0 - pwm : pwm), frequency);
 }
 
