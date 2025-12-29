@@ -46,6 +46,10 @@
 # include <ClosedLoop/ClosedLoop.h>
 #endif
 
+#if SUPPORT_INDUCTIVE_HEATER
+# include "InductiveHeaterPort.h"
+#endif
+
 #ifdef ATEIO
 # include <Hardware/ATEIO/ExtendedAnalog.h>
 #endif
@@ -143,6 +147,10 @@ namespace Platform
 #endif
 #if HAS_12V_MONITOR
 	static AveragingFilter<VinReadingsAveraged> v12Filter;
+#endif
+
+#if SUPPORT_INDUCTIVE_HEATER
+	static InductiveHeaterPort inductiveHeaterPort;
 #endif
 
 #if SAME5x
@@ -557,6 +565,10 @@ void Platform::Init()
 #endif
 
 	InitLeds();
+
+#if SUPPORT_INDUCTIVE_HEATER
+	inductiveHeaterPort.Init();
+#endif
 
 	// Turn all outputs off
 	for (size_t pin = 0; pin < ARRAY_SIZE(PinTable); ++pin)
@@ -1500,6 +1512,15 @@ MinCurMax Platform::GetV12Voltages(bool resetMinMax) noexcept
 float Platform::GetCurrentV12Voltage() noexcept
 {
 	return AdcReadingToV12Voltage(currentV12);
+}
+
+#endif
+
+#if SUPPORT_INDUCTIVE_HEATER
+
+void Platform::SetInductiveHeaterPwm(float pwm) noexcept
+{
+	inductiveHeaterPort.SetPwm(pwm);
 }
 
 #endif

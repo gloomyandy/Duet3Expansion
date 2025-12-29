@@ -144,6 +144,10 @@ namespace Platform
 # endif
 #endif
 
+#if SUPPORT_INDUCTIVE_HEATER
+	void SetInductiveHeaterPwm(float pwm) noexcept;
+#endif
+
 	const MinCurMax& GetMcuTemperatures() noexcept;
 
 	void KickHeatTaskWatchdog() noexcept;
