@@ -11,7 +11,7 @@
 #include <Hardware/PinDescription.h>
 
 #define BOARD_TYPE_NAME		"TOOLINDX"
-#define BOOTLOADER_NAME		"SAME5x"	// temporary until we have the cmposite bootloader
+#define BOOTLOADER_NAME		"SAME5x"	// temporary until we have the composite bootloader
 
 // General features
 #define HAS_VREF_MONITOR		0
@@ -94,6 +94,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { PortAPin(21) };
 #define SUPPORT_TPiS_1T_1086_L5_5	1										// IR temperature sensor
 #define SUPPORT_AS5601				0										// support direct-connected magnetic filament monitor encoder chip
 #define SUPPORT_DMA_NEOPIXEL		1										// using QSPI for Neopixels
+#define NEOPIXEL_USES_QSPI			1										// using QSPI for Neopixels
 #define SUPPORT_INDUCTIVE_HEATER	1										// Inductive heater support
 #define SUPPORT_LP5817				1										// LP5817 LED driver support
 
@@ -215,6 +216,9 @@ constexpr GpioPinFunction InductiveHeaterCCLOutPinPeriphMode = GpioPinFunction::
 
 // Misc definitions
 constexpr Pin UsbNotCanSelectPin = PortBPin(31);
+
+constexpr Pin NeopixelOutPin = PortAPin(8);
+constexpr GpioPinFunction NeopixelOutPinFunction = GpioPinFunction::H;
 
 // Table of pin functions that we are allowed to use
 constexpr PinDescription PinTable[] =

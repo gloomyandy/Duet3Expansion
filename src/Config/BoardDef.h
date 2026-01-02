@@ -131,6 +131,10 @@ constexpr size_t NumDrivers = 0;
 # define USE_SPICAN						0
 #endif
 
+#ifndef NEOPIXEL_USES_QSPI
+# define NEOPIXEL_USES_QSPI				0
+#endif
+
 #ifndef BOARD_USES_UF2_BINARY
 # define BOARD_USES_UF2_BINARY			0
 #endif
