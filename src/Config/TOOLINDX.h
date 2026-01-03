@@ -97,6 +97,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { PortAPin(21) };
 #define NEOPIXEL_USES_QSPI			1										// using QSPI for Neopixels
 #define SUPPORT_INDUCTIVE_HEATER	1										// Inductive heater support
 #define SUPPORT_LP5817				1										// LP5817 LED driver support
+#define SUPPORT_ADS131M02			1										// ADS131M02 ADC support
 
 #ifdef DEBUG
 # define NUM_I2C_CHANNELS		0											// in debug mode the SERCOM is used for debugging
@@ -194,6 +195,17 @@ constexpr uint16_t LP5817_I2CAddress = 0x2D * 2;
 #if SUPPORT_AS5601
 constexpr unsigned int AS5601_I2CChannel = 0;					//TODO which I2C?
 constexpr uint16_t AS5601_I2CAddress = 0x36;					// I2C address of the AS5601
+#endif
+
+#if SUPPORT_ADS131M02
+constexpr unsigned int ADS131M02_SercomNumber = 1;
+constexpr unsigned int ADS131M02_DataInPad = 3;
+constexpr unsigned int ADS131M02_DataOutPad = 0;
+constexpr Pin ADS131M02_MosiPin = PortAPin(16);
+constexpr Pin ADS131M02_MisoPin = PortAPin(19);
+constexpr Pin ADS131M02_SclkPin = PortAPin(17);
+constexpr Pin ADS131M02_CsPin = PortAPin(18);
+constexpr GpioPinFunction ADS131M02_SpiPinFunction = GpioPinFunction::D;
 #endif
 
 #if SUPPORT_INDUCTIVE_HEATER

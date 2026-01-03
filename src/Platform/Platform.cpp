@@ -689,7 +689,7 @@ void Platform::Init()
 	SetPinFunction(SSPISclkPin, SSPISclkPinPeriphMode);
 	SetPinFunction(SSPIMisoPin, SSPIMisoPinPeriphMode);
 # if SAME5x || SAMC21
-	sharedSpi = new SharedSpiDevice(SspiSercomNumber, SspiDataInPad);
+	sharedSpi = new SharedSpiDevice(SspiSercomNumber, SspiDataInPad, SspiDataOutPad);
 # elif RP2040
 	sharedSpi = new SharedSpiDevice(SspiSpiInstanceNumber);
 # else

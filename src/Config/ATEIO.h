@@ -46,6 +46,7 @@ constexpr bool LedActiveHigh = false;
 // Shared SPI
 constexpr uint8_t SspiSercomNumber = 1;
 constexpr uint32_t SspiDataInPad = 3;
+constexpr uint32_t SspiDataOutPad = 0;
 constexpr Pin SSPIMosiPin = PortAPin(16);
 constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::C;
 constexpr Pin SSPISclkPin = PortAPin(17);

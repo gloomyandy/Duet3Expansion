@@ -118,6 +118,7 @@ constexpr Pin EncoderCsPin = PortAPin(18);
 // Shared SPI (used for interface to encoders, not for temperature sensors)
 constexpr uint8_t SspiSercomNumber = 1;
 constexpr uint32_t SspiDataInPad = 3;
+constexpr uint32_t SspiDataOutPad = 0;
 constexpr Pin SSPIMosiPin = PortAPin(16);
 constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::C;
 
