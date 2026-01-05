@@ -131,6 +131,10 @@ constexpr size_t NumDrivers = 0;
 # define SUPPORT_INDUCTIVE_HEATER		0
 #endif
 
+#ifndef NUM_CURRENT_SENSORS
+# define NUM_CURRENT_SENSORS			0
+#endif
+
 #ifndef USE_SPICAN
 # define USE_SPICAN						0
 #endif

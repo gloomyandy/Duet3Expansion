@@ -118,6 +118,10 @@ namespace Platform
 	SharedI2CMaster *sharedI2C[NUM_I2C_CHANNELS] = { 0 };
 #endif
 
+#if SUPPORT_ADS131M02
+	ADS131M02 *loadCellAdc = nullptr;
+#endif
+
 #if HAS_VOLTAGE_MONITOR
 	static volatile uint16_t currentVin, highestVin, lowestVin;
 //	static uint16_t lastUnderVoltageValue, lastOverVoltageValue;
@@ -151,6 +155,11 @@ namespace Platform
 
 #if SUPPORT_INDUCTIVE_HEATER
 	static InductiveHeaterPort inductiveHeaterPort;
+#endif
+
+#if NUM_CURRENT_SENSORS != 0
+	static uint32_t currentSensorReadings[NUM_CURRENT_SENSORS] = { 0 };
+	void CurrentSensorAinCallback(CallbackParameter cp, uint32_t val) noexcept;
 #endif
 
 #if SAME5x
@@ -626,6 +635,15 @@ void Platform::Init()
 	ADC_temperature_init();
 #endif
 
+#if NUM_CURRENT_SENSORS != 0
+	// Initialise the current sensor system. Each sensor is associated with an ADC input.
+	for (size_t sensorNum = 0; sensorNum < NUM_CURRENT_SENSORS; ++sensorNum)
+	{
+		IoPort::SetPinMode(CurrentSensorPins[sensorNum], AIN);
+		AnalogIn::EnableChannel(PinToAdcChannel(CurrentSensorPins[sensorNum]), Platform::CurrentSensorAinCallback, CallbackParameter(sensorNum), 1);
+	}
+#endif
+
 #if HAS_ADDRESS_SWITCHES
 	// Set up the board ID switch inputs
 	for (unsigned int i = 0; i < 4; ++i)
@@ -712,6 +730,10 @@ void Platform::Init()
 	SetPinFunction(I2C1SDAPin, I2C1SDAPinPeriphMode);
 	SetPinFunction(I2C1SCLPin, I2C1SCLPinPeriphMode);
 	sharedI2C[1] = new SharedI2CMaster(I2C1SercomNumber);
+#endif
+
+#if SUPPORT_ADS131M02
+	loadCellAdc = new ADS131M02;
 #endif
 
 #ifdef ATEIO
@@ -1135,6 +1157,19 @@ ThermistorAveragingFilter *Platform::GetVrefFilter(unsigned int filterNumber)
 
 #endif
 
+#if NUM_CURRENT_SENSORS != 0
+
+void Platform::CurrentSensorAinCallback(CallbackParameter cp, uint32_t val) noexcept
+{
+	const size_t sensorNumber = cp.u32;
+	if (sensorNumber < NUM_CURRENT_SENSORS)
+	{
+		currentSensorReadings[sensorNumber] = val;
+	}
+}
+
+#endif
+
 const MinCurMax& Platform::GetMcuTemperatures()
 {
 	return mcuTemperature;
@@ -1521,6 +1556,15 @@ float Platform::GetCurrentV12Voltage() noexcept
 void Platform::SetInductiveHeaterPwm(float pwm) noexcept
 {
 	inductiveHeaterPort.SetPwm(pwm);
+}
+
+#endif
+
+#if NUM_CURRENT_SENSORS != 0
+
+float Platform::GetCurrentSensorReading(size_t sensorNumber) noexcept
+{
+	return std::ldexp((float)currentSensorReadings[sensorNumber] * CurrentSensorEffectiveResistances[sensorNumber], -AnalogIn::AdcBits);
 }
 
 #endif

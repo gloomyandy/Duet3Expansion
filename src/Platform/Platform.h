@@ -27,6 +27,10 @@
 # include <Hardware/LISAccelerometer.h>
 #endif
 
+#if SUPPORT_ADS131M02
+# include <Hardware/Drivers/ADS131M02.h>
+#endif
+
 #if RP2040
 # include <hardware/structs/sio.h>
 #endif
@@ -92,7 +96,7 @@ enum class ErrorCode : uint32_t
 };
 
 typedef Bitmap<uint16_t> DebugFlags;
-static constexpr uint16_t DefaultDebugFlags = 0x00FF;
+constexpr uint16_t DefaultDebugFlags = 0x00FF;
 
 class IoPort;
 
@@ -107,6 +111,10 @@ namespace Platform
 #if NUM_I2C_CHANNELS != 0
 	extern SharedI2CMaster *sharedI2C[NUM_I2C_CHANNELS];
 	inline SharedI2CMaster& GetSharedI2C(unsigned int n) noexcept { return *sharedI2C[n]; }
+#endif
+
+#if SUPPORT_ADS131M02
+	extern ADS131M02 *loadCellAdc;
 #endif
 
 	// We don't really want the following to be writable, but we've no choice because we want to inline functions that access them
@@ -185,6 +193,14 @@ namespace Platform
 #if HAS_12V_MONITOR
 	MinCurMax GetV12Voltages(bool resetMinMax) noexcept;
 	float GetCurrentV12Voltage() noexcept;
+#endif
+
+#if NUM_CURRENT_SENSORS != 0
+	float GetCurrentSensorReading(size_t sensorNumber) noexcept
+		pre(sensorNumber < NUM_CURRENT_SENSORS);
+	inline constexpr const char *GetCurrentSensorName(size_t sensorNumber) noexcept
+		pre(sensorNumber < NUM_CURRENT_SENSORS)
+		{ return CurrentSensorNames[sensorNumber]; }
 #endif
 
 	inline uint32_t GetDateTime() noexcept { return realTime; }
