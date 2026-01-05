@@ -19,12 +19,13 @@ public:
 
 	static constexpr const char *TypeName = "current";
 
+	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
 	void Poll() noexcept override;
 
 private:
 	static SensorTypeDescriptor typeDescriptor;
 
-	size_t currentSensorNumber;					// which current sensor, must be less than NUM_CURRENT_SENSORS
+	size_t currentSensorIndex;					// which current sensor, must be less than NUM_CURRENT_SENSORS
 };
 
 #endif
