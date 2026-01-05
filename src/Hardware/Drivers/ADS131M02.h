@@ -19,8 +19,13 @@ class ADS131M02 : public SpiDevice
 public:
 	ADS131M02() noexcept;
 	bool DeviceOk() const noexcept { return initOk; }
+	int32_t GetLatestData() const noexcept { return compositeData; }			// no lock needed because 32-bit data access is atomic
+
+	[[noreturn]] void TaskLoop() noexcept;
 
 private:
+	static constexpr uint32_t TaskStackWords = 200;			//TODO optimise this
+
 	enum class Ads131M02Register : uint8_t
 	{
 		id = 0x00, status, mode, clock, gain,
@@ -52,8 +57,10 @@ private:
 	uint16_t rslt;											// the result of the previous command
 	int32_t data0;											// the channel 0 data
 	int32_t data1;											// the channel 1 data
+	int32_t compositeData = 0;
 
-	bool initOk;
+	Task<TaskStackWords> *adcTask = nullptr;
+	bool initOk = false;
 };
 
 #endif
