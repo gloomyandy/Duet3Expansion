@@ -88,7 +88,7 @@ static void DataReadyCallback(CallbackParameter param) noexcept
 			const uint32_t channel1Data = ((uint32_t)regReadBuffer[6] << 16) | ((uint32_t)regReadBuffer[7] << 8) | regReadBuffer[8];
 			if (channel1Data < 256)
 			{
-				compositeData = 0;					// error, the reference channel should read much higher, such a low value may cause overflow
+				compositeData = 0;					// error, the reference channel should read much higher, such a low value may cause the result of the next division to exceed 32 bits
 			}
 			else
 			{
