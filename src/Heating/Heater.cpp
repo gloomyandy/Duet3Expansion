@@ -73,7 +73,7 @@ float Heater::GetHighestTemperatureLimit() const noexcept
 	return limit;
 }
 
-GCodeResult Heater::SetModel(unsigned int heater, const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept
+GCodeResult Heater::SetModel(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept
 {
 	const bool rslt = model.SetParameters(msg, reply);
 	if (rslt)

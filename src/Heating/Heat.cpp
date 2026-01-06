@@ -499,7 +499,7 @@ GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef&
 GCodeResult Heat::ProcessM307V1(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heater);
-	return (h.IsNotNull()) ? h->SetModel(msg.heater, msg, reply) : UnknownHeater(msg.heater, reply);
+	return (h.IsNotNull()) ? h->SetModel(msg, reply) : UnknownHeater(msg.heater, reply);
 }
 
 GCodeResult Heat::ProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept

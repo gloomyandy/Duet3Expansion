@@ -54,7 +54,7 @@ public:
 	void SetHeaterMonitoring(HeaterMonitor *h) noexcept;
 
 	const FopDt& GetModel() const noexcept { return model; }			// Get the process model
-	GCodeResult SetModel(unsigned int heater, const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
+	GCodeResult SetModel(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
 
 	bool IsHeaterEnabled() const noexcept								// Is this heater enabled?
 		{ return model.IsEnabled(); }
