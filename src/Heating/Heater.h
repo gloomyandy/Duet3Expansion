@@ -82,9 +82,9 @@ protected:
 	volatile float lastExtrusionPwmBoost;			// The last value of extrusion boost we applied
 	volatile float extrusionTemperatureBoost;		// the amount of extrusion temperature boost we are currently applying
 
-private:
 	FopDt model;
 
+private:
 	unsigned int heaterNumber;
 	int sensorNumber;								// the sensor number used by this heater
 	float requestedTemperature;						// the required temperature

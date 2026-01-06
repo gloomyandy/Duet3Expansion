@@ -93,6 +93,25 @@ void FopDt::SetDefaultBedOrChamberParameters() noexcept
 	enabled = true;
 }
 
+#if SUPPORT_INDUCTIVE_HEATER
+
+void FopDt::SetDefaultInductiveNozzleHeaterParameters() noexcept
+{
+	heatingRate = DefaultInductiveHeaterHeatingRate;
+	basicCoolingRate = DefaultInductiveHeaterBasicCoolingRate;
+	deadTime = DefaultInductiveHeaterDeadTime;
+	fanCoolingRate = 0.0;
+	coolingRateExponent = DefaultInductiveHeaterCoolingRateExponent;
+	maxPwm = 1.0;
+	standardVoltage = 0.0;
+	usePid = false;
+	inverted = pidParametersOverridden = false;
+	CalcPidConstants(220.0);
+	enabled = true;
+}
+
+#endif
+
 // Get the PID parameters as reported by M301
 M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const
 {

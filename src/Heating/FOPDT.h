@@ -10,8 +10,7 @@
 #ifndef SRC_HEATING_FOPDT_H_
 #define SRC_HEATING_FOPDT_H_
 
-#include <cstdint>
-#include "GCodeResult.h"
+#include <RepRapFirmware.h>
 
 class StringRef;
 class CanMessageHeaterModelV2;
@@ -43,6 +42,9 @@ public:
 	bool SetParameters(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
 	void SetDefaultToolParameters() noexcept;
 	void SetDefaultBedOrChamberParameters() noexcept;
+#if SUPPORT_INDUCTIVE_HEATER
+	void SetDefaultInductiveNozzleHeaterParameters() noexcept;
+#endif
 
 	// Stored parameters
 	float GetDeadTime() const noexcept { return deadTime; }

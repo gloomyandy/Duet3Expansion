@@ -102,6 +102,12 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 		{
 			return GCodeResult::error;
 		}
+#if SUPPORT_INDUCTIVE_HEATER
+		if (ports[0].GetPin() == InductiveHeaterPin)
+		{
+			model.SetDefaultInductiveNozzleHeaterParameters();			// override the default model parameters
+		}
+#endif
 	}
 	else
 	{
