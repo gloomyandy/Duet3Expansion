@@ -159,6 +159,10 @@ namespace Platform
 
 #if NUM_CURRENT_SENSORS != 0
 	static uint32_t currentSensorReadings[NUM_CURRENT_SENSORS] = { 0 };
+	static uint32_t currentSensorCallbackThresholds[NUM_CURRENT_SENSORS] = { 0 };
+	static CallbackParameter currentSensorCallbackParameters[NUM_CURRENT_SENSORS];
+	static StandardCallbackFunction *null currentSensorCallbackFunctions[NUM_CURRENT_SENSORS] = { 0 };
+
 	void CurrentSensorAinCallback(CallbackParameter cp, uint32_t val) noexcept;
 #endif
 
@@ -1165,6 +1169,14 @@ void Platform::CurrentSensorAinCallback(CallbackParameter cp, uint32_t val) noex
 	if (sensorNumber < NUM_CURRENT_SENSORS)
 	{
 		currentSensorReadings[sensorNumber] = val;
+		if (currentSensorCallbackThresholds[sensorNumber] != 0 && val > currentSensorCallbackThresholds[sensorNumber])
+		{
+			StandardCallbackFunction *null const cbfunc = currentSensorCallbackFunctions[sensorNumber];
+			if (cbfunc != nullptr)
+			{
+				(*cbfunc)(currentSensorCallbackParameters[sensorNumber]);
+			}
+		}
 	}
 }
 
@@ -1562,9 +1574,18 @@ void Platform::SetInductiveHeaterPwm(float pwm) noexcept
 
 #if NUM_CURRENT_SENSORS != 0
 
+// Get the current read from the specified sensor
 float Platform::GetCurrentSensorReading(size_t sensorNumber) noexcept
 {
-	return std::ldexp((float)currentSensorReadings[sensorNumber] * CurrentSensorEffectiveResistances[sensorNumber], -AnalogIn::AdcBits);
+	return std::ldexp((float)currentSensorReadings[sensorNumber] * CurrentSensorFullScaleCurrents[sensorNumber], -AnalogIn::AdcBits);
+}
+
+// Set up a callback when the current exceed the specified threshold. Set the threshold to zero or the function to nullptr to stop getting callbacks.
+void Platform::SetCurrentSensorCallbackThreshold(size_t sensorNumber, float val, StandardCallbackFunction *null func, CallbackParameter param) noexcept
+{
+	currentSensorCallbackParameters[sensorNumber] = param;
+	currentSensorCallbackThresholds[sensorNumber] = (uint32_t)(std::ldexp(val, AnalogIn::AdcBits)/CurrentSensorFullScaleCurrents[sensorNumber]);
+	currentSensorCallbackFunctions[sensorNumber] = func;
 }
 
 #endif

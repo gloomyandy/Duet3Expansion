@@ -201,6 +201,8 @@ namespace Platform
 	inline constexpr const char *GetCurrentSensorName(size_t sensorNumber) noexcept
 		pre(sensorNumber < NUM_CURRENT_SENSORS)
 		{ return CurrentSensorNames[sensorNumber]; }
+	void SetCurrentSensorCallbackThreshold(size_t sensorNumber, float val, StandardCallbackFunction *null func, CallbackParameter param) noexcept
+		pre(sensorNumber < NUM_CURRENT_SENSORS);
 #endif
 
 	inline uint32_t GetDateTime() noexcept { return realTime; }
