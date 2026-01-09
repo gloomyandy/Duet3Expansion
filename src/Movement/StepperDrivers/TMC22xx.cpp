@@ -805,8 +805,8 @@ private:
 #if !RP2040
 # if TMC22xx_SINGLE_UART
 #  if TMC22xx_USES_SERCOM
-Sercom * const TmcDriverState::sercom = SERCOM_TMC22xx;
-uint8_t const TmcDriverState::sercomNumber = TMC22xxSercomNumber;
+Sercom * const TmcDriverState::sercom = SERCOM_TMC;
+uint8_t const TmcDriverState::sercomNumber = TMCSercomNumber;
 #  else
 Uart * const TmcDriverState::uart = UART_TMC22xx;
 #  endif
@@ -2169,7 +2169,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 					driversStepped.Clear();
 					driversState = DriversState::stepping;
 #else
-					fastDigitalWriteLow(GlobalTmc22xxEnablePin);
+					fastDigitalWriteLow(GlobalTmcEnablePin);
 					driversState = DriversState::ready;
 #endif
 				}
@@ -2302,17 +2302,17 @@ void SmartDrivers::Init() noexcept
 	numTmc22xxDrivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
 #endif
 	// Make sure the ENN pins are high
-	IoPort::SetPinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+	IoPort::SetPinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
 
 #if TMC22xx_SINGLE_UART
 	// Set up the single UART that communicates with all TMC22xx drivers
 # if RP2040
 	TmcUartInterface::Init(Tmc22xxUartPin, DriversBaudRate, DmacChanTmcTx);
 # elif TMC22xx_USES_SERCOM
-	SetPinFunction(TMC22xxSercomTxPin, TMC22xxSercomTxPinPeriphMode);
-	SetPinFunction(TMC22xxSercomRxPin, TMC22xxSercomRxPinPeriphMode);
+	SetPinFunction(TMCSercomTxPin, TMCSercomTxPinPeriphMode);
+	SetPinFunction(TMCSercomRxPin, TMCSercomRxPinPeriphMode);
 
-	Serial::InitUart(TMC22xxSercomNumber, DriversBaudRate, TMC22xxSercomRxPad
+	Serial::InitUart(TMCSercomNumber, DriversBaudRate, TMCSercomRxPad
 #  if SAME5x
 			, true		// use 32-bit mode
 #  endif
@@ -2405,7 +2405,7 @@ void SmartDrivers::Init() noexcept
 // Shut down the drivers and stop any related interrupts
 void SmartDrivers::Exit() noexcept
 {
-	IoPort::SetPinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+	IoPort::SetPinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
 #if TMC22xx_SINGLE_UART
 # if RP2040
 	TmcUartInterface::DisableCompletedCallback();
@@ -2507,7 +2507,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 	else if (driversState != DriversState::shutDown)
 	{
 		driversState = DriversState::noPower;				// flag that there is no power to the drivers
-		fastDigitalWriteHigh(GlobalTmc22xxEnablePin);		// disable the drivers
+		fastDigitalWriteHigh(GlobalTmcEnablePin);			// disable the drivers
 	}
 }
 

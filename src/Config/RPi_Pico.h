@@ -37,6 +37,7 @@
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			1
 #define SUPPORT_TMC2240			0
+#define SUPPORT_TMC2240_SPI		0
 
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
@@ -64,7 +65,7 @@ constexpr float MaximumMotorCurrent = 1600.0;
 constexpr float MaximumStandstillCurrent = 1200.0;
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
-constexpr Pin GlobalTmc22xxEnablePin = GpioPin(0);							// this is different from the Fly board because GPIO25 on the Pico is the LED
+constexpr Pin GlobalTmcEnablePin = GpioPin(0);							// this is different from the Fly board because GPIO25 on the Pico is the LED
 constexpr Pin Tmc22xxUartPin = GpioPin(21);
 
 constexpr Pin StepPins[NumDrivers] = { GpioPin(24) };

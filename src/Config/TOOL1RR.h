@@ -39,6 +39,7 @@
 #define SUPPORT_TMC2208			0
 #define SUPPORT_TMC2209			0
 #define SUPPORT_TMC2240			1
+#define SUPPORT_TMC2240_SPI		0
 
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
@@ -50,16 +51,16 @@ constexpr size_t MaxSmartDrivers = 1;
 #define TMC22xx_VARIABLE_NUM_DRIVERS	0
 #define TMC22xx_USE_SLAVEADDR			0
 
-constexpr Pin GlobalTmc22xxEnablePin = PortAPin(0);
+constexpr Pin GlobalTmcEnablePin = PortAPin(0);
 
-constexpr uint8_t TMC22xxSercomNumber = 0;
-Sercom * const SERCOM_TMC22xx = SERCOM0;
+constexpr uint8_t TMCSercomNumber = 0;
+Sercom * const SERCOM_TMC = SERCOM0;
 
-constexpr Pin TMC22xxSercomTxPin = PortAPin(8);
-constexpr GpioPinFunction TMC22xxSercomTxPinPeriphMode = GpioPinFunction::C;
-constexpr Pin TMC22xxSercomRxPin = PortAPin(9);
-constexpr GpioPinFunction TMC22xxSercomRxPinPeriphMode = GpioPinFunction::C;
-constexpr uint8_t TMC22xxSercomRxPad = 1;
+constexpr Pin TMCSercomTxPin = PortAPin(8);
+constexpr GpioPinFunction TMCSercomTxPinPeriphMode = GpioPinFunction::C;
+constexpr Pin TMCSercomRxPin = PortAPin(9);
+constexpr GpioPinFunction TMCSercomRxPinPeriphMode = GpioPinFunction::C;
+constexpr uint8_t TMCSercomRxPad = 1;
 
 // Define the baud rate used to send/receive data to/from the drivers.
 // If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.

@@ -43,23 +43,23 @@
 
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
-constexpr float MaxTmc5160Current = 6300.0;					// the maximum current we allow the TMC5160/5161 drivers to be set to in open loop mode
+constexpr float MaxMotorCurrent = 6300.0;					// the maximum current we allow the TMC5160/5161 drivers to be set to in open loop mode
 constexpr uint32_t DefaultStandstillCurrentPercent = 71;
 constexpr float Tmc5160SenseResistor = 0.050;
 
-constexpr Pin GlobalTmc51xxEnablePin = PortAPin(5);
-constexpr Pin GlobalTmc51xxCSPin = PortAPin(10);
+constexpr Pin GlobalTmcEnablePin = PortAPin(5);
+constexpr Pin GlobalTmcCSPin = PortAPin(10);
 
-#define TMC51xx_USES_SERCOM	1
-Sercom * const SERCOM_TMC51xx = SERCOM0;
-constexpr uint8_t SERCOM_TMC51xx_NUMBER = 0;
+#define TMC_USES_SERCOM	1
+Sercom * const SERCOM_TMC = SERCOM0;
+constexpr uint8_t TmcSercomNumber = 0;
 
-constexpr Pin TMC51xxMosiPin = PortAPin(8);
-constexpr GpioPinFunction TMC51xxMosiPinPeriphMode = GpioPinFunction::C;
-constexpr Pin TMC51xxSclkPin = PortAPin(9);
-constexpr GpioPinFunction TMC51xxSclkPinPeriphMode = GpioPinFunction::C;
-constexpr Pin TMC51xxMisoPin = PortAPin(11);
-constexpr GpioPinFunction TMC51xxMisoPinPeriphMode = GpioPinFunction::C;
+constexpr Pin TMCMosiPin = PortAPin(8);
+constexpr GpioPinFunction TMCMosiPinPeriphMode = GpioPinFunction::C;
+constexpr Pin TMCSclkPin = PortAPin(9);
+constexpr GpioPinFunction TMCSclkPinPeriphMode = GpioPinFunction::C;
+constexpr Pin TMCMisoPin = PortAPin(11);
+constexpr GpioPinFunction TMCMisoPinPeriphMode = GpioPinFunction::C;
 
 PortGroup * const StepPio = &(PORT->Group[1]);				// the PIO that all the step pins are on (port B)
 constexpr Pin StepPins[NumDrivers] = { PortBPin(23) };

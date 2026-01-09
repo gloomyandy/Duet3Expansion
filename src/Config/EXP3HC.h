@@ -37,6 +37,7 @@
 #define SUPPORT_TMC51xx			1
 #define SUPPORT_TMC22xx			0
 #define SUPPORT_TMC2660			0
+#define SUPPORT_TMC2240_SPI		0
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
@@ -54,7 +55,7 @@ constexpr bool UseLaterCanPins = false;
 
 constexpr size_t NumDrivers = 3;
 constexpr size_t MaxSmartDrivers = 3;
-constexpr float MaxTmc5160Current = 6300.0;									// the maximum current we allow the TMC5160/5161 drivers to be set to
+constexpr float MaxMotorCurrent = 6300.0;									// the maximum current we allow the TMC5160/5161 drivers to be set to
 constexpr uint32_t DefaultStandstillCurrentPercent = 71;
 constexpr float Tmc5160SenseResistor = 0.050;
 
@@ -68,19 +69,19 @@ constexpr float DefaultThermistorSeriesR = 2200.0;
 constexpr float VrefTopResistor = 15.0;
 constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / NumThermistorInputs) * 4700.0/((DefaultThermistorSeriesR / NumThermistorInputs) + 4700.0);
 																			// there are 3 temperature sensing channels and a 4K7 load resistor
-constexpr Pin GlobalTmc51xxEnablePin = PortBPin(23);
-constexpr Pin GlobalTmc51xxCSPin = PortBPin(22);
+constexpr Pin GlobalTmcEnablePin = PortBPin(23);
+constexpr Pin GlobalTmcCSPin = PortBPin(22);
 
-#define TMC51xx_USES_SERCOM	1
-Sercom * const SERCOM_TMC51xx = SERCOM0;
-constexpr uint8_t SERCOM_TMC51xx_NUMBER = 0;
+#define TMC_USES_SERCOM			1
+Sercom * const SERCOM_TMC = SERCOM0;
+constexpr uint8_t TmcSercomNumber = 0;
 
-constexpr Pin TMC51xxMosiPin = PortBPin(24);
-constexpr GpioPinFunction TMC51xxMosiPinPeriphMode = GpioPinFunction::C;
-constexpr Pin TMC51xxSclkPin = PortBPin(25);
-constexpr GpioPinFunction TMC51xxSclkPinPeriphMode = GpioPinFunction::C;
-constexpr Pin TMC51xxMisoPin = PortCPin(25);
-constexpr GpioPinFunction TMC51xxMisoPinPeriphMode = GpioPinFunction::C;
+constexpr Pin TMCMosiPin = PortBPin(24);
+constexpr GpioPinFunction TMCMosiPinPeriphMode = GpioPinFunction::C;
+constexpr Pin TMCSclkPin = PortBPin(25);
+constexpr GpioPinFunction TMCSclkPinPeriphMode = GpioPinFunction::C;
+constexpr Pin TMCMisoPin = PortCPin(25);
+constexpr GpioPinFunction TMCMisoPinPeriphMode = GpioPinFunction::C;
 
 PortGroup * const StepPio = &(PORT->Group[0]);		// the PIO that all the step pins are on
 constexpr Pin StepPins[NumDrivers] = { PortAPin(25), PortAPin(27), PortAPin(1) };

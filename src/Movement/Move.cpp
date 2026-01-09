@@ -1791,7 +1791,7 @@ GCodeResult Move::ProcessM569(const CanMessageGeneric& msg, const StringRef& rep
 					  );
 		}
 
-# if SUPPORT_TMC22xx || SUPPORT_TMC51xx
+# if SUPPORT_TMC22xx || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
 		if (SmartDrivers::GetDriverMode(drive) == DriverMode::stealthChop)
 		{
 			const uint32_t tcoolthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tcoolthrs);
