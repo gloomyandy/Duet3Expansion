@@ -79,12 +79,10 @@ constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;			// with RRef
 
 #if 1
 // New current limits (RRF 3.6 and later)
-constexpr float MaximumMotorCurrent = 1600.0;
-constexpr float MaximumStandstillCurrent = 1130.0;
+constexpr float MaxMotorCurrent = 1600.0;
 #else
 // Original current limits for normal use (RRF 3.5.x and earlier)
-constexpr float MaximumMotorCurrent = 1000.0;								// peak current per phase, only one phase gets this at a time
-constexpr float MaximumStandstillCurrent = 800.0;							// peak current in a single phase at standstill
+constexpr float MaxMotorCurrent = 1000.0;								// peak current per phase, only one phase gets this at a time
 #endif
 
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;

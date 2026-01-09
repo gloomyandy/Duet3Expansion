@@ -82,13 +82,14 @@ constexpr size_t TmcTaskStackWords = 140;					// with 100 stack words, deckingma
 #endif
 
 #if TMC_TYPE == 5160
-// We now define MaxTmc5160Current and Tmc5160SenseResistor in the board configuration file because they vary between boards
-constexpr float MaximumStandstillCurrent = MaxMotorCurrent * 0.707;
+// We define MaxMotorCurrent and Tmc5160SenseResistor in the board configuration file because they vary between boards
 constexpr float RecipFullScaleCurrent = Tmc5160SenseResistor/325.0;		// 1.0 divided by full scale current in mA
 #elif TMC_TYPE == 2240
+// We define MaxMotorCurrent and DriverFullScaleCurrent in the board configuration file
 constexpr float RecipFullScaleCurrent = 1.0/DriverFullScaleCurrent;
-constexpr float MaximumStandstillCurrent = DriverFullScaleCurrent * 0.707;
 #endif
+
+constexpr float MaxStandstillCurrent = MaxMotorCurrent * 0.707;
 
 // The SPI clock speed is a compromise:
 // - too high and polling the driver chips takes too much of the CPU time
@@ -515,7 +516,7 @@ private:
 
 	std::atomic<uint32_t> newRegistersToUpdate;				// bitmap of register indices whose values need to be sent to the driver chip
 	std::atomic<uint32_t> registersToUpdate;				// bitmap of register indices whose values need to be sent to the driver chip
-	uint32_t motorCurrent;									// the configured motor current in mA
+	float motorCurrent;										// the configured motor current in mA
 
 #if SUPPORT_CLOSED_LOOP || SUPPORT_PHASE_STEPPING
 	uint32_t phaseToSet;									// phase value to be written to the XDIRECT register, only read/written by the TMC task
@@ -524,13 +525,14 @@ private:
 	LocalDriversBitmap driverBit;							// a bitmap containing just this driver number
 	uint16_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
 	uint16_t numReads, numWrites;							// how many successful reads and writes we had
+	uint16_t standstillCurrentFraction;						// divide this by 256 to get the motor current standstill fraction
+
 	static uint16_t numTimeouts;							// how many times a transfer timed out
 
 	uint8_t driverNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
 	uint8_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 
 	int8_t currentScaler = -1;								// CS if manually specified, otherwise -1 to indicate auto calculate
-	uint16_t standstillCurrentFraction;						// divide this by 256 to get the motor current standstill fraction
 	uint8_t regIndexBeingUpdated;							// which register we are sending
 	uint8_t regIndexRequested;								// the register we asked to read in the previous transaction, or 0xFF
 	uint8_t regIndexJustRequested;							// the register index we requested in the previous transaction, or 0xFF
@@ -579,7 +581,7 @@ pre(!driversPowered)
 	registersToUpdate.store(0);
 	newRegistersToUpdate.store(0);
 	specialReadRegisterNumber = specialWriteRegisterNumber = 0xFF;
-	motorCurrent = 0;
+	motorCurrent = 0.0;
 	standstillCurrentFraction = (uint16_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 256);
 
 	// Set default values for all registers and flag them to be updated
@@ -902,7 +904,7 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 // Set the motor current
 void TmcDriverState::SetCurrent(float current) noexcept
 {
-	motorCurrent = static_cast<uint32_t>(constrain<float>(current, MinimumMotorCurrent, MaxMotorCurrent));
+	motorCurrent = constrain<float>(current, MinimumMotorCurrent, MaxMotorCurrent);
 	UpdateCurrent();
 }
 
@@ -945,12 +947,13 @@ void TmcDriverState::UpdateCurrent() noexcept
 #else
 					standstillCurrentFraction;
 #endif
-	constexpr uint32_t MaxStandstillCurrentTimes256 = 256 * (uint32_t)MaximumStandstillCurrent;
-	const uint32_t limitedStandstillCurrentFraction = (motorCurrent * desiredStandstillCurrentFraction <= MaxStandstillCurrentTimes256)
+	constexpr float MaxStandstillCurrentTimes256 = 256 * MaxStandstillCurrent;
+	const float limitedStandstillCurrentFraction = ((uint32_t)motorCurrent * desiredStandstillCurrentFraction <= MaxStandstillCurrentTimes256)
 														? desiredStandstillCurrentFraction
-															: MaxStandstillCurrentTimes256/motorCurrent;
-	const uint8_t iHold = (iRun * limitedStandstillCurrentFraction)/256;
-	UpdateRegister(WriteIholdIrun, (writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHold << IHOLDIRUN_IHOLD_SHIFT));
+															: MaxStandstillCurrentTimes256/(uint32_t)motorCurrent;
+	const float idealIHoldCs = (float)iRun * limitedStandstillCurrentFraction * (1.0/256.0);
+	const uint32_t iHoldCsBits = constrain<uint32_t>((unsigned int)(idealIHoldCs + 0.2), 1, 32) - 1;
+	UpdateRegister(WriteIholdIrun, (writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHoldCsBits << IHOLDIRUN_IHOLD_SHIFT));
 	UpdateRegister(WriteGlobalScaler, globalScaler);
 }
 

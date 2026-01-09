@@ -79,12 +79,10 @@ constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
 
 #if 0
 // Current limits for thermal testing of the board
-constexpr float MaximumMotorCurrent = 1600.0;
-constexpr float MaximumStandstillCurrent = 1130.0;
+constexpr float MaxMotorCurrent = 1600.0;
 #else
 // Proposed current limits for normal use
-constexpr float MaximumMotorCurrent = 1200.0;								// peak current per phase, only one phase gets this at a time
-constexpr float MaximumStandstillCurrent = 800.0;							// peak current in a single phase at standstill
+constexpr float MaxMotorCurrent = 1200.0;								// peak current per phase, only one phase gets this at a time
 #endif
 
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;

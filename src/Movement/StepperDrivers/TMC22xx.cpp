@@ -67,6 +67,7 @@
 // The TMC22xx does handle a write request immediately followed by a read request to the same driver.
 // The TMC2209 does _not_ handle back-to-back read requests to different drivers on the same multiplexer channel, it needs a short delay between them to allow the first driver to release the bus.
 
+constexpr float MaxStandstillCurrent = MaxMotorCurrent * 0.707;
 constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA for the open load status to be taken seriously
 constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
 constexpr bool DefaultInterpolation = true;					// interpolation enabled
@@ -772,6 +773,7 @@ private:
 #if SUPPORT_TMC2208 || SUPPORT_TMC2209
 	uint16_t badChopConfErrors;
 #endif
+	uint16_t standstillCurrentFraction;						// divide this by 256 to get the motor current standstill fraction
 
 #if TMC22xx_HAS_ENABLE_PINS
 	Pin enablePin;											// the enable pin of this driver, if it has its own
@@ -780,7 +782,6 @@ private:
 	Pin diagPin;
 #endif
 	uint8_t driverNumber;									// the number of this driver as addressed by the UART multiplexer
-	uint8_t standstillCurrentFraction;						// divide this by 256 to get the motor current standstill fraction
 	uint8_t registerToRead;									// the next register we need to read
 	uint8_t regnumBeingUpdated;								// which register we are sending
 	uint8_t lastIfCount;									// the value of the IFCNT register last time we read it
@@ -1220,7 +1221,7 @@ pre(!driversPowered)
 	registersToUpdate = 0;
 	specialReadRegisterNumber = specialWriteRegisterNumber = 0xFF;
 	motorCurrent = 0.0;
-	standstillCurrentFraction = (uint8_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 255);
+	standstillCurrentFraction = (uint16_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 256);
 	UpdateRegister(WriteGConf,
 #if SUPPORT_TMC2240
 # if SUPPORT_TMC2208 || SUPPORT_TMC2209
@@ -1349,7 +1350,7 @@ float TmcDriverState::GetStandstillCurrentPercent() const noexcept
 
 void TmcDriverState::SetStandstillCurrentPercent(float percent) noexcept
 {
-	standstillCurrentFraction = (uint8_t)constrain<long>(lrintf((percent * 256)/100), 0, 255);
+	standstillCurrentFraction = (uint16_t)constrain<long>(lrintf((percent * 256)/100), 0, 256);
 	UpdateCurrent();
 }
 
@@ -1551,7 +1552,7 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 // Set the motor current
 void TmcDriverState::SetCurrent(float current) noexcept
 {
-	motorCurrent = constrain<float>(current, 50.0, MaximumMotorCurrent);
+	motorCurrent = constrain<float>(current, 50.0, MaxMotorCurrent);
 	UpdateCurrent();
 }
 
@@ -1559,7 +1560,11 @@ void TmcDriverState::UpdateCurrent() noexcept
 {
 	const float idealIRunCs = DriverCsMultiplier * motorCurrent;
 	const uint32_t iRunCsBits = constrain<uint32_t>((unsigned int)(idealIRunCs + 0.2), 1, 32) - 1;
-	const float idealIHoldCs = idealIRunCs * standstillCurrentFraction * (1.0/256.0);
+	constexpr float MaxStandstillCurrentTimes256 = 256 * MaxStandstillCurrent;
+	const float limitedStandstillCurrentFraction = (motorCurrent * standstillCurrentFraction <= MaxStandstillCurrentTimes256)
+														? standstillCurrentFraction
+															: MaxStandstillCurrentTimes256/motorCurrent;
+	const float idealIHoldCs = idealIRunCs * limitedStandstillCurrentFraction * (1.0/256.0);
 	const uint32_t iHoldCsBits = constrain<uint32_t>((unsigned int)(idealIHoldCs + 0.2), 1, 32) - 1;
 	UpdateRegister(WriteIholdIrun,
 					  (writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK))

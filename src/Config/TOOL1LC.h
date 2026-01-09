@@ -70,12 +70,12 @@ constexpr uint8_t TMCSercomRxPad = 2;
 constexpr uint32_t DriversBaudRate = 200000;
 constexpr uint32_t TransferTimeout = 10;									// any transfer should complete within 10 ticks @ 1ms/tick
 
+// TOOL1LC uses a TMC2209 driver
 constexpr float DriverSenseResistor = 0.091 + 0.02 + 0.003;					// in ohms. Added the 0.003 to make the max current a round 1600mA.
 constexpr float DriverVRef = 180.0;											// in mV
 constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
 constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
-constexpr float MaximumMotorCurrent = 1600.0;
-constexpr float MaximumStandstillCurrent = 1200.0;
+constexpr float MaxMotorCurrent = 1600.0;
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
 PortGroup * const StepPio = &(PORT->Group[0]);		// the PIO that all the step pins are on
