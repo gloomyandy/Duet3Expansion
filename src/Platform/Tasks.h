@@ -35,7 +35,6 @@ namespace Tasks
 
 	static constexpr uint32_t MaxHeatTaskTicksInSpinState = 4000;	// timeout before we reset the processor if the heat task doesn't run
 	static constexpr uint32_t MaxMainTaskTicksInSpinState = 60000;	// timeout before we reset the processor if the main task doesn't run
-	static constexpr uint32_t HighMainTaskTicksInSpinState = 16000;	// how long before we warn that timeout is approaching
 }
 
 // Functions called by CanMessageBuffer in CANlib
