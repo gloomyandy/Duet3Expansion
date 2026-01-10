@@ -15,6 +15,8 @@
 #include <FilamentMonitors/FilamentMonitor.h>
 #include <Hardware/Devices.h>
 #include <Hardware/NonVolatileMemory.h>
+#include <Hardware/SoftwareReset.h>
+#include <Hardware/ExceptionHandlers.h>
 #include <CanMessageBuffer.h>
 #include <CanMessageFormats.h>
 #include <Duet3Common.h>
@@ -83,9 +85,12 @@ constexpr uint8_t memPattern = 0xA5;
 constexpr unsigned int MainTaskStackWords = 830;				// this seems very large; but a user had a stack overflow when it was set to 800
 constexpr unsigned int UpdateBootloaderTaskStackWords = 300;
 
+static bool checkSpinLock = false;
+static volatile uint32_t ticksInSpinState = 0;
+Module volatile spinningModule = Module::numModules;
+
 static TaskBase *mainTask = nullptr;
 static Mutex mallocMutex;
-static unsigned int heatTaskIdleTicks = 0;
 
 // Idle task data
 constexpr unsigned int IdleTaskStackWords = 50;					// currently we don't use the idle talk for anything, so this can be quite small
@@ -316,11 +321,20 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 	moveInstance->Init();
 #endif
 
+	checkSpinLock = true;
 	for (;;)
 	{
+		ticksInSpinState = 0;
+		spinningModule = Module::Platform;
 		Platform::Spin();
+
+		ticksInSpinState = 0;
+		spinningModule = Module::CAN;
 		CommandProcessor::Spin();
+
 #if SUPPORT_DRIVERS
+		ticksInSpinState = 0;
+		spinningModule = Module::FilamentSensors;
 		FilamentMonitor::Spin();
 #endif
 	}
@@ -1000,26 +1014,32 @@ extern "C" void vApplicationTickHook(void) noexcept
 	CoreSysTick();
 	WatchdogReset();							// kick the watchdog
 	Platform::Tick();
-	++heatTaskIdleTicks;
-#if 0
-	const bool heatTaskStuck = (heatTaskIdleTicks >= MaxTicksInSpinState);
-	if (heatTaskStuck || ticksInSpinState >= MaxTicksInSpinState)		// if we stall for 20 seconds, save diagnostic data and reset
+	++ticksInSpinState;
+
+	// only check stuck state when main task is running - disabled for bootloader task
+	const bool mainTaskStuck = (checkSpinLock && ticksInSpinState >= Tasks::MaxMainTaskTicksInSpinState);
+	const bool heatTaskStuck = (checkSpinLock && Platform::GetHeatTaskIdleTicks() >= Tasks::MaxHeatTaskTicksInSpinState);
+	const bool syncedStuck = (checkSpinLock && Platform::GetSyncedIdleTicks() >= Tasks::MaxMainTaskTicksInSpinState);
+	if (heatTaskStuck || syncedStuck || mainTaskStuck)		// if we stall, save diagnostic data and reset
 	{
-		resetting = true;
-		for (size_t i = 0; i < MaxHeaters; i++)
-		{
-			Platform::SetHeater(i, 0.0);
-		}
-		Platform::DisableAllDrives();
+		Heat::SwitchOffAll();
+#if SUPPORT_DRIVERS
+# if SUPPORT_TMC51xx
+		IoPort::WriteDigital(GlobalTmc51xxEnablePin, true);
+# endif
+# if SUPPORT_TMC22xx
+		IoPort::WriteDigital(GlobalTmc22xxEnablePin, true);
+# endif
+		moveInstance->DisableAllDrives();
+#endif
 
 		// We now save the stack when we get stuck in a spin loop
 		__asm volatile("mrs r2, psp");
 		register const uint32_t * stackPtr asm ("r2");					// we want the PSP not the MSP
-		Platform::SoftwareReset(
-			(heatTaskStuck) ? (uint16_t)SoftwareResetReason::heaterWatchdog : (uint16_t)SoftwareResetReason::stuckInSpin,
+		SoftwareReset(
+				(heatTaskStuck) ? SoftwareResetReason::heaterWatchdog :SoftwareResetReason::stuckInSpin,
 			stackPtr + 5);												// discard uninteresting registers, keep LR PC PSR
 	}
-#endif
 }
 
 static StaticTask_t xTimerTaskTCB;
@@ -1038,6 +1058,8 @@ extern "C" void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuf
     /* Pass out the size of the array pointed to by *ppxTimerTaskStackBuffer. */
     *pulTimerTaskStackSize = ARRAY_SIZE(uxTimerTaskStack);
 }
+
+Module Tasks::GetSpinningModule() noexcept { return spinningModule; }
 
 // Helper function to cause a divide by zero error without the compiler noticing we are doing that
 uint32_t Tasks::DoDivide(uint32_t a, uint32_t b) noexcept

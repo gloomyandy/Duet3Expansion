@@ -148,6 +148,7 @@ namespace Platform
 
 	void KickHeatTaskWatchdog() noexcept;
 	uint32_t GetHeatTaskIdleTicks() noexcept;
+	uint32_t GetSyncedIdleTicks() noexcept;
 
 #if HAS_ADDRESS_SWITCHES
 	uint8_t ReadBoardAddress() noexcept;
