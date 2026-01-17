@@ -56,6 +56,7 @@
 
 #if RPXXXX
 # include <hardware/structs/watchdog.h>
+# include <hardware/structs/sysinfo.h>
 #endif
 
 #if SAME5x
@@ -557,6 +558,9 @@ void Platform::Init()
 	SetPinMode(BoardTypePins[1], INPUT_PULLUP, false);
 	delayMicroseconds(10);
 	boardVariant = (digitalRead(BoardTypePins[1])) ? 0 : 1;
+#elif defined(MNBN17) && SUPPORT_TMC51xx
+	// Set to use SPI for driver control
+	SetPinMode(ConfigureDriverIOPin, OUTPUT_LOW);
 #endif
 
 	InitLeds();
@@ -1542,9 +1546,17 @@ void Platform::AppendBoardAndFirmwareDetails(const StringRef& reply) noexcept
 	reply.lcatf("Duet " BOARD_TYPE_NAME " rev %s firmware version " VERSION " (%s%s)",
 				(boardVariant == 1) ? "1.02 or later" : "1.01 or earlier",
 				DateText, TimeSuffix);
+#elif RPXXXX
+	reply.lcatf("Duet " BOARD_TYPE_NAME " (%s%s) firmware version " VERSION " (%s%s) Clock %.1fMHz",
+#if RP2350
+				"RP2350", ((sysinfo_hw->package_sel & 1) ? "A" : "B"),
 #else
-	reply.lcatf("Duet " BOARD_TYPE_NAME " firmware version " VERSION " (%s%s) Clock %.1fMHz",
+				"RP2040", "",
+#endif
 				DateText, TimeSuffix, (double)(SystemCoreClock/1000000.0f));
+#else
+	reply.lcatf("Duet " BOARD_TYPE_NAME " firmware version " VERSION " (%s%s)",
+				DateText, TimeSuffix);
 #endif
 }
 

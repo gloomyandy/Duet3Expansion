@@ -57,6 +57,8 @@
 # include "FlyM2.h"
 #elif defined(RP2350TEST)
 # include "RP2350Test.h"
+#elif defined(MNBN17)
+# include "MnBN17r1_5.h"
 #else
 # error Board type not defined
 #endif
