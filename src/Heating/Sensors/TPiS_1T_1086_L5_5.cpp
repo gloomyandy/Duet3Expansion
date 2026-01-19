@@ -27,7 +27,7 @@ GCodeResult TPiS_1T_1086_L5_5::Configure(const CanMessageGenericParser& parser, 
 	{
 		// Initialise the sensor
 		bool ok;
-		// Set the slave address of the sensor. After power up it on;y responds to the General Call address.
+		// Set the slave address of the sensor. After power up it only responds to the General Call address.
 		{
 			device.SetAddress(0);									// general call address
 			const uint8_t txBuffer[] = { 0x04 };					// command to load address from EPROM
