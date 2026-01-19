@@ -10,7 +10,7 @@
 
 #include "Encoder.h"
 
-#if SUPPORT_CLOSED_LOOP && SAME5x
+#if SUPPORT_CLOSED_LOOP && SUPPORT_COMPOSITE_ENCODER
 
 #include "QuadratureEncoderPdec.h"
 #include "AS5047D.h"

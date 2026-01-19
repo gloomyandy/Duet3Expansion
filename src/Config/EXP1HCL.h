@@ -39,7 +39,10 @@
 #define SUPPORT_INPUT_SHAPING	1
 #define SUPPORT_CLOSED_LOOP		1
 #define SUPPORT_BRAKE_PWM		1
-#define SUPPORT_MT6835			1
+
+#define SUPPORT_MT6835					1
+#define SUPPORT_QUADRATURE_ENCODER		1
+#define SUPPORT_COMPOSITE_ENCODER		1
 
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
@@ -168,9 +171,9 @@ constexpr Pin PositionDecoderPins[] = { PortAPin(24), PortAPin(25), PortBPin(22)
 constexpr GpioPinFunction PositionDecoderPinFunction = GpioPinFunction::G;
 
 // Clock generator pin for TMC2160
-constexpr uint8_t ClockGenGclkNumber = 5;
-constexpr Pin ClockGenPin = PortBPin(11);
-constexpr GpioPinFunction ClockGenPinPeriphMode = GpioPinFunction::M;
+constexpr uint8_t TmcClockGclkNumber = 5;
+constexpr Pin TmcClockPin = PortBPin(11);
+constexpr GpioPinFunction TmcClockPinPeriphMode = GpioPinFunction::M;
 
 // Brake On pin for version 2.0 board. If the BrakePwmPort is configured as the brake pin in M569.7 then the BrakeOnPin is used implicitly as well.
 constexpr Pin BrakePwmPin = PortBPin(10);

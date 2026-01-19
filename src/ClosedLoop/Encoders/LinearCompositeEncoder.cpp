@@ -7,7 +7,7 @@
 
 #include <ClosedLoop/Encoders/LinearCompositeEncoder.h>
 
-#if SUPPORT_CLOSED_LOOP && SAME5x
+#if SUPPORT_CLOSED_LOOP && SUPPORT_COMPOSITE_ENCODER
 
 #include <Hardware/NonVolatileMemory.h>
 

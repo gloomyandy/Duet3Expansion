@@ -166,7 +166,7 @@ constexpr Pin Lis3dhInt1Pin = PortAPin(27);
 #if SUPPORT_LDC1612
 constexpr unsigned int LDC1612_I2CChannel = 0;
 constexpr uint16_t LDC1612_I2CAddress = 0x2A;				// pin 4 is tied low
-constexpr unsigned int Ldc1612GClkNumber = 5;
+constexpr unsigned int LDC1612GClkNumber = 5;
 constexpr Pin LDC1612ClockGenPin = PortBPin(11);
 constexpr Pin LDC1612InterruptPin = PortAPin(25);
 #endif

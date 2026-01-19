@@ -301,12 +301,12 @@ void ScanningSensorHandler::Init(SharedI2CMaster& i2cDevice) noexcept
 	static_assert(LDC1612::ClockFrequency == 25.0 || LDC1612::ClockFrequency == 30.0);
 	if constexpr(LDC1612::ClockFrequency == 25.0)
 	{
-		ConfigureGclk(GclkNumPB11, (GclkSource)((uint8_t)GclkSource::xosc0 + AppGetXoscNumber()), 1, true);
+		ConfigureGclk(LDC1612GClkNumber, (GclkSource)((uint8_t)GclkSource::xosc0 + AppGetXoscNumber()), 1, true);
 		SetPinFunction(LDC1612ClockGenPin, GpioPinFunction::M);
 	}
 	else if constexpr(LDC1612::ClockFrequency == 30.0)
 	{
-		ConfigureGclk(GclkNumPB11, GclkSource::dpll0, 4, true);
+		ConfigureGclk(LDC1612GClkNumber, GclkSource::dpll0, 4, true);
 		SetPinFunction(LDC1612ClockGenPin, GpioPinFunction::M);
 	}
 #else
