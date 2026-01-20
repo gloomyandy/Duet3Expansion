@@ -152,4 +152,8 @@ constexpr size_t NumDrivers = 0;
 # define HEATER_POLL_RATE_MULTIPLIER	(1)			// how many times faster we run the temperature control loop than the standard 4Hz
 #endif
 
+#ifndef CUSTOM_THERMISTORS
+# define CUSTOM_THERMISTORS				0
+#endif
+
 #endif /* SRC_CONFIG_BOARDDEF_H_ */
