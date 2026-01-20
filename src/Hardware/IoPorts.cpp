@@ -146,6 +146,13 @@ bool IoPort::SetMode(PinAccess access) noexcept
 		}
 		else
 #endif
+#if SUPPORT_ADS131M02
+			if (chan == AdcInput::ads131m02 && access == PinAccess::readAnalog)
+			{
+				// nothing needed here
+			}
+			else
+#endif
 		{
 			if (chan != AdcInput::none)
 			{
@@ -190,7 +197,7 @@ bool IoPort::ReadDigital() const noexcept
 	return false;
 }
 
-uint32_t IoPort::ReadAnalog() const noexcept
+int32_t IoPort::ReadAnalog() const noexcept
 {
 	if (IsValid())
 	{
@@ -199,6 +206,12 @@ uint32_t IoPort::ReadAnalog() const noexcept
 		if (chan == AdcInput::ldc1612)
 		{
 			return ScanningSensorHandler::GetReading();
+		}
+#endif
+#if SUPPORT_ADS131M02
+		if (chan == AdcInput::ads131m02)
+		{
+			return (Platform::loadCellAdc == nullptr) ? std::numeric_limits<int32_t>::min() : Platform::loadCellAdc->GetLatestData();
 		}
 #endif
 		if (chan != AdcInput::none)

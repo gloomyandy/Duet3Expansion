@@ -72,7 +72,7 @@ public:
 	static constexpr size_t NumAveraged() noexcept { return numAveraged; }
 
 	// Function used as an ADC callback to feed a result into an averaging filter
-	static void CallbackFeedIntoFilter(CallbackParameter cp, uint32_t val) noexcept;
+	static void CallbackFeedIntoFilter(CallbackParameter cp, int32_t val) noexcept;
 
 	bool CheckIntegrity() const noexcept;
 
@@ -86,7 +86,7 @@ private:
 };
 
 // This is called from an ISR or high priority task to add a new reading to the filter.
-template<size_t numAveraged> void AveragingFilter<numAveraged>::CallbackFeedIntoFilter(CallbackParameter cp, uint32_t val) noexcept
+template<size_t numAveraged> void AveragingFilter<numAveraged>::CallbackFeedIntoFilter(CallbackParameter cp, int32_t val) noexcept
 {
 	static_cast<AveragingFilter<numAveraged>*>(cp.vp)->ProcessReading((uint16_t)val);
 }

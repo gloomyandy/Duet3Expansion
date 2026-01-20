@@ -133,7 +133,7 @@ void InputMonitor::Deactivate() noexcept
 }
 
 // Return the analog value of this input
-uint32_t InputMonitor::GetAnalogValue() const noexcept
+int32_t InputMonitor::GetAnalogValue() const noexcept
 {
 	return (!IsDigital()) ? port.ReadAnalog()
 #if SAME5x
@@ -141,7 +141,7 @@ uint32_t InputMonitor::GetAnalogValue() const noexcept
 #else
 			: port.ReadDigital()
 #endif
-			  ? 0xFFFFFFFF
+			  ? std::numeric_limits<int32_t>::min()
 				: 0;
 }
 
@@ -204,7 +204,7 @@ void InputMonitor::DigitalInterrupt() noexcept
 	}
 }
 
-void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
+void InputMonitor::AnalogInterrupt(int32_t reading) noexcept
 {
 	const bool newState = reading >= threshold;
 	if (newState != state)
@@ -250,7 +250,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	static_cast<InputMonitor*>(cbp.vp)->DigitalInterrupt();
 }
 
-/*static*/ void InputMonitor::CommonAnalogPortInterrupt(CallbackParameter cbp, uint32_t reading) noexcept
+/*static*/ void InputMonitor::CommonAnalogPortInterrupt(CallbackParameter cbp, int32_t reading) noexcept
 {
 	static_cast<InputMonitor*>(cbp.vp)->AnalogInterrupt(reading);
 }
@@ -379,7 +379,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 		break;
 
 	case CanMessageChangeInputMonitorV1::actionChangeThreshold:
-		m->threshold = msg.param;
+		m->threshold = (int32_t)msg.param;
 		m->state = m->port.ReadAnalog() >= m->threshold;
 #if SUPPORT_LDC1612
 		if (m->port.IsLdc1612())
@@ -489,7 +489,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 		if ((h->handle & mask) == pattern)
 		{
 			reply->results[count].handle.Set(h->handle);
-			StoreLEU32(&reply->results[count].reading, h->GetAnalogValue());
+			StoreLEI32(&reply->results[count].reading, h->GetAnalogValue());
 			++count;
 		}
 		h = h->next;

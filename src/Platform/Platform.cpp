@@ -158,12 +158,12 @@ namespace Platform
 #endif
 
 #if NUM_CURRENT_SENSORS != 0
-	static uint32_t currentSensorReadings[NUM_CURRENT_SENSORS] = { 0 };
-	static uint32_t currentSensorCallbackThresholds[NUM_CURRENT_SENSORS] = { 0 };
+	static int32_t currentSensorReadings[NUM_CURRENT_SENSORS] = { 0 };
+	static int32_t currentSensorCallbackThresholds[NUM_CURRENT_SENSORS] = { 0 };
 	static CallbackParameter currentSensorCallbackParameters[NUM_CURRENT_SENSORS];
 	static StandardCallbackFunction *null currentSensorCallbackFunctions[NUM_CURRENT_SENSORS] = { 0 };
 
-	void CurrentSensorAinCallback(CallbackParameter cp, uint32_t val) noexcept;
+	void CurrentSensorAinCallback(CallbackParameter cp, int32_t val) noexcept;
 #endif
 
 #if SAME5x
@@ -1160,7 +1160,7 @@ ThermistorAveragingFilter *Platform::GetVrefFilter(unsigned int filterNumber)
 
 #if NUM_CURRENT_SENSORS != 0
 
-void Platform::CurrentSensorAinCallback(CallbackParameter cp, uint32_t val) noexcept
+void Platform::CurrentSensorAinCallback(CallbackParameter cp, int32_t val) noexcept
 {
 	const size_t sensorNumber = cp.u32;
 	if (sensorNumber < NUM_CURRENT_SENSORS)

@@ -93,10 +93,13 @@ public:
 	}
 #endif
 
-	uint32_t ReadAnalog() const noexcept;
+	int32_t ReadAnalog() const noexcept;
 
 #if SUPPORT_LDC1612
 	bool IsLdc1612() const noexcept { return IsValid() && PinTable[pin].adc == AdcInput::ldc1612; }
+#endif
+#if SUPPORT_ADS131M02
+	bool IsAds131M02() const noexcept { return IsValid() && PinTable[pin].adc == AdcInput::ads131m02; }
 #endif
 
 	bool AttachInterrupt(StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param) const noexcept;
