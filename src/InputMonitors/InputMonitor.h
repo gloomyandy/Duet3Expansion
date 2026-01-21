@@ -61,7 +61,7 @@ private:
 	GCodeResult SetDriveLevel(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept;
 	GCodeResult SelectTouchMode(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept;
 #else
-	void AnalogInterrupt(uint32_t reading) noexcept;			// this is private unless LKDC1612 support is configured
+	void AnalogInterrupt(int32_t reading) noexcept;			// this is private unless LDC1612 support is configured
 #endif
 
 	static bool Delete(uint16_t hndl) noexcept;
