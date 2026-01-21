@@ -20,6 +20,8 @@ public:
 	SharedI2CClient(SharedI2CMaster& dev, uint16_t addr) noexcept;
 	void SetAddress(uint16_t addr) noexcept { address = addr; }
 	bool Transfer(const uint8_t *txBuffer, uint8_t *rxBuffer, size_t numToWrite, size_t numToRead, uint32_t timeout, bool releaseBus = true) noexcept;
+	bool Take(uint32_t timeout) noexcept { return device.Take(timeout); }
+	void Release() noexcept { device.Release(); }
 
 private:
 	SharedI2CMaster& device;

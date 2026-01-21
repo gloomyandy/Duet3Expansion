@@ -121,6 +121,9 @@ namespace Platform
 #if SUPPORT_ADS131M02
 	ADS131M02 *loadCellAdc = nullptr;
 #endif
+#if SUPPORT_LP5817
+	LP5817 *lp5817 = nullptr;
+#endif
 
 #if HAS_VOLTAGE_MONITOR
 	static volatile uint16_t currentVin, highestVin, lowestVin;
@@ -735,6 +738,9 @@ void Platform::Init()
 
 #if SUPPORT_ADS131M02
 	loadCellAdc = new ADS131M02;
+#endif
+#if SUPPORT_LP5817
+	lp5817 = new LP5817(GetSharedI2C(LP5817_I2CChannel));
 #endif
 
 #ifdef ATEIO

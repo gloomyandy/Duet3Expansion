@@ -211,7 +211,8 @@ int32_t IoPort::ReadAnalog() const noexcept
 #if SUPPORT_ADS131M02
 		if (chan == AdcInput::ads131m02)
 		{
-			return (Platform::loadCellAdc == nullptr) ? std::numeric_limits<int32_t>::min() : Platform::loadCellAdc->GetLatestData();
+			ADS131M02 *const loadCellAdc = Platform::GetLoadCellAdc();
+			return (loadCellAdc == nullptr) ? std::numeric_limits<int32_t>::min() : loadCellAdc->GetLatestData();
 		}
 #endif
 		if (chan != AdcInput::none)
@@ -659,6 +660,17 @@ void PwmPort::WriteAnalog(float pwm) const noexcept
 	{
 		Platform::SetInductiveHeaterPwm(pwm);
 		return;
+	}
+#endif
+#if SUPPORT_LP5817
+	if (pin == LP5817Pin)
+	{
+		LP5817 *const ledDriver = Platform::GetLp5817();
+		if (ledDriver != nullptr)
+		{
+			const uint32_t val = lrintf(std::ldexpf(pwm, 24));
+			ledDriver->SetColour(val);
+		}
 	}
 #endif
 

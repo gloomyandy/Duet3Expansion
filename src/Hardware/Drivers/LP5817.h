@@ -25,21 +25,7 @@ class LP5817 : public SharedI2CClient
 public:
 	LP5817(SharedI2CMaster& dev) noexcept;
 
-	// Currently we only support colours for which each LED is either on or off
-	enum LedColour : uint8_t
-	{
-		black = 0,
-		red,
-		green,
-		yellow,
-		blue,
-		magenta,
-		cyan,
-		white
-	};
-
-	bool Init(uint8_t inputPins, uint8_t initialOutputs) noexcept;		// initialise the device returning true if it was found
-	void SetColour(LedColour colour) noexcept;							// set new LED colours
+	void SetColour(uint32_t colour) noexcept;							// set new LED colours, colour is R | (G << 8) | (B << 16) where R,G,B are 8-bit values
 
 private:
 	enum class LP5817_Register : uint8_t								// these are all 8-bit registers
@@ -68,7 +54,8 @@ private:
 	bool Read8(LP5817_Register reg, uint8_t& val) noexcept;
 	bool Write8(LP5817_Register reg, uint8_t val) noexcept;
 
-	LedColour currentColour;
+	uint32_t currentColour = 0;
+	bool initialised = false;
 };
 
 #endif

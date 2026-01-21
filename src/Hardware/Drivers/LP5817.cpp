@@ -12,29 +12,40 @@
 LP5817::LP5817(SharedI2CMaster& dev) noexcept
 	: SharedI2CClient(dev, LP5817_I2CAddress)
 {
-}
-
-bool LP5817::Init(uint8_t inputPins, uint8_t initialOutputs) noexcept
-{
-	currentColour = black;
-	uint8_t temp;
-	return Write8(LP5817_Register::reset_cmd, 0xCC)
-		&& Write8(LP5817_Register::out0_dc, CurrentSetting[0])
-		&& Write8(LP5817_Register::out1_dc, CurrentSetting[1])
-		&& Write8(LP5817_Register::out2_dc, CurrentSetting[2])
-		&& Write8(LP5817_Register::chip_en, 0x01)
-		&& Read8(LP5817_Register::out1_dc, temp)
-		&& temp == CurrentSetting[1]
-		;
+	(void)Write8(LP5817_Register::reset_cmd, 0xCC);						// try to reset the device
 }
 
 // Set new LED colours next time Poll is called
-void LP5817::SetColour(LedColour colour) noexcept
+void LP5817::SetColour(uint32_t colour) noexcept
 {
 	if (colour != currentColour)
 	{
-		Write8(LP5817_Register::dev_config1, (uint8_t)colour);
-		currentColour = colour;
+		if (Take(LP5817_I2CTimeout))									// get ownership of the I2C bus, this also saves having a mutex for this device
+		{
+			if (!initialised)
+			{
+				uint8_t temp;
+				initialised = Write8(LP5817_Register::reset_cmd, 0xCC)						// reset the device
+							&& Write8(LP5817_Register::chip_en, 0x01)						// enable IC, must do this before update_cmd will work
+							&& Write8(LP5817_Register::out0_dc, CurrentSetting[0])			// set R,G,B currents
+							&& Write8(LP5817_Register::out1_dc, CurrentSetting[1])
+							&& Write8(LP5817_Register::out2_dc, CurrentSetting[2])
+							// The manual PWM registers default to 0 after reset, so no need to write them
+							&& Write8(LP5817_Register::dev_config1, 0x07)					// enable R,G,B
+							&& Write8(LP5817_Register::update_cmd, 0x01)					// update dev_config1
+							&& Read8(LP5817_Register::out1_dc, temp)
+							&& temp == CurrentSetting[1]
+							;
+			}
+			if (initialised)
+			{
+				Write8(LP5817_Register::out0_manual_pwm, (uint8_t)colour);
+				Write8(LP5817_Register::out1_manual_pwm, (uint8_t)(colour >> 8));
+				Write8(LP5817_Register::out2_manual_pwm, (uint8_t)(colour >> 16));
+				currentColour = colour;
+			}
+			Release();													// release the bus
+		}
 	}
 }
 
