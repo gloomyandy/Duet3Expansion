@@ -62,23 +62,23 @@ GCodeResult TPiS_1T_1086_L5_5::Configure(const CanMessageGenericParser& parser, 
 				calculatedChecksum += epromBuffer[i];
 			}
 			const uint16_t storedChecksum = ((uint16_t)epromBuffer[1] << 8) | (uint16_t)epromBuffer[2];
-			if (epromBuffer[0] == 3 && epromBuffer[31] == TPiS_I2CAddress && calculatedChecksum == storedChecksum)
+			if (epromBuffer[0] == 3 && epromBuffer[31] == (TPiS_I2CAddress | 0x80) && calculatedChecksum == storedChecksum)
 			{
 				// Get needed data from EPROM contents
 				TempCalibPtat25 = ((uint16_t)epromBuffer[10] << 8) | epromBuffer[11];
 				TempCalibM = ((uint16_t)epromBuffer[12] << 8) | epromBuffer[13];
-				TempCalibUo = (((uint32_t)epromBuffer[14] << 8) | epromBuffer[15]) + 32768L;
+				TempCalibUo = (((uint32_t)epromBuffer[14] << 8) | epromBuffer[15]) + 32768UL;
 				TempCalibUout1 = (((uint32_t)epromBuffer[16] << 8) | epromBuffer[17]) * 2;
 				TempCalibTobj1 = epromBuffer[18];
 
 				// Pre-compute some derived calibration constants
-				recipTempCalibM = 1.0/(float)TempCalibM;
-				recipCorrectedK = ((powf((float)TempCalibTobj1, 4.2) - powf(25.0 - ABS_ZERO, 4.2)) * FovAndEmissivityCorrection) / (float)(TempCalibUout1 - TempCalibUo);
+				recipTempCalibM = 100.0/(float)TempCalibM;
+				recipCorrectedK = (powf((float)TempCalibTobj1 - ABS_ZERO, 4.2) - powf(25.0 - ABS_ZERO, 4.2)) / ((float)(int32_t)(TempCalibUout1 - TempCalibUo) * FovAndEmissivityCorrection);
 
 				ambientTemperatureDegK = objectTemperatureDegK = 0.0;
 				return GCodeResult::ok;
 			}
-			reply.copy("Error in thermopile sensor EPROM");
+			reply.printf("Error in thermopile sensor EPROM: %02x %02x %04x %04x", epromBuffer[0], epromBuffer[31], calculatedChecksum, storedChecksum);
 			return GCodeResult::error;
 		}
 		reply.copy("Failed to initialise thermopile sensor");
@@ -102,11 +102,23 @@ void TPiS_1T_1086_L5_5::Poll() noexcept
 		const uint32_t rawTAmb = ((uint32_t)(rxBuffer[2] & 0x7F)) << 8 | (uint32_t)rxBuffer[3];
 
 		// Calculate the ambient temperature reported by the sensor in degK. See datasheet section 8.4.
-		ambientTemperatureDegK = (25.0 - ABS_ZERO) + (float)(rawTAmb - TempCalibPtat25) * recipTempCalibM;
+		ambientTemperatureDegK = (25.0 - ABS_ZERO) + (float)((int32_t)(rawTAmb - TempCalibPtat25)) * recipTempCalibM;
 
 		// Calculate the object temperature. See datasheet section 8.5. We assume that LOOKUP# = 2.
-		objectTemperatureDegK = powf((rawTpObject - TempCalibUo) * recipCorrectedK + powf(ambientTemperatureDegK, 4.2), 1.0/4.2);
-		SetResult(objectTemperatureDegK - ABS_ZERO, TemperatureError::ok);
+		objectTemperatureDegK = powf((float)(int32_t)(rawTpObject - TempCalibUo) * recipCorrectedK + powf(ambientTemperatureDegK, 4.2), 1.0/4.2);
+
+#if 0	//DEBUG
+		{
+			static uint8_t count=0;
+			++count;
+			if (count == 0)
+			{
+				debugPrintf("PTAT25=%u M=%u U0=%lu Uout1=%lu Tobj1=%u 1/M=%.4f 1/K=%.3f", TempCalibPtat25, TempCalibM, TempCalibUo, TempCalibUout1, TempCalibTobj1, (double)recipTempCalibM, (double)recipCorrectedK);
+				debugPrintf(" %lu %lu %.1f %.1f\n", rawTAmb, rawTpObject, (double)ambientTemperatureDegK, (double)objectTemperatureDegK);
+			}
+		}
+#endif
+		SetResult(objectTemperatureDegK + ABS_ZERO, TemperatureError::ok);
 	}
 	else
 	{
@@ -120,7 +132,7 @@ TemperatureError TPiS_1T_1086_L5_5::GetAdditionalOutput(float &t, uint8_t output
 	switch (outputNumber)
 	{
 	case 1:
-		t = ambientTemperatureDegK - ABS_ZERO;
+		t = ambientTemperatureDegK + ABS_ZERO;
 		break;
 
 	default:
