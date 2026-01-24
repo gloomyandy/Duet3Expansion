@@ -329,7 +329,7 @@ static constexpr size_t numTmcDrivers = MaxSmartDrivers;
 static constexpr uint32_t MaxValidSgLoadRegister = 1023;
 static constexpr uint32_t InvalidSgLoadRegister = 1024;
 
-#if defined(EXP1HCL) || defined(M23CL) || defined(TOOLINDX)
+#if defined(EXP1HCL) || defined(M23CL) || (defined(TOOLINDX) && SUPPORT_CLOSED_LOOP)
 
 static uint32_t tmcClockSpeed = HighestTmcClockSpeed;		// the (highest) rate at which the TMC driver is clocked, internally or externally
 
