@@ -55,8 +55,6 @@ private:
 	uint8_t regReadBuffer[3 * 4];							// we always transfer four 24-bit words
 
 	uint16_t rslt;											// the result of the previous command
-	int32_t data0;											// the channel 0 data
-	int32_t data1;											// the channel 1 data
 	int32_t compositeData = 0;
 
 	Task<TaskStackWords> *adcTask = nullptr;

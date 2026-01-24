@@ -75,10 +75,10 @@ static void DataReadyCallback(CallbackParameter param) noexcept
 
 [[noreturn]] void ADS131M02::TaskLoop() noexcept
 {
-	AttachPinInterrupt(ADS131M02_DRDYPin, DataReadyCallback, InterruptMode::high, CallbackParameter(this->adcTask));
+	AttachPinInterrupt(ADS131M02_DRDYPin, DataReadyCallback, InterruptMode::low, CallbackParameter(this->adcTask), false);
 	for (;;)
 	{
-		if (IoPort::ReadPin(ADS131M02_DRDYPin))
+		if (!IoPort::ReadPin(ADS131M02_DRDYPin))
 		{
 			do
 			{
@@ -88,7 +88,7 @@ static void DataReadyCallback(CallbackParameter param) noexcept
 					// This should never happen
 					delay(10);
 				}
-			} while (IoPort::ReadPin(ADS131M02_DRDYPin));
+			} while (!IoPort::ReadPin(ADS131M02_DRDYPin));
 
 			// Calculate the load cell output
 			const uint32_t channel0Data = ((uint32_t)regReadBuffer[3] << 16) | ((uint32_t)regReadBuffer[4] << 8) | regReadBuffer[5];
