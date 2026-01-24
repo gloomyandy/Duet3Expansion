@@ -39,9 +39,9 @@ void LP5817::SetColour(uint32_t colour) noexcept
 			}
 			if (initialised)
 			{
-				Write8(LP5817_Register::out0_manual_pwm, (uint8_t)colour);
-				Write8(LP5817_Register::out1_manual_pwm, (uint8_t)(colour >> 8));
-				Write8(LP5817_Register::out2_manual_pwm, (uint8_t)(colour >> 16));
+				success = Write8(LP5817_Register::out0_manual_pwm, (uint8_t)colour)
+						&& Write8(LP5817_Register::out1_manual_pwm, (uint8_t)(colour >> 8))
+						&& Write8(LP5817_Register::out2_manual_pwm, (uint8_t)(colour >> 16));
 				currentColour = colour;
 			}
 			Release();													// release the bus

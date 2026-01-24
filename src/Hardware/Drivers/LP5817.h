@@ -56,6 +56,7 @@ private:
 
 	uint32_t currentColour = 0;
 	bool initialised = false;
+	bool success = false;			// for debugging
 };
 
 #endif
