@@ -35,7 +35,7 @@ private:
 		regmap_crc = 0x3e, reserved
 	};
 
-	enum class Ads131M02Command : uint32_t
+	enum class Ads131M02Command : uint16_t
 	{
 		nullCmd = 0,
 		reset = 0x0011,

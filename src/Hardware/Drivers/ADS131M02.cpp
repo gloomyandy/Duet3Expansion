@@ -23,13 +23,20 @@ extern "C" [[noreturn]] void AdcTaskStart(void* param) noexcept
 
 ADS131M02::ADS131M02() noexcept : SpiDevice(ADS131M02_SercomNumber, ADS131M02_DataInPad, ADS131M02_DataOutPad)
 {
+	SetDriveStrength(ADS131M02_GclkPin, 1);											// set high drive strength on ADC pin
+	SetDriveStrength(ADS131M02_SclkPin, 1);											// set high drive strength on SCLK pin
+	SetDriveStrength(ADS131M02_MosiPin, 1);											// set high drive strength on MOSI pin
+
 	SetPinMode(ADS131M02_CsPin, OUTPUT_HIGH);
 	SetPinFunction(ADS131M02_MosiPin, ADS131M02_SpiPinFunction);
 	SetPinFunction(ADS131M02_MisoPin, ADS131M02_SpiPinFunction);
 	SetPinFunction(ADS131M02_SclkPin, ADS131M02_SpiPinFunction);
 	SetPinMode(ADS131M02_DRDYPin, INPUT);
 	ConfigureGclk(ADA131M02_GclkNumber, GclkSource::dpll0, 120/8, true);			// set up 8MHz clock
-	SetPinFunction(ADS131M0_GclkPin, ADS131M0_GclkPinFunction);						// enable 8MHz clock on output pin
+	SetDriveStrength(ADS131M02_GclkPin, 1);											// set high drive strength on clock pin
+	SetPinFunction(ADS131M02_GclkPin, ADS131M0_GclkPinFunction);					// enable 8MHz clock on output pin
+
+	SetClockFrequencyAndMode(6'000'000, SpiMode::mode1);							// 6MHz SPI clock
 
 	// Reset the device
 	if (!SendSimpleCommand(Ads131M02Command::reset)) return;
@@ -105,35 +112,47 @@ static void DataReadyCallback(CallbackParameter param) noexcept
 // Send a simple command, not a read or write register
 bool ADS131M02::SendSimpleCommand(Ads131M02Command cmd) noexcept
 {
-	regWriteBuffer[0] = (uint32_t)cmd >> 24;
-	regWriteBuffer[1] =  (uint32_t)cmd >> 16;
-	regWriteBuffer[2] =  (uint32_t)cmd >> 8;
+	regWriteBuffer[0] = (uint16_t)cmd >> 8;
+	regWriteBuffer[1] =  (uint16_t)cmd & 0xFF;
+	regWriteBuffer[2] =  0;
 	memset(regWriteBuffer + 3, 0, sizeof(regWriteBuffer) - 3);
-	return TransceivePacket(regWriteBuffer, regReadBuffer, sizeof(regReadBuffer));
+	IoPort::WriteDigital(ADS131M02_CsPin, false);
+	const bool ret = TransceivePacket(regWriteBuffer, regReadBuffer, sizeof(regReadBuffer));
+	IoPort::WriteDigital(ADS131M02_CsPin, true);
+	rslt = ((uint16_t)regReadBuffer[0] << 8) | regReadBuffer[1];
+	return ret;
 }
 
 // Send the command to read a 16-bit register, need to do another transfer to actually read it
 bool ADS131M02::ReadRegister(Ads131M02Register regNum) noexcept
 {
-	const uint32_t cmd = (uint32_t)Ads131M02Command::rreg | ((uint32_t)regNum << 7);
-	regWriteBuffer[0] = (uint32_t)cmd >> 24;
-	regWriteBuffer[1] =  (uint32_t)cmd >> 16;
-	regWriteBuffer[2] =  (uint32_t)cmd >> 8;
+	const uint16_t cmd = (uint16_t)Ads131M02Command::rreg | ((uint16_t)regNum << 7);
+	regWriteBuffer[0] = cmd >> 8;
+	regWriteBuffer[1] =  cmd & 0xFF;
+	regWriteBuffer[2] =  0;
 	memset(regWriteBuffer + 3, 0, sizeof(regWriteBuffer) - 3);
-	return TransceivePacket(regWriteBuffer, regReadBuffer, sizeof(regReadBuffer));
+	IoPort::WriteDigital(ADS131M02_CsPin, false);
+	const bool ret = TransceivePacket(regWriteBuffer, regReadBuffer, sizeof(regReadBuffer));
+	IoPort::WriteDigital(ADS131M02_CsPin, true);
+	rslt = ((uint16_t)regReadBuffer[0] << 8) | regReadBuffer[1];
+	return ret;
 }
 
 // Write a 16-bit register
 bool ADS131M02::WriteRegister(Ads131M02Register regNum, uint16_t val) noexcept
 {
 	const uint32_t cmd = (uint32_t)Ads131M02Command::wreg | ((uint32_t)regNum << 7);
-	regWriteBuffer[0] = (uint32_t)cmd >> 24;
-	regWriteBuffer[1] =  (uint32_t)cmd >> 16;
-	regWriteBuffer[2] =  (uint32_t)cmd >> 8;
+	regWriteBuffer[0] = cmd >> 8;
+	regWriteBuffer[1] =  cmd & 0xFF;
+	regWriteBuffer[2] =  0;
 	regWriteBuffer[3] = val >> 8;
 	regWriteBuffer[4] = val & 0xFF;
 	memset(regWriteBuffer + 5, 0, sizeof(regWriteBuffer) - 5);
-	return TransceivePacket(regWriteBuffer, regReadBuffer, sizeof(regReadBuffer));
+	IoPort::WriteDigital(ADS131M02_CsPin, false);
+	const bool ret = TransceivePacket(regWriteBuffer, regReadBuffer, sizeof(regReadBuffer));
+	IoPort::WriteDigital(ADS131M02_CsPin, true);
+	rslt = ((uint16_t)regReadBuffer[0] << 8) | regReadBuffer[1];
+	return ret;
 }
 
 #endif
