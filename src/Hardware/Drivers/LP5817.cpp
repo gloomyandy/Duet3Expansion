@@ -32,7 +32,7 @@ void LP5817::SetColour(uint32_t colour) noexcept
 							&& Write8(LP5817_Register::out2_dc, CurrentSetting[2])
 							// The manual PWM registers default to 0 after reset, so no need to write them
 							&& Write8(LP5817_Register::dev_config1, 0x07)					// enable R,G,B
-							&& Write8(LP5817_Register::update_cmd, 0x01)					// update dev_config1
+							&& Write8(LP5817_Register::update_cmd, 0x55)					// update dev_config1
 							&& Read8(LP5817_Register::out1_dc, temp)
 							&& temp == CurrentSetting[1]
 							;
