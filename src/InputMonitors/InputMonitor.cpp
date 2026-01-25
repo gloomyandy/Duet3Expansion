@@ -20,6 +20,10 @@
 # include <CommandProcessing/MFMHandler.h>
 #endif
 
+#if SUPPORT_ADS131M02
+# include <Platform/Platform.h>
+#endif
+
 InputMonitor * volatile InputMonitor::monitorsList = nullptr;
 ReadWriteLock InputMonitor::listLock;
 
@@ -71,6 +75,13 @@ bool InputMonitor::Activate() noexcept
 				ok = ScanningSensorHandler::Activate(*this);
 			}
 			else
+#endif
+#if SUPPORT_ADS131M02
+				if (port.IsAds131M02())
+				{
+					ok = Platform::GetLoadCellAdc()->Activate(*this);
+				}
+				else
 #endif
 			{
 				state = port.ReadAnalog() >= threshold;

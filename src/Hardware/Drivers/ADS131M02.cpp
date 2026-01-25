@@ -66,6 +66,11 @@ ADS131M02::ADS131M02() noexcept : SpiDevice(ADS131M02_SercomNumber, ADS131M02_Da
 	adcTask->Create(AdcTaskStart, "ADS131M02", (void*)this, TaskPriority::Ads131M02);
 }
 
+bool ADS131M02::Activate(const InputMonitor& monitor) noexcept
+{
+	return true;	//***TEMPORARY!
+}
+
 static void DataReadyCallback(CallbackParameter param) noexcept
 {
 	TaskBase *const task = (TaskBase *)param.vp;
@@ -91,15 +96,15 @@ static void DataReadyCallback(CallbackParameter param) noexcept
 			} while (!IoPort::ReadPin(ADS131M02_DRDYPin));
 
 			// Calculate the load cell output
-			const uint32_t channel0Data = ((uint32_t)regReadBuffer[3] << 16) | ((uint32_t)regReadBuffer[4] << 8) | regReadBuffer[5];
-			const uint32_t channel1Data = ((uint32_t)regReadBuffer[6] << 16) | ((uint32_t)regReadBuffer[7] << 8) | regReadBuffer[8];
+			/*const uint32_t*/ channel0Data = ((uint32_t)regReadBuffer[3] << 24) | ((uint32_t)regReadBuffer[4] << 16) | ((uint32_t)regReadBuffer[5] << 8);
+			/*const uint32_t*/ channel1Data = ((uint32_t)regReadBuffer[6] << 24) | ((uint32_t)regReadBuffer[7] << 16) | ((uint32_t)regReadBuffer[8] << 8);
 			if (channel1Data < 256)
 			{
 				compositeData = 0;					// error, the reference channel should read much higher, such a low value may cause the result of the next division to exceed 32 bits
 			}
 			else
 			{
-				compositeData = (int32_t)(((int64_t)channel0Data << 24)/channel1Data);
+				compositeData = (int32_t)(((int64_t)(int32_t)channel0Data << 16)/(int32_t)channel1Data);
 			}
 		}
 

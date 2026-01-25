@@ -13,6 +13,7 @@
 #if SUPPORT_ADS131M02
 
 #include <Hardware/SpiDevice.h>
+#include <InputMonitors/InputMonitor.h>
 
 class ADS131M02 : public SpiDevice
 {
@@ -20,6 +21,7 @@ public:
 	ADS131M02() noexcept;
 	bool DeviceOk() const noexcept { return initOk; }
 	int32_t GetLatestData() const noexcept { return compositeData; }			// no lock needed because 32-bit data access is atomic
+	bool Activate(const InputMonitor& monitor) noexcept;
 
 	[[noreturn]] void TaskLoop() noexcept;
 
@@ -55,6 +57,8 @@ private:
 	uint8_t regReadBuffer[3 * 4];							// we always transfer four 24-bit words
 
 	uint16_t rslt;											// the result of the previous command
+	uint32_t channel0Data;
+	uint32_t channel1Data;
 	int32_t compositeData = 0;
 
 	Task<TaskStackWords> *adcTask = nullptr;
