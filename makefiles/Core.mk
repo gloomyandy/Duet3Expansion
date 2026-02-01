@@ -2,7 +2,7 @@ CORE_DIR = $(COREN2G_DIR)
 
 
 #Core
-CORE_SRC_DIRS  = src src/RP2040 src/RP2040/include/$(MCU_DIR)/pico_base src/RP2040/MCP2517FD
+CORE_SRC_DIRS  = src src/RP2040 src/RP2040/include/$(MCU_DIR)/pico_base src/RP2040/MCP2517FD src/RP2040/SharedSPI
 
 CORE_SRC = $(CORE_DIR) $(addprefix $(CORE_DIR)/, $(CORE_SRC_DIRS))
 CORE_INCLUDES = $(addprefix -I, $(CORE_SRC))
