@@ -37,9 +37,7 @@
 #define TMC51xx_USES_SHARED_SPI	1
 #define SUPPORT_SLOW_DRIVERS	0
 #define SUPPORT_DELTA_MOVEMENT	0
-#define NUM_HW_SPI_CHANNELS		1
-#define NUM_PIO_SPI_CHANNELS	0
-#define NUM_SPI_CHANNELS		(NUM_HW_SPI_CHANNELS + NUM_PIO_SPI_CHANNELS)
+#define NUM_SPI_CHANNELS		1
 
 #define SUPPORT_TMC51xx			1
 #define SUPPORT_TMC2660			0
@@ -112,21 +110,19 @@ constexpr Pin LedPins[] = { GpioPin(15) };
 constexpr bool LedActiveHigh = false;
 
 #if NUM_SPI_CHANNELS > 0
-
 // Shared SPI pin connections
-constexpr uint8_t SspiSpiInstanceNumber = 0;
-constexpr Pin SSPI0MosiPin = GpioPin(3);
-constexpr GpioPinFunction SSPI0MosiPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPI0SclkPin = GpioPin(2);
-constexpr GpioPinFunction SSPI0SclkPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPI0MisoPin = GpioPin(0);
-constexpr GpioPinFunction SSPI0MisoPinPeriphMode = GpioPinFunction::Spi;
+// 													Clock, Miso, Mosi
+constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(2), GpioPin(0), GpioPin(3)}};
+#endif
+
+#if SUPPORT_SPI_SENSORS
+constexpr unsigned int Temperature_SpiChannel = 0;
+#endif
 
 #if TMC51xx_USES_SHARED_SPI
 constexpr unsigned int Tmc5160_SpiChannel = 0;
 #endif
 
-#endif
 
 #if SUPPORT_LIS3DH
 

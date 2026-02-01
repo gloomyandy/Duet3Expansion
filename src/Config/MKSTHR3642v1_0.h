@@ -80,9 +80,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(7) };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		0
-#define NUM_HW_SPI_CHANNELS		1
-#define NUM_PIO_SPI_CHANNELS	0
-#define NUM_SPI_CHANNELS		(NUM_HW_SPI_CHANNELS + NUM_PIO_SPI_CHANNELS)
+#define NUM_SPI_CHANNELS		0
 #define SUPPORT_I2C_SENSORS		0
 #define SUPPORT_LIS3DH			0
 #define SUPPORT_DHT_SENSOR		0
@@ -120,15 +118,6 @@ constexpr Pin LedPins[] = { PIN_TODO };
 constexpr bool LedActiveHigh = false;
 
 #if NUM_SPI_CHANNELS > 0
-
-// Shared SPI pin connections
-constexpr uint8_t SspiSpiInstanceNumber = 1;
-constexpr Pin SSPI0MosiPin = GpioPin(NoPin);
-constexpr GpioPinFunction SSPI0MosiPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPI0SclkPin = GpioPin(NoPin);
-constexpr GpioPinFunction SSPI0SclkPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPI0MisoPin = GpioPin(NoPin);
-constexpr GpioPinFunction SSPI0MisoPinPeriphMode = GpioPinFunction::Spi;
 
 #endif
 

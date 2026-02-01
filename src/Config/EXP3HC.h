@@ -113,12 +113,12 @@ constexpr Pin TempSensePins[NumThermistorInputs] = { PortCPin(3), PortBPin(8), P
 // Shared SPI
 constexpr uint8_t SspiSercomNumber = 6;
 constexpr uint32_t SspiDataInPad = 3;
-constexpr Pin SSPI0MosiPin = PortCPin(16);
-constexpr GpioPinFunction SSPI0MosiPinPeriphMode = GpioPinFunction::C;
-constexpr Pin SSPI0SclkPin = PortCPin(17);
-constexpr GpioPinFunction SSPI0SclkPinPeriphMode = GpioPinFunction::C;
-constexpr Pin SSPI0MisoPin = PortCPin(19);
-constexpr GpioPinFunction SSPI0MisoPinPeriphMode = GpioPinFunction::C;
+constexpr Pin SSPIMosiPin = PortCPin(16);
+constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::C;
+constexpr Pin SSPISclkPin = PortCPin(17);
+constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::C;
+constexpr Pin SSPIMisoPin = PortCPin(19);
+constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
 constexpr unsigned int Temperature_SpiChannel = 0;
 
 constexpr auto sercom1cPad0 = SercomIo::sercom1c + SercomIo::pad0;

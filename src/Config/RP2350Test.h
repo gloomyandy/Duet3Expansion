@@ -32,9 +32,7 @@
 #define SUPPORT_LED_STRIPS		1
 #define SUPPORT_PIO_NEOPIXEL	1
 #define SUPPORT_INPUT_SHAPING	1
-#define NUM_HW_SPI_CHANNELS		0
-#define NUM_PIO_SPI_CHANNELS	1
-#define NUM_SPI_CHANNELS		(NUM_HW_SPI_CHANNELS + NUM_PIO_SPI_CHANNELS)
+#define NUM_SPI_CHANNELS		3
 
 // Drivers configuration
 #define SUPPORT_DRIVERS			1
@@ -81,7 +79,7 @@ constexpr Pin Tmc51xxCSPins[] = {GpioPin(15)};
 constexpr Pin GlobalTmc51xxCSPin = GpioPin(15);
 #endif
 #if TMC51xx_USES_SHARED_SPI
-constexpr unsigned int Tmc5160_SpiChannel = 0;
+constexpr unsigned int Tmc5160_SpiChannel = 2;
 #endif
 
 constexpr Pin DirectionPins[NumDrivers] = { GpioPin(6) };
@@ -220,22 +218,26 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico u
 constexpr Pin LedPins[] = { GpioPin(5) };
 constexpr bool LedActiveHigh = false;
 
-#if NUM_HW_SPI_CHANNELS > 0
+#if NUM_SPI_CHANNELS > 0
 // Shared SPI pin connections
-constexpr uint8_t SspiSpiInstanceNumber = 0;
-constexpr Pin SSPI0MosiPin = GpioPin(3);
-constexpr GpioPinFunction SSPI0MosiPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPI0SclkPin = GpioPin(2);
-constexpr GpioPinFunction SSPI0SclkPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPI0MisoPin = GpioPin(4);
-constexpr GpioPinFunction SSPI0MisoPinPeriphMode = GpioPinFunction::Spi;
+// 													Clock, Miso, Mosi
+#if 0
+constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(2), GpioPin(4), GpioPin(3)},
+													{GpioPin(10), GpioPin(8), GpioPin(11)} };
+#endif
+constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{NoPin, NoPin, NoPin},
+													{GpioPin(10), GpioPin(8), GpioPin(11)},
+													{GpioPin(2), GpioPin(4), GpioPin(3)}};
+
+#if SUPPORT_CAN && USE_SPICAN
+
+constexpr uint8_t spiCan_SpiChannel = 1;
+constexpr Pin SPICanCsPin = GpioPin(9);
+
 #endif
 
-#if NUM_PIO_SPI_CHANNELS > 0
-constexpr Pin SPIOSPI0MosiPin = GpioPin(3);
-constexpr Pin SPIOSPI0SclkPin = GpioPin(2);
-constexpr Pin SPIOSPI0MisoPin = GpioPin(4);
 #endif
+
 
 #if SUPPORT_I2C_SENSORS
 
@@ -369,16 +371,4 @@ const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interru
 const NvicPriority NvicPriorityAdc = 3;
 const NvicPriority NvicPriorityUSB = 3;
 
-#if SUPPORT_CAN && USE_SPICAN
-
-constexpr uint8_t spiCanSpiInstanceNumber = 1;
-constexpr Pin SPICanMosiPin = GpioPin(11);
-constexpr GpioPinFunction SPICanMosiPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SPICanSclkPin = GpioPin(10);
-constexpr GpioPinFunction SPICanSclkPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SPICanMisoPin = GpioPin(8);
-constexpr GpioPinFunction SPICanMisoPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SPICanCsPin = GpioPin(9);
-
-#endif
 #endif /* SRC_CONFIG_RP2350TEST_H_ */

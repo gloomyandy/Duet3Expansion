@@ -120,12 +120,12 @@ constexpr bool LedActiveHigh = true;
 // Shared SPI using pins PA16,17,18. If changing this, also change the available pins in the pin table.
 constexpr uint8_t SspiSercomNumber = 1;
 constexpr uint32_t SspiDataInPad = 2;
-constexpr Pin SSPI0MosiPin = PortAPin(16);
-constexpr GpioPinFunction SSPI0MosiPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPI0SclkPin = PortAPin(17);
-constexpr GpioPinFunction SSPI0SclkPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPI0MisoPin = PortAPin(18);
-constexpr GpioPinFunction SSPI0MisoPinPeriphMode = GpioPinFunction::Spi;
+constexpr Pin SSPIMosiPin = PortAPin(16);
+constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::Spi;
+constexpr Pin SSPISclkPin = PortAPin(17);
+constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::Spi;
+constexpr Pin SSPIMisoPin = PortAPin(18);
+constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::Spi;
 
 #endif
 
@@ -230,7 +230,7 @@ const NvicPriority NvicPriorityAdc = 3;
 const NvicPriority NvicPriorityUSB = 3;
 
 #if SUPPORT_CAN && USE_SPICAN
-constexpr uint8_t spiCanSpiInstanceNumber = 0;
+constexpr uint8_t spiCan_SpiChannel = 0;
 constexpr Pin SPICanMosiPin = GpioPin(19);
 constexpr GpioPinFunction SPICanMosiPinPeriphMode = GpioPinFunction::Spi;
 constexpr Pin SPICanSclkPin = GpioPin(18);

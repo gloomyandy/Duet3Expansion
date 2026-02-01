@@ -57,6 +57,9 @@
 #if RPXXXX
 # include <hardware/structs/watchdog.h>
 # include <hardware/structs/sysinfo.h>
+# if NUM_SPI_CHANNELS > 0
+#  include<SPI.h>
+# endif
 #endif
 
 #if SAME5x
@@ -681,23 +684,15 @@ void Platform::Init()
 #if NUM_SPI_CHANNELS > 0
 # if SAME5x || SAMC21
 	// Set the pin functions
-	SetPinFunction(SSPI0MosiPin, SSPI0MosiPinPeriphMode);
-	SetPinFunction(SSPI0SclkPin, SSPI0SclkPinPeriphMode);
-	SetPinFunction(SSPI0MisoPin, SSPI0MisoPinPeriphMode);
+	SetPinFunction(SSPIMosiPin, SSPIMosiPinPeriphMode);
+	SetPinFunction(SSPISclkPin, SSPISclkPinPeriphMode);
+	SetPinFunction(SSPIMisoPin, SSPIMisoPinPeriphMode);
 	sharedSpi[0] = new SharedSpiDevice(SspiSercomNumber, SspiDataInPad);
 # elif RPXXXX
+	for(size_t spichan = 0; spichan < NUM_SPI_CHANNELS; spichan++)
 	{
-		size_t spichan = 0;
-#  if NUM_HW_SPI_CHANNELS > 0
-	// Set the pin functions
-	SetPinFunction(SSPI0MosiPin, SSPI0MosiPinPeriphMode);
-	SetPinFunction(SSPI0SclkPin, SSPI0SclkPinPeriphMode);
-	SetPinFunction(SSPI0MisoPin, SSPI0MisoPinPeriphMode);
-	sharedSpi[spichan++] = new SharedHWSpiDevice(SspiSpiInstanceNumber);
-#  endif
-#  if NUM_PIO_SPI_CHANNELS > 0
-	sharedSpi[spichan++] = new SharedPIOSpiDevice();
-#  endif
+		SPI::getSPIDevice((SPIChannel)spichan)->initPins(SSPIPins[spichan][0], SSPIPins[spichan][1], SSPIPins[spichan][2]);
+		sharedSpi[spichan] = new SharedSpiDevice((SPIChannel)spichan);
 	}
 # else
 # error Unsupported processor
@@ -766,6 +761,13 @@ void Platform::InitMinimal()
 	InitVinMonitor();
 	InitialiseInterrupts();
 #if RPXXXX
+# if NUM_SPI_CHANNELS > 0
+	for(size_t spichan = 0; spichan < NUM_SPI_CHANNELS; spichan++)
+	{
+		SPI::getSPIDevice((SPIChannel)spichan)->initPins(SSPIPins[spichan][0], SSPIPins[spichan][1], SSPIPins[spichan][2]);
+		sharedSpi[spichan] = new SharedSpiDevice((SPIChannel)spichan);
+	}
+# endif
 	serialUSB.Start(NoPin);
 #endif
 	CanInterface::Init(GetCanAddress(), UseAlternateCanPins, false);

@@ -26,9 +26,7 @@
 #define USE_SERIAL_DEBUG		1
 #define SUPPORT_LED_STRIPS		0
 #define SUPPORT_PIO_NEOPIXEL	0
-#define NUM_HW_SPI_CHANNELS		1
-#define NUM_PIO_SPI_CHANNELS	0
-#define NUM_SPI_CHANNELS		(NUM_HW_SPI_CHANNELS + NUM_PIO_SPI_CHANNELS)
+#define NUM_SPI_CHANNELS		2
 #define SUPPORT_INPUT_SHAPING	1
 
 // Drivers configuration
@@ -96,17 +94,15 @@ constexpr Pin ConfigureDriverIOPin = GpioPin(29);	// GPIO29 DRV_UART_ENA - pull 
 
 #define PIN_TODO				GpioPin(NoPin)	//TEMPORARY! Used when we haven't assigned a pin yet.
 
-#if NUM_HW_SPI_CHANNELS > 0
-
+#if NUM_SPI_CHANNELS > 0
 // Shared SPI pin connections
-constexpr uint8_t SspiSpiInstanceNumber = 0;
-constexpr Pin SSPI0MosiPin = GpioPin(7);
-constexpr GpioPinFunction SSPI0MosiPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPI0SclkPin = GpioPin(6);
-constexpr GpioPinFunction SSPI0SclkPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPI0MisoPin = GpioPin(4);
-constexpr GpioPinFunction SSPI0MisoPinPeriphMode = GpioPinFunction::Spi;
+// 													Clock, Miso, Mosi
+constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(6), GpioPin(4), GpioPin(7)},
+													{GpioPin(10), GpioPin(8), GpioPin(11)} };
+#endif
 
+#if SUPPORT_SPI_SENSORS
+constexpr unsigned int Temperature_SpiChannel = 0;
 #endif
 
 
@@ -216,13 +212,7 @@ const NvicPriority NvicPriorityUSB  = 3;
 #if SUPPORT_CAN && USE_SPICAN
 
 // CAN controller SPI configuration based on netlist
-constexpr uint8_t spiCanSpiInstanceNumber = 1;
-constexpr Pin SPICanMosiPin = GpioPin(11);			// CAN_MOSI -> GPIO11
-constexpr GpioPinFunction SPICanMosiPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SPICanSclkPin = GpioPin(10);			// CAN_SCK -> GPIO10
-constexpr GpioPinFunction SPICanSclkPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SPICanMisoPin = GpioPin(8);			// CAN_MISO -> GPIO8
-constexpr GpioPinFunction SPICanMisoPinPeriphMode = GpioPinFunction::Spi;
+constexpr uint8_t spiCan_SpiChannel = 1;
 constexpr Pin SPICanCsPin = GpioPin(9);				// CAN_CS -> GPIO9
 constexpr Pin SPICanIntPin = GpioPin(13);			// CAN_INT -> GPIO17
 

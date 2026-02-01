@@ -154,14 +154,14 @@ constexpr Pin Lis3dhInt1Pin = PortAPin(13);					// same as io1.in
 // Shared SPI (used for interface to encoders, not for temperature sensors)
 constexpr uint8_t SspiSercomNumber = 1;
 constexpr uint32_t SspiDataInPad = 3;
-constexpr Pin SSPI0MosiPin = PortAPin(16);
-constexpr GpioPinFunction SSPI0MosiPinPeriphMode = GpioPinFunction::C;
+constexpr Pin SSPIMosiPin = PortAPin(16);
+constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::C;
 
-constexpr Pin SSPI0SclkPin = PortAPin(17);
-constexpr GpioPinFunction SSPI0SclkPinPeriphMode = GpioPinFunction::C;
+constexpr Pin SSPISclkPin = PortAPin(17);
+constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::C;
 
-constexpr Pin SSPI0MisoPin = PortAPin(19);
-constexpr GpioPinFunction SSPI0MisoPinPeriphMode = GpioPinFunction::C;
+constexpr Pin SSPIMisoPin = PortAPin(19);
+constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
 
 // Position decoder
 constexpr Pin PositionDecoderPins[] = { PortAPin(24), PortAPin(25), PortBPin(22) };
