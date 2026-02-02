@@ -23,7 +23,7 @@ extern "C" [[noreturn]] void AdcTaskStart(void* param) noexcept
 
 ADS131M02::ADS131M02() noexcept : SpiDevice(ADS131M02_SercomNumber, ADS131M02_DataInPad, ADS131M02_DataOutPad)
 {
-	SetDriveStrength(ADS131M02_GclkPin, 1);											// set high drive strength on ADC pin
+	SetDriveStrength(ADS131M02_GclkPin, 1);											// set high drive strength on ADC clock pin
 	SetDriveStrength(ADS131M02_SclkPin, 1);											// set high drive strength on SCLK pin
 	SetDriveStrength(ADS131M02_MosiPin, 1);											// set high drive strength on MOSI pin
 
@@ -34,7 +34,7 @@ ADS131M02::ADS131M02() noexcept : SpiDevice(ADS131M02_SercomNumber, ADS131M02_Da
 	SetPinMode(ADS131M02_DRDYPin, INPUT);
 	ConfigureGclk(ADA131M02_GclkNumber, GclkSource::dpll0, 120/8, true);			// set up 8MHz clock
 	SetDriveStrength(ADS131M02_GclkPin, 1);											// set high drive strength on clock pin
-	SetPinFunction(ADS131M02_GclkPin, ADS131M0_GclkPinFunction);					// enable 8MHz clock on output pin
+	SetPinFunction(ADS131M02_GclkPin, ADS131M02_GclkPinFunction);					// enable 8MHz clock on output pin
 
 	SetClockFrequencyAndMode(6'000'000, SpiMode::mode1);							// 6MHz SPI clock
 
