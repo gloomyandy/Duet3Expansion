@@ -1126,11 +1126,17 @@ void Platform::InitThermistorFilter(const IoPort& port) noexcept
 	const int adcFilterChannel = GetAveragingFilterIndex(port);
 	if (adcFilterChannel >= 0)
 	{
-		ThermistorAveragingFilter& filter = thermistorFilters[adcFilterChannel];
-		filter.Init((1u << AnalogIn::AdcBits) - 1);
-		const AdcInput adcChan = IoPort::PinToAdcInput(port.GetPin(), port.UseAlternateConfig());
-		AnalogIn::EnableChannel(adcChan, filter.CallbackFeedIntoFilter, CallbackParameter(&filter), 1);
+		InitThermistorFilter(port.GetPin(), (unsigned int)adcFilterChannel, port.UseAlternateConfig());
 	}
+}
+
+// This one is used for direct initialisation of a filter channel
+void Platform::InitThermistorFilter(Pin p, unsigned int adcFilterChannel, bool useAlternateConfig) noexcept
+{
+	ThermistorAveragingFilter& filter = thermistorFilters[adcFilterChannel];
+	filter.Init((1u << AnalogIn::AdcBits) - 1);
+	const AdcInput adcChan = IoPort::PinToAdcInput(p, useAlternateConfig);
+	AnalogIn::EnableChannel(adcChan, filter.CallbackFeedIntoFilter, CallbackParameter(&filter), 1);
 }
 
 ThermistorAveragingFilter *Platform::GetAdcFilter(unsigned int filterNumber)

@@ -26,7 +26,7 @@ public:
 
 	static constexpr const char *TypeName = "thermopile_tpis.object";
 
-	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 1; }
+	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 2; }
 	TemperatureError GetAdditionalOutput(float& t, uint8_t outputNumber) noexcept override;
 
 	void Poll() override;
@@ -49,9 +49,18 @@ private:
 	float recipTempCalibM;
 	float recipCorrectedK;
 
-	// Latest readings
+	// Latest raw readings from the sensor
 	float ambientTemperatureDegK;
 	float objectTemperatureDegK;
+
+	// Parameters for the thermistor that measures the surround temperature
+	float r25, beta, shC, seriesR;										// configured parameters
+	float shA, shB;														// derived parameters
+	float environmentTemperature = BadErrorTemperature;
+	TemperatureError thermistorResult = TemperatureError::notReady;
+
+	static constexpr unsigned int AdcOversampleBits = 2;				// we use 2-bit oversampling
+	static constexpr int32_t OversampledAdcRange = 1u << (AnalogIn::AdcBits + AdcOversampleBits);	// The readings we pass in should be in range 0..(AdcRange - 1)
 };
 
 // This class represents the TPiS_1T_1086_L5_5 ambient temperature sensor
@@ -62,6 +71,19 @@ public:
 	~TPiS_AmbientTemperatureSensor() noexcept;
 
 	static constexpr const char *TypeName = "thermopile_tpis.ambient";
+
+private:
+	static SensorTypeDescriptor typeDescriptor;
+};
+
+// This class represents the environment temperature sensor
+class TPiS_EnvironmentTemperatureSensor : public AdditionalOutputSensor
+{
+public:
+	TPiS_EnvironmentTemperatureSensor(unsigned int sensorNum) noexcept;
+	~TPiS_EnvironmentTemperatureSensor() noexcept;
+
+	static constexpr const char *TypeName = "thermopile_tpis.environment";
 
 private:
 	static SensorTypeDescriptor typeDescriptor;

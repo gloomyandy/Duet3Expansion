@@ -151,8 +151,13 @@ namespace Platform
 #endif
 
 #if SUPPORT_THERMISTORS
+	// These are the functions normally used when a port name has been specified
 	int GetAveragingFilterIndex(const IoPort&) noexcept;
 	void InitThermistorFilter(const IoPort& port) noexcept;
+
+	// This one is used for direct initialisation of a filter channel
+	void InitThermistorFilter(Pin p, unsigned int adcFilterChannel, bool useAlternateConfig) noexcept;
+
 	ThermistorAveragingFilter *GetAdcFilter(unsigned int filterNumber) noexcept;
 
 # if HAS_VREF_MONITOR

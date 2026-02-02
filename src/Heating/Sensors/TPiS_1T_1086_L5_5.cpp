@@ -10,21 +10,34 @@
 #if SUPPORT_TPiS_1T_1086_L5_5
 
 #include <CanMessageGenericParser.h>
+#include <Platform/Platform.h>
 
 // Sensor type descriptors
 TemperatureSensor::SensorTypeDescriptor TPiS_1T_1086_L5_5::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new TPiS_1T_1086_L5_5(sensorNum); } );
 TemperatureSensor::SensorTypeDescriptor TPiS_AmbientTemperatureSensor::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new TPiS_AmbientTemperatureSensor(sensorNum); } );
+TemperatureSensor::SensorTypeDescriptor TPiS_EnvironmentTemperatureSensor::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new TPiS_EnvironmentTemperatureSensor(sensorNum); } );
 
 TPiS_1T_1086_L5_5::TPiS_1T_1086_L5_5(unsigned int sensorNum) noexcept
-	: I2CTemperatureSensor(sensorNum, TypeName, TPiS_I2CChannel, TPiS_I2CAddress)
+	: I2CTemperatureSensor(sensorNum, TypeName, TPiS_I2CChannel, TPiS_I2CAddress),
+	  r25(ThermistorR25[envThermistorAdcFilterChannel]),
+	  beta(ThermistorBeta[envThermistorAdcFilterChannel]),
+	  shC(ThermistorShC[envThermistorAdcFilterChannel]),
+	  seriesR(ThermistorSeriesR[envThermistorAdcFilterChannel])
 {
 }
 
 // Configure this temperature sensor
 GCodeResult TPiS_1T_1086_L5_5::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
 {
+	bool changed = false;
 	if (parser.HasParameter('P'))
 	{
+		changed = true;
+
+		// Configure the environment thermistor
+		SetPinMode(TempSensePins[envThermistorAdcFilterChannel], PinMode::AIN);
+		Platform::InitThermistorFilter(TempSensePins[envThermistorAdcFilterChannel], envThermistorAdcFilterChannel, false);
+
 		// Initialise the sensor
 		bool ok;
 		// Set the slave address of the sensor. After power up it only responds to the General Call address.
@@ -76,19 +89,41 @@ GCodeResult TPiS_1T_1086_L5_5::Configure(const CanMessageGenericParser& parser, 
 				recipCorrectedK = (powf((float)TempCalibTobj1 - ABS_ZERO, 4.2) - powf(25.0 - ABS_ZERO, 4.2)) / ((float)(int32_t)(TempCalibUout1 - TempCalibUo) * FovAndEmissivityCorrection);
 
 				ambientTemperatureDegK = objectTemperatureDegK = 0.0;
-				return GCodeResult::ok;
 			}
-			reply.printf("Error in thermopile sensor EPROM: %02x %02x %04x %04x", epromBuffer[0], epromBuffer[31], calculatedChecksum, storedChecksum);
+			else
+			{
+				reply.printf("Error in thermopile sensor EPROM: %02x %02x %04x %04x", epromBuffer[0], epromBuffer[31], calculatedChecksum, storedChecksum);
+				return GCodeResult::error;
+			}
+		}
+		else
+		{
+			reply.copy("Failed to initialise thermopile sensor");
 			return GCodeResult::error;
 		}
-		reply.copy("Failed to initialise thermopile sensor");
-		return GCodeResult::error;
+	}
+
+	// Get the environment thermistor parameters. We don't currently allow the series resistance to be configured because we don't expect it to change.
+	if (parser.GetFloatParam('B', beta))
+	{
+		shC = 0.0;						// if user changes B and doesn't define C, assume C=0
+		changed = true;
+	}
+	changed = parser.GetFloatParam('C', shC) || changed;
+	changed = parser.GetFloatParam('T', r25) || changed;
+
+	if (changed)
+	{
+		shB = 1.0/beta;
+		const float lnR25 = logf(r25);
+		shA = 1.0/(25.0 - ABS_ZERO) - shB * lnR25 - shC * lnR25 * lnR25 * lnR25;
 	}
 	else
 	{
 		CopyBasicDetails(reply);
-		return GCodeResult::ok;
+		reply.catf(", environment thermistor: T:%.1f B:%.1f C:%.2e R:%.1f", (double)r25, (double)beta, (double)shC, (double)seriesR);
 	}
+	return GCodeResult::ok;
 }
 
 void TPiS_1T_1086_L5_5::Poll() noexcept
@@ -124,6 +159,44 @@ void TPiS_1T_1086_L5_5::Poll() noexcept
 	{
 		SetResult(TemperatureError::ioError);
 	}
+
+	// Read the environment thermistor
+	const volatile ThermistorAveragingFilter * const tempFilter = Platform::GetAdcFilter(envThermistorAdcFilterChannel);
+	if (tempFilter->IsValid())
+	{
+		const int32_t averagedTempReading = tempFilter->GetSum()/(tempFilter->NumAveraged() >> AdcOversampleBits);
+		if (OversampledAdcRange <= averagedTempReading)
+		{
+			SetResult(ABS_ZERO, TemperatureError::openCircuit);
+		}
+		else
+		{
+			const float denom = (float)(OversampledAdcRange - averagedTempReading) - 0.5;
+			float resistance = seriesR * ((float)averagedTempReading + 0.5)/denom;
+			const float logResistance = logf(resistance);
+			const float recipT = shA + shB * logResistance + shC * logResistance * logResistance * logResistance;
+			const float temp = (recipT > 0.0) ? (1.0/recipT) + ABS_ZERO : BadErrorTemperature;
+
+			// It's hard to distinguish between an open circuit and a cold high-resistance thermistor.
+			// So we treat a temperature below -5C as an open circuit, unless we are using a low-resistance thermistor.
+			if (temp < MinimumConnectedTemperature && resistance > seriesR * 100)
+			{
+				// Assume thermistor is disconnected
+				environmentTemperature = ABS_ZERO;
+				thermistorResult = TemperatureError::openCircuit;
+			}
+			else
+			{
+				environmentTemperature = temp;
+				thermistorResult = TemperatureError::ok;
+			}
+		}
+	}
+	else
+	{
+		environmentTemperature = BadErrorTemperature;
+		thermistorResult = TemperatureError::notReady;
+	}
 }
 
 TemperatureError TPiS_1T_1086_L5_5::GetAdditionalOutput(float &t, uint8_t outputNumber) noexcept
@@ -135,6 +208,10 @@ TemperatureError TPiS_1T_1086_L5_5::GetAdditionalOutput(float &t, uint8_t output
 		t = ambientTemperatureDegK + ABS_ZERO;
 		break;
 
+	case 2:
+		t = environmentTemperature;
+		break;
+
 	default:
 		t = BadErrorTemperature;
 		return TemperatureError::invalidOutputNumber;
@@ -143,13 +220,22 @@ TemperatureError TPiS_1T_1086_L5_5::GetAdditionalOutput(float &t, uint8_t output
 }
 
 // TPiS_AmbientTemperatureSensor members
-
 TPiS_AmbientTemperatureSensor::TPiS_AmbientTemperatureSensor(unsigned int sensorNum) noexcept
 	: AdditionalOutputSensor(sensorNum, TypeName, false)
 {
 }
 
 TPiS_AmbientTemperatureSensor::~TPiS_AmbientTemperatureSensor() noexcept
+{
+}
+
+// TPiS_EnvironmentTemperatureSensor members
+TPiS_EnvironmentTemperatureSensor::TPiS_EnvironmentTemperatureSensor(unsigned int sensorNum) noexcept
+	: AdditionalOutputSensor(sensorNum, TypeName, false)
+{
+}
+
+TPiS_EnvironmentTemperatureSensor::~TPiS_EnvironmentTemperatureSensor() noexcept
 {
 }
 
