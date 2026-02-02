@@ -210,7 +210,7 @@ TemperatureError TPiS_1T_1086_L5_5::GetAdditionalOutput(float &t, uint8_t output
 
 	case 2:
 		t = environmentTemperature;
-		break;
+		return thermistorResult;
 
 	default:
 		t = BadErrorTemperature;
