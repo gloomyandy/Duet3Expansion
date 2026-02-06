@@ -47,7 +47,6 @@ protected:
 	void ResetHeater() noexcept override;
 	HeaterMode GetMode() const noexcept override { return mode; }
 	GCodeResult SwitchOn(const StringRef& reply) noexcept override;		// Turn the heater on and set the mode
-	GCodeResult UpdateModel(const StringRef& reply) noexcept override;	// Called when the heater model has been changed
 
 private:
 	void SetHeater(float power) const noexcept;					// Power is a fraction in [0,1]

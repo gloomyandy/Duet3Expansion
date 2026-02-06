@@ -66,7 +66,6 @@ protected:
 	virtual void ResetHeater() noexcept;
 	virtual HeaterMode GetMode() const noexcept = 0;
 	virtual GCodeResult SwitchOn(const StringRef& reply) noexcept = 0;
-	virtual GCodeResult UpdateModel(const StringRef& reply) noexcept = 0;
 
 	int GetSensorNumber() const noexcept { return sensorNumber; }
 	void SetSensorNumber(int sn) noexcept { sensorNumber = sn; }

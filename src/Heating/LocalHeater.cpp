@@ -243,12 +243,6 @@ void LocalHeater::SwitchOff() noexcept
 	lastExtrusionTemperatureBoost = 0.0;
 }
 
-// This is called when the heater model has been updated. Returns true if successful.
-GCodeResult LocalHeater::UpdateModel(const StringRef& reply) noexcept
-{
-	return GCodeResult::ok;
-}
-
 // This is the main heater control loop function
 void LocalHeater::Spin() noexcept
 {

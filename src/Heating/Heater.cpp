@@ -78,11 +78,7 @@ GCodeResult Heater::SetModel(const CanMessageHeaterModelV2& msg, const StringRef
 	const bool rslt = model.SetParameters(msg, reply);
 	if (rslt)
 	{
-		if (model.IsEnabled())
-		{
-			return UpdateModel(reply);
-		}
-		else
+		if (!model.IsEnabled())
 		{
 			ResetHeater();
 		}
