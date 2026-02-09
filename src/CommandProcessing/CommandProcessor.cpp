@@ -621,7 +621,7 @@ void CommandProcessor::Spin()
 			rslt = Heat::ProcessM307V2(buf->msg.heaterModelV2, replyRef);
 			break;
 
-		case CanMessageType::setHeaterTemperature:
+		case CanMessageType::setHeaterTemperatureV1:
 			requestId = buf->msg.setTemp.requestId;
 			rslt = Heat::SetTemperature(buf->msg.setTemp, replyRef);
 			break;
@@ -643,7 +643,7 @@ void CommandProcessor::Spin()
 
 		case CanMessageType::m950Heater:
 			requestId = buf->msg.generic.requestId;
-			rslt = Heat::ConfigureHeater(buf->msg.generic, replyRef);
+			rslt = Heat::ConfigureHeater(buf->msg.generic, replyRef, extra);
 			break;
 
 		case CanMessageType::heaterFeedForwardV1:
@@ -786,6 +786,11 @@ void CommandProcessor::Spin()
 			requestId = buf->msg.setHeaterMonitors.requestId;
 			rslt = Heat::SetHeaterMonitors(buf->msg.setHeaterMonitors, replyRef);
 			break;
+
+		case CanMessageType::setDefaultHeaterModel:
+			Heat::SetDefaultHeaterModel(*buf);
+			CanInterface::SendAndFree(buf);
+			return;
 
 		case CanMessageType::createInputMonitorV1:
 			requestId = buf->msg.createInputMonitorV1.requestId;

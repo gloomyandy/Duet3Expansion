@@ -437,7 +437,7 @@ void Heat::Exit() noexcept
 	}
 }
 
-GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply, uint8_t& extra) noexcept
 {
 	CanMessageGenericParser parser(msg, M950HeaterParams);
 	uint16_t heater;
@@ -474,6 +474,7 @@ GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef&
 		if (Succeeded(rslt))
 		{
 			heaters[heater] = newHeater;
+			extra = (newHeater->IsCustom()) ? 1 : 0;			// set lowest bit of 'extra' if it is a known heater type with custom parameters
 		}
 		else
 		{
@@ -570,6 +571,24 @@ GCodeResult Heat::SetFaultDetection(const CanMessageSetHeaterFaultDetectionParam
 				: UnknownHeater(msg.heater, reply);
 }
 
+// Set and report the default model for a heater
+void Heat::SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept
+{
+	const auto h = FindHeater(buf.msg.setDefaultHeaterModel.heater);
+	if (h.IsNotNull())
+	{
+		h->SetDefaultHeaterModel(buf);
+	}
+	else
+	{
+		const CanRequestId rid = buf.msg.setDefaultHeaterModel.requestId;
+		const CanAddress src = buf.id.Src();
+		auto msg = buf.SetupResponseMessage<CanMessageStandardReply>(rid, CanInterface::GetCanAddress(), src);
+		msg->resultCode = (uint32_t)GCodeResult::error;
+		strcpy(msg->text, "unknown heater");
+	}
+}
+
 GCodeResult Heat::SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heater);
@@ -639,7 +658,7 @@ void Heat::ResetFault(int heater) noexcept
 	}
 }
 
-GCodeResult Heat::SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept
+GCodeResult Heat::SetTemperature(const CanMessageSetHeaterTemperatureV1& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heaterNumber);
 	return (h.IsNotNull()) ? h->SetTemperature(msg, reply) : UnknownHeater(msg.heaterNumber, reply);
