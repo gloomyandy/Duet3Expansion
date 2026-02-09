@@ -46,7 +46,6 @@ bool FopDt::SetParameters(const CanMessageHeaterModelV2& msg, const StringRef& r
 		else
 		{
 			CalcPidConstants(100.0);
-
 		}
 		enabled = true;
 		return true;
