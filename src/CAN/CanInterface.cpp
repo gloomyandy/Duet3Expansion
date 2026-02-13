@@ -483,6 +483,7 @@ CanMessageBuffer *CanInterface::ProcessReceivedMessage(CanMessageBuffer *buf) no
 					{
 						const int32_t stepsWanted = buf->msg.revertPosition.finalStepCounts[index++];
 						const int32_t stepsTaken = moveInstance->GetLastMoveStepsTaken(driver);
+						//debugPrintf("Driver %u revert, wanted %ld taken %ld\n", driver, stepsWanted, stepsTaken);
 						if (((stepsWanted >= 0 && stepsTaken > stepsWanted) || (stepsWanted <= 0 && stepsTaken < stepsWanted)))
 						{
 							steps = stepsWanted - stepsTaken;
