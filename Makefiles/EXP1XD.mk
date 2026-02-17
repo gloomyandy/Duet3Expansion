@@ -13,10 +13,15 @@ MCU_ARCH := cortex-m0plus
 FPU_FLAGS :=
 
 # Compiler defines
-DEFINES := -D__SAMC21G18A__ -DEXP1XD -DRTOS
+# C files only get noexcept define
+C_DEFINES := -D__SAMC21G18A__ -Dnoexcept=
+
+# C++ files get board-specific defines
+CXX_DEFINES := -D__SAMC21G18A__ -DEXP1XD -DRTOS
 
 # Optimization and debug
-OPT := -Os
+OPT := -O3
+LDOPT := -Os
 DEBUG_FLAGS ?=
 CFLAGS_EXTRA := $(DEBUG_FLAGS)
 CXXFLAGS_EXTRA := $(DEBUG_FLAGS)
@@ -46,8 +51,18 @@ SRC_DIRS := \
 	src/Movement/StepperDrivers \
 	src/Platform
 
-# Include paths
-INCLUDES := \
+# Include paths for C files (minimal set)
+C_INCLUDES := \
+	-I$(WORKSPACE)/Qfplib-M0-full \
+	-I$(WORKSPACE)/CoreN2G \
+	-I$(WORKSPACE)/FreeRTOS \
+	-I$(CURDIR)/src \
+	-I$(WORKSPACE)/CoreN2G/src \
+	-I$(WORKSPACE)/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include \
+	-I$(WORKSPACE)/CoreN2G/src/atmel/SAMC21_DFP/1.2.176/samc21/include
+
+# Include paths for C++ files (full set)
+CXX_INCLUDES := \
 	-I$(WORKSPACE)/Qfplib-M0-full \
 	-I$(WORKSPACE)/CoreN2G \
 	-I$(WORKSPACE)/FreeRTOS \
@@ -95,22 +110,20 @@ FP_WRAP_FLAGS := \
 # Common flags
 COMMON_FLAGS := -c -mcpu=$(MCU_ARCH) -mthumb -fno-math-errno -mfp16-format=ieee \
 	-ffunction-sections -fdata-sections -nostdlib -Wundef -Wdouble-promotion -Werror=return-type \
-	-fsingle-precision-constant -Werror
+	-fsingle-precision-constant -Wall -Werror
 
-# C flags
-CFLAGS := $(COMMON_FLAGS) $(OPT) $(DEFINES) -Dnoexcept= $(INCLUDES) -std=gnu99 \
-	$(CFLAGS_EXTRA)
+# C flags (matching Eclipse, no extra warnings)
+CFLAGS := $(COMMON_FLAGS) $(OPT) $(C_DEFINES) $(C_INCLUDES) -std=gnu99 $(CFLAGS_EXTRA)
 
 # Build directory
 BUILD_DIR := $(BOARD)
 
-# C++ flags
-CXXFLAGS := $(COMMON_FLAGS) $(OPT) $(DEFINES) $(INCLUDES) -std=gnu++17 \
-	-fno-threadsafe-statics -fno-rtti -fno-exceptions -Wfloat-conversion \
-	-fstack-usage $(CXXFLAGS_EXTRA)
+# C++ flags (matching Eclipse, no extra warnings)
+CXXFLAGS := $(COMMON_FLAGS) $(OPT) $(CXX_DEFINES) $(CXX_INCLUDES) -std=gnu++17 \
+	-fno-threadsafe-statics -fno-rtti -fno-exceptions -Wfloat-conversion $(CXXFLAGS_EXTRA)
 
 # Linker flags
-LDFLAGS := $(OPT) --specs=nano.specs -Wl,--gc-sections -Wl,--entry=Reset_Handler \
+LDFLAGS := $(LDOPT) --specs=nano.specs -Wl,--gc-sections -Wl,--entry=Reset_Handler \
 	-Wl,--fatal-warnings -Wl,--no-warn-rwx-segment -mcpu=$(MCU_ARCH) \
 	-T$(LINKER_SCRIPT) -Wl,-Map,$(CURDIR)/$(BUILD_DIR)/$(BINARY).map,--cref $(FP_WRAP_FLAGS)
 
@@ -130,9 +143,14 @@ DEPS := $(OBJS:.o=.d)
 ELF := $(BUILD_DIR)/$(BINARY).elf
 BIN := $(BUILD_DIR)/$(BINARY).bin
 
+# Pre-build step (touch Version.cpp like Eclipse does)
+.PHONY: pre-build-$(BOARD)
+pre-build-$(BOARD):
+	$(Q)touch -c $(CURDIR)/src/Version.cpp
+
 # Default target
 .PHONY: $(BOARD)
-$(BOARD): $(BIN)
+$(BOARD): pre-build-$(BOARD) $(BIN)
 	$(Q)echo ""
 	$(Q)echo "Build complete for $(BOARD):"
 	$(Q)$(SIZE) $(ELF)
@@ -165,7 +183,6 @@ $(BUILD_DIR)/%.o: %.c
 $(BUILD_DIR)/%.o: %.cpp
 	$(Q)echo "  CXX     $<"
 	$(Q)mkdir -p $(dir $@)
-	$(Q)touch -c $(CURDIR)/src/Version.cpp
 	$(Q)$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 # Clean target
