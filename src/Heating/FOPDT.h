@@ -14,7 +14,7 @@
 #include <HeaterModel.h>
 
 class StringRef;
-class CanMessageHeaterModelV2;
+class CanMessageHeaterModelV3;
 
 // This is how PID parameters are stored internally
 struct PidParameters
@@ -40,7 +40,7 @@ public:
 	FopDt() noexcept;
 
 	void Reset() noexcept;
-	bool SetParameters(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
+	bool SetParameters(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept;
 	void SetDefaultModel(const HeaterModel& model) noexcept;
 	const HeaterModel& GetBasicModel() const noexcept { return basicModel; }
 
@@ -74,7 +74,6 @@ private:
 
 	HeaterModel basicModel;
 	float maxPwm;
-	float standardVoltage;					// power voltage reading at which tuning was done, or 0 if unknown
 	bool enabled;
 	bool inverted;
 	bool pidParametersOverridden;

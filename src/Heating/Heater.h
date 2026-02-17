@@ -17,7 +17,7 @@
 class HeaterMonitor;
 class CanMessageGenericParser;
 class CanMessageSetHeaterTemperatureV1;
-class CanMessageHeaterModelV2;
+class CanMessageHeaterModelV3;
 class CanMessageSetHeaterMonitors;
 class CanMessageHeaterTuningCommand;
 class CanMessageSetHeaterFaultDetectionParameters;
@@ -57,7 +57,7 @@ public:
 	void SetHeaterMonitoring(HeaterMonitor *h) noexcept;
 
 	const FopDt& GetModel() const noexcept { return model; }			// Get the process model
-	GCodeResult SetModel(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
+	GCodeResult SetModel(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept;
 
 	bool IsHeaterEnabled() const noexcept								// Is this heater enabled?
 		{ return model.IsEnabled(); }

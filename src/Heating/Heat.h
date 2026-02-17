@@ -19,7 +19,7 @@
 class TemperatureSensor;
 class FopDt;
 struct CanMessageGeneric;
-struct CanMessageHeaterModelV2;
+struct CanMessageHeaterModelV3;
 struct CanMessageSetHeaterFaultDetectionParameters;
 struct CanMessageSetHeaterMonitors;
 struct CanMessageHeaterFeedForwardV1;
@@ -37,7 +37,7 @@ namespace Heat
 
 	GCodeResult ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply, uint8_t& extra) noexcept;
 	GCodeResult ProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
-	GCodeResult ProcessM307V2(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
+	GCodeResult ProcessM307(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept;
 	GCodeResult SetFaultDetection(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept;
 	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;
 

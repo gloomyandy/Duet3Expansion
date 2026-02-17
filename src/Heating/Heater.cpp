@@ -74,7 +74,7 @@ float Heater::GetHighestTemperatureLimit() const noexcept
 }
 
 // This function may be overridden in class LocalHeater if the heater characteristics are fixed
-GCodeResult Heater::SetModel(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept
+GCodeResult Heater::SetModel(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept
 {
 	const bool rslt = model.SetParameters(msg, reply);
 	if (rslt)

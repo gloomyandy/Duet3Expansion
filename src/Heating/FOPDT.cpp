@@ -15,27 +15,21 @@ FopDt::FopDt() noexcept
 }
 
 // Check the model parameters are sensible, if they are then save them and return true. If not then write an error message to reply and return false.
-bool FopDt::SetParameters(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept
+bool FopDt::SetParameters(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept
 {
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
 	const char *const err =
-		  (msg.heatingRate/msg.basicCoolingRate < 0.1) ? "estimated temperature rise too small"					// minimum 10C temperature rise (same as with earlier heater model)
-		: (msg.fanCoolingRate < 0.0) ? "fan reduces cooling rate"
-		: (msg.coolingRateExponent < 1.0 || msg.coolingRateExponent > 1.6) ? "cooling rate exponent out of range"
-		: (msg.deadTime <= 0.0099) ? "dead time too small"
-		: (msg.deadTime * msg.basicCoolingRate > 50.0) ? "dead time too close to cooling time constant"			// dead time less than half the cooling time constant
+		  (msg.basicModel.heatingRate/msg.basicModel.basicCoolingRate < 0.1) ? "estimated temperature rise too small"					// minimum 10C temperature rise (same as with earlier heater model)
+		: (msg.basicModel.fanCoolingRate < 0.0) ? "fan reduces cooling rate"
+		: (msg.basicModel.coolingRateExponent < 1.0 || msg.basicModel.coolingRateExponent > 1.6) ? "cooling rate exponent out of range"
+		: (msg.basicModel.deadTime <= 0.0099) ? "dead time too small"
+		: (msg.basicModel.deadTime * msg.basicModel.basicCoolingRate > 50.0) ? "dead time too close to cooling time constant"			// dead time less than half the cooling time constant
 		: (msg.maxPwm <= 0.0099 || msg.maxPwm > 1.0) ? "PWM out of range"
 		: nullptr;
 	if (err == nullptr)
 	{
-		basicModel.heatingRate = msg.heatingRate;
-		basicModel.basicCoolingRate = msg.basicCoolingRate;
-		basicModel.fanCoolingRate = msg.fanCoolingRate;
-		basicModel.coolingRateExponent = msg.coolingRateExponent;
-		basicModel.deadTime = msg.deadTime;
-		basicModel.usePid = msg.usePid;
+		basicModel = msg.basicModel;
 		maxPwm = msg.maxPwm;
-		standardVoltage = msg.standardVoltage;
 		inverted = msg.inverted;
 		pidParametersOverridden = msg.pidParametersOverridden;
 
@@ -66,7 +60,6 @@ void FopDt::SetDefaultModel(const HeaterModel& model) noexcept
 	basicModel.zero = 0;
 
 	maxPwm = 1.0;
-	standardVoltage = 0.0;
 	inverted = pidParametersOverridden = false;
 	CalcPidConstants(basicModel.typicalTemperature);
 	enabled = true;
@@ -136,7 +129,7 @@ void FopDt::CalcPidConstants(float targetTemperature) noexcept
 		const float temperatureRise = max<float>(targetTemperature - NormalAmbientTemperature, 1.0);		// avoid division by zero!
 		const float averageCoolingRatePerDegC = GetCoolingRate(temperatureRise, 0.2)/temperatureRise;
 		loadChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
-		loadChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.25)/(1.14 * powf(basicModel.deadTime, 0.75));		// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
+		loadChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.25)/(1.14 * powf(basicModel.deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
 		loadChangeParams.tD = basicModel.deadTime * 0.7;
 
 		setpointChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
@@ -148,9 +141,9 @@ void FopDt::CalcPidConstants(float targetTemperature) noexcept
 // Adjust the actual heater PWM for supply voltage
 float FopDt::CorrectPwmForVoltage(float requiredPwm, float actualVoltage) const noexcept
 {
-	if (requiredPwm < maxPwm && standardVoltage >= 10.0 && actualVoltage >= 10.0)
+	if (requiredPwm < maxPwm && basicModel.standardVoltage >= 10.0 && actualVoltage >= 10.0)
 	{
-		requiredPwm *= fsquare(standardVoltage/actualVoltage);
+		requiredPwm *= fsquare(basicModel.standardVoltage/actualVoltage);
 	}
 	return min<float>(requiredPwm, maxPwm);
 }
