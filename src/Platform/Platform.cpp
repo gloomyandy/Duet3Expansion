@@ -624,8 +624,10 @@ void Platform::Init()
 		}
 	}
 
+	InitialiseInterrupts();											// set interrupt priorities before we enable any interrupts
+
 #if defined(SAMMYC21) && USE_SERIAL_DEBUG
-	uart0.begin(115200);						// set up the UART with the same baud rate as the bootloader
+	uart0.begin(115200);											// set up the UART with the same baud rate as the bootloader
 #elif defined(RPI_PICO) || defined(FLY36RRF)
 	serialUSB.Start(NoPin);
 #elif USE_SERIAL_DEBUG
@@ -748,8 +750,6 @@ void Platform::Init()
 #endif
 
 	uniqueId.SetFromCurrentBoard();
-
-	InitialiseInterrupts();
 
 #if SUPPORT_LIS3DH
 # ifdef TOOL1LC

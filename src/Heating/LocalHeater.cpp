@@ -61,6 +61,57 @@ LocalHeater::~LocalHeater()
 	}
 }
 
+// Returns true if this is a custom heater with unusual default model parameters
+bool LocalHeater::IsCustom() const noexcept
+{
+#if SUPPORT_INDUCTIVE_HEATER
+	return ports[0].GetPin() == InductiveHeaterPin;
+#else
+	return false;
+#endif
+}
+
+// Set and return the default model for this heater
+void LocalHeater::SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept
+{
+	const CanRequestId rid = buf.msg.setDefaultHeaterModel.requestId;
+	const CanAddress src = buf.id.Src();
+#if SUPPORT_INDUCTIVE_HEATER
+	if (ports[0].GetPin() == InductiveHeaterPin)
+	{
+		model.SetDefaultModel(InductiveHeaterDefaultModel);
+	}
+	else
+#endif
+	{
+		switch ((HeaterFunction)buf.msg.setDefaultHeaterModel.heaterFunction)
+		{
+		default:
+			{
+				auto msg1 = buf.SetupResponseMessage<CanMessageStandardReply>(rid, CanInterface::GetCanAddress(), src);
+				strcpy(msg1->text, "unknown heater function");
+				msg1->resultCode = (uint32_t)GCodeResult::error;
+			}
+			return;
+
+		case HeaterFunction::tool:
+			model.SetDefaultModel(DefaultToolHeaterModel);
+			break;
+
+		case HeaterFunction::bed:
+			model.SetDefaultModel(DefaultBedHeaterModel);
+			break;
+
+		case HeaterFunction::chamber:
+			model.SetDefaultModel(DefaultChamberHeaterModel);
+			break;
+		}
+	}
+	auto msg2 = buf.SetupResponseMessage<CanMessageHeaterModelReport>(rid, CanInterface::GetCanAddress(), src);
+	msg2->model = model.GetBasicModel();
+	msg2->resultCode = (uint32_t)GCodeResult::ok;
+}
+
 float LocalHeater::GetTemperature() const noexcept
 {
 	return temperature;
@@ -105,7 +156,7 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 #if SUPPORT_INDUCTIVE_HEATER
 		if (ports[0].GetPin() == InductiveHeaterPin)
 		{
-			model.SetDefaultInductiveNozzleHeaterParameters();			// override the default model parameters
+			model.SetDefaultModel(InductiveHeaterDefaultModel);			// override the default model parameters
 		}
 #endif
 	}
@@ -243,12 +294,6 @@ void LocalHeater::SwitchOff() noexcept
 	lastExtrusionTemperatureBoost = 0.0;
 }
 
-// This is called when the heater model has been updated. Returns true if successful.
-GCodeResult LocalHeater::UpdateModel(const StringRef& reply) noexcept
-{
-	return GCodeResult::ok;
-}
-
 // This is the main heater control loop function
 void LocalHeater::Spin() noexcept
 {
@@ -333,7 +378,7 @@ void LocalHeater::Spin() noexcept
 							const float expectedTemperatureRise = expectedRate * actualInterval;
 							const float actualTemperatureRise = temperature - lastTemperatureValue;
 							// Bed heaters sometimes have much slower long term heating rates than their short term heating rates, so allow them a lower measured heating rate
-							if (actualTemperatureRise < expectedTemperatureRise * ((IsBedOrChamber()) ? MinBedTemperatureRiseFactor : MinToolTemperatureRiseFactor))
+							if (actualTemperatureRise < expectedTemperatureRise * MinTemperatureRiseFactors[(unsigned int)GetFunction()])
 							{
 								++heatingFaultCount;
 								if (heatingFaultCount * Heat::NormalHeaterPollInterval > GetMaxHeatingFaultTime() * SecondsToMillis)

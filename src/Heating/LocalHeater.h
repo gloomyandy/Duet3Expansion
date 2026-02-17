@@ -40,6 +40,8 @@ public:
 	void Suspend(bool sus) noexcept override;					// Suspend the heater to conserve power or while doing Z probing
 	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept override;
 	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept override;
+	bool IsCustom() const noexcept override;					// returns true if this is a custom heater with unusual default model parameters
+	void SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept override;	// set and return the default heater model
 
 	static bool GetTuningCycleData(CanMessageHeaterTuningReport& msg);	// get a heater tuning cycle report, if we have one
 
@@ -47,7 +49,6 @@ protected:
 	void ResetHeater() noexcept override;
 	HeaterMode GetMode() const noexcept override { return mode; }
 	GCodeResult SwitchOn(const StringRef& reply) noexcept override;		// Turn the heater on and set the mode
-	GCodeResult UpdateModel(const StringRef& reply) noexcept override;	// Called when the heater model has been changed
 
 private:
 	void SetHeater(float power) const noexcept;					// Power is a fraction in [0,1]

@@ -16,12 +16,13 @@
 
 class HeaterMonitor;
 class CanMessageGenericParser;
-class CanMessageSetHeaterTemperature;
-class CanMessageHeaterModelV2;
+class CanMessageSetHeaterTemperatureV1;
+class CanMessageHeaterModelV3;
 class CanMessageSetHeaterMonitors;
 class CanMessageHeaterTuningCommand;
 class CanMessageSetHeaterFaultDetectionParameters;
 class CanMessageHeaterFeedForwardV1;
+class CanMessageBuffer;
 
 class Heater
 {
@@ -43,8 +44,10 @@ public:
 	virtual float GetAccumulator() const noexcept = 0;					// get the inertial term accumulator
 	virtual GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept = 0;
 	virtual GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept = 0;
+	virtual bool IsCustom() const noexcept = 0;							// returns true if this is a custom heater with unusual default model parameters
+	virtual void SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept = 0;	// set and return the default heater model
 
-	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
+	GCodeResult SetTemperature(const CanMessageSetHeaterTemperatureV1& msg, const StringRef& reply) noexcept;
 
 	unsigned int GetHeaterNumber() const noexcept { return heaterNumber; }
 
@@ -54,7 +57,7 @@ public:
 	void SetHeaterMonitoring(HeaterMonitor *h) noexcept;
 
 	const FopDt& GetModel() const noexcept { return model; }			// Get the process model
-	GCodeResult SetModel(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
+	GCodeResult SetModel(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept;
 
 	bool IsHeaterEnabled() const noexcept								// Is this heater enabled?
 		{ return model.IsEnabled(); }
@@ -62,11 +65,12 @@ public:
 	bool IsTuning() const noexcept { return GetMode() >= HeaterMode::firstTuningMode; }
 	uint8_t GetModeByte() const noexcept { return (uint8_t)GetMode(); }
 
+	HeaterFunction GetFunction() const noexcept { return function; }
+
 protected:
 	virtual void ResetHeater() noexcept;
 	virtual HeaterMode GetMode() const noexcept = 0;
 	virtual GCodeResult SwitchOn(const StringRef& reply) noexcept = 0;
-	virtual GCodeResult UpdateModel(const StringRef& reply) noexcept = 0;
 
 	int GetSensorNumber() const noexcept { return sensorNumber; }
 	void SetSensorNumber(int sn) noexcept { sensorNumber = sn; }
@@ -74,7 +78,6 @@ protected:
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
 	uint32_t GetMaxBadTemperatureCount() const noexcept { return maxBadTemperatureCount; }
 	float GetTargetTemperature() const noexcept { return requestedTemperature; }
-	bool IsBedOrChamber() const noexcept { return isBedOrChamber; }
 	float GetHighestTemperatureLimit() const noexcept;
 
 	HeaterMonitor monitors[MaxMonitorsPerHeater];	// embedding them in the Heater uses less memory than dynamic allocation
@@ -91,7 +94,7 @@ private:
 	float maxTempExcursion;							// the maximum temperature excursion permitted while maintaining the setpoint
 	float maxHeatingFaultTime;						// how long a heater fault is permitted to persist before a heater fault is raised
 	uint32_t maxBadTemperatureCount;				// the number of consecutive bad sensor readings we allow before raising a fault
-	bool isBedOrChamber;							// true if this was a bed or chamber heater when it was switched on
+	HeaterFunction function;						// function of this heater when it was switched on
 };
 
 #endif /* SRC_HEATING_HEATER_H_ */
