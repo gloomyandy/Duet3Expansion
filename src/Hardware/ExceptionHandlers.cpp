@@ -207,4 +207,29 @@ void vAssertCalled(uint32_t line, const char *file) noexcept
 	);
 }
 
+namespace std
+{
+	// We need to define this function in order to use lambda functions with captures
+	[[noreturn]] void __throw_bad_function_call() { vAssertCalled(__LINE__, __FILE__); }
+
+	// This is referenced from std::atomic<T>::load in debug builds
+	[[noreturn]] void __glibcxx_assert_fail(const char * assertion, int line, const char * file, const char * function) { vAssertCalled((uint32_t)line, file); }
+}
+
+// The default terminate handler pulls in sprintf and lots of other functions, which makes the binary too large. So we replace it.
+[[noreturn]] void Terminate() noexcept
+{
+	SoftwareReset(SoftwareResetReason::terminateCalled, GetStackPointer());
+}
+
+extern "C" [[noreturn]] void __cxa_pure_virtual() noexcept
+{
+	SoftwareReset(SoftwareResetReason::pureOrDeletedVirtual, GetStackPointer());
+}
+
+extern "C" [[noreturn]] void __cxa_deleted_virtual() noexcept
+{
+	SoftwareReset(SoftwareResetReason::pureOrDeletedVirtual, GetStackPointer());
+}
+
 // End
