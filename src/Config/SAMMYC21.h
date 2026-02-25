@@ -68,7 +68,7 @@ constexpr Pin DirectionPins[NumDrivers] = { PortAPin(10) };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
-#define SUPPORT_I2C_SENSORS		1
+#define NUM_I2C_CHANNELS		1
 #define SUPPORT_LIS3DH			1
 #define SUPPORT_LDC1612			1
 #define SUPPORT_DHT_SENSOR		0
@@ -79,7 +79,8 @@ constexpr Pin DirectionPins[NumDrivers] = { PortAPin(10) };
 
 #define DIAG_SERCOM_NUMBER		5		// which SERCOM device we use for debugging output
 
-constexpr bool UseAlternateCanPins = true;
+constexpr unsigned int CANInstanceNumber = 0;
+constexpr bool UseLaterCanPins = true;
 
 constexpr size_t MaxPortsPerHeater = 1;
 
@@ -110,24 +111,26 @@ constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
 
 #endif
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 
 // I2C using pins PA22,23. If changing this, also change the available pins in the pin table.
-constexpr uint8_t I2CSercomNumber = 3;
-constexpr Pin I2CSDAPin = PortAPin(22);
-constexpr GpioPinFunction I2CSDAPinPeriphMode = GpioPinFunction::C;
-constexpr Pin I2CSCLPin = PortAPin(23);
-constexpr GpioPinFunction I2CSCLPinPeriphMode = GpioPinFunction::C;
-#define I2C_HANDLER		SERCOM3_Handler
+constexpr uint8_t I2C0SercomNumber = 3;
+constexpr Pin I2C0SDAPin = PortAPin(22);
+constexpr GpioPinFunction I2C0SDAPinPeriphMode = GpioPinFunction::C;
+constexpr Pin I2C0SCLPin = PortAPin(23);
+constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::C;
+#define I2C0_HANDLER		SERCOM3_Handler
 
 #endif
 
 #if SUPPORT_LIS3DH
 # define ACCELEROMETER_USES_SPI			(0)					// 0 if the accelerometer is connected via I2C, 1 if via SPI
+constexpr unsigned int Lis_I2CChannel = 0;
 constexpr Pin Lis3dhInt1Pin = PortAPin(13);
 #endif
 
 #if SUPPORT_LDC1612
+constexpr unsigned int LDC1612_I2CChannel = 0;
 constexpr uint16_t LDC1612_I2CAddress = 0x2B;				// pin 4 is tied high on the Grove board
 constexpr Pin LDC1612InterruptPin = PortAPin(21);
 #endif
@@ -169,7 +172,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::tc4_1,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		3,	"pa19"		},	// PA19
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pa20"		},	// PA20
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pa21"		},	// PA21 LDC1612 INT
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA22 I2C
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA23 I2C
 #else

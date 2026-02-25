@@ -57,6 +57,8 @@
 # include "FlyM2.h"
 #elif defined(RP2350TEST)
 # include "RP2350Test.h"
+#elif defined(TOOLINDX)
+# include "TOOLINDX.h"
 #else
 # error Board type not defined
 #endif
@@ -137,6 +139,14 @@ constexpr size_t NumDrivers = 0;
 
 #ifndef SUPPORT_TCA6408A
 # define SUPPORT_TCA6408A				0
+#endif
+
+#ifndef SUPPORT_TPiS_1T_1086_L5_5
+# define SUPPORT_TPiS_1T_1086_L5_5		0
+#endif
+
+#ifndef SUPPORT_INDUCTIVE_HEATER
+# define SUPPORT_INDUCTIVE_HEATER		0
 #endif
 
 #ifndef USE_SPICAN

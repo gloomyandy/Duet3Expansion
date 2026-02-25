@@ -69,7 +69,7 @@ constexpr Pin DiagPins[NumDrivers] = { PortAPin(21) };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		0							// we have no SPI temperature sensors but we need the SharedSPI channel for the encoder
-#define SUPPORT_I2C_SENSORS		0
+#define NUM_I2C_CHANNELS		0
 #define SUPPORT_DHT_SENSOR		0
 #define SUPPORT_SDADC			0
 #define NUM_SERIAL_PORTS		0
@@ -77,7 +77,8 @@ constexpr Pin DiagPins[NumDrivers] = { PortAPin(21) };
 #define USE_MPU					0
 #define USE_CACHE				1
 
-constexpr bool UseAlternateCanPins = true;
+constexpr unsigned int CANInstanceNumber = 0;
+constexpr bool UseLaterCanPins = false;
 
 constexpr size_t MaxPortsPerHeater = 1;
 

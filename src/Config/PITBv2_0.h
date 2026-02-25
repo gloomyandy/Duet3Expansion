@@ -72,7 +72,7 @@ constexpr Pin StepPins[NumDrivers] = { GpioPin(6), GpioPin(13) };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		0
-#define SUPPORT_I2C_SENSORS		0
+#define NUM_I2C_CHANNELS		0
 #define SUPPORT_LIS3DH			0
 #define SUPPORT_DHT_SENSOR		0
 

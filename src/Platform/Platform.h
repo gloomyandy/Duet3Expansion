@@ -22,7 +22,7 @@
 # include <Hardware/SharedSpiDevice.h>
 #endif
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 # include <Hardware/SharedI2CMaster.h>
 # include <Hardware/LISAccelerometer.h>
 #endif
@@ -104,9 +104,9 @@ namespace Platform
 	inline SharedSpiDevice& GetSharedSpi() noexcept { return *sharedSpi; }
 #endif
 
-#if SUPPORT_I2C_SENSORS
-	extern SharedI2CMaster *sharedI2C;
-	inline SharedI2CMaster& GetSharedI2C() noexcept { return *sharedI2C; }
+#if NUM_I2C_CHANNELS != 0
+	extern SharedI2CMaster *sharedI2C[NUM_I2C_CHANNELS];
+	inline SharedI2CMaster& GetSharedI2C(unsigned int n) noexcept { return *sharedI2C[n]; }
 #endif
 
 	// We don't really want the following to be writable, but we've no choice because we want to inline functions that access them

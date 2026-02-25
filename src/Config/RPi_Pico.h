@@ -80,7 +80,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(22) };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		0
-#define SUPPORT_I2C_SENSORS		0	//temporary
+#define NUM_I2C_CHANNELS		0	//temporary
 #define SUPPORT_LIS3DH			0	//temporary
 #define SUPPORT_DHT_SENSOR		0
 
@@ -89,7 +89,8 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(22) };
 
 #define PIN_TODO	GpioPin(NoPin)	//TEMPORARY! Used when we haven't assigned a pin yet.
 
-constexpr bool UseAlternateCanPins = false;
+constexpr unsigned int CANInstanceNumber = 0;		// not used for this configuration
+constexpr bool UseLaterCanPins = false;				// not used for this configuration
 
 constexpr size_t MaxPortsPerHeater = 1;
 
@@ -126,19 +127,20 @@ constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::Spi;
 
 #endif
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 
 // I2C using pins GPIO8,9. If changing this, also change the available pins in the pin table.
 constexpr uint8_t I2CSercomNumber = 0;			// the I2C unit number we use
-constexpr Pin I2CSDAPin = GpioPin(8);
-constexpr GpioPinFunction I2CSDAPinPeriphMode = GpioPinFunction::I2c;
-constexpr Pin I2CSCLPin = GpioPin(9);
-constexpr GpioPinFunction I2CSCLPinPeriphMode = GpioPinFunction::I2c;
+constexpr Pin I2C0SDAPin = GpioPin(8);
+constexpr GpioPinFunction I2C0SDAPinPeriphMode = GpioPinFunction::I2c;
+constexpr Pin I2C0SCLPin = GpioPin(9);
+constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::I2c;
 //#define I2C_HANDLER		SERCOM3_Handler
 
 #endif
 
 #if SUPPORT_LIS3DH
+constexpr unsigned int Lis_I2CChannel = 0;
 constexpr Pin Lis3dhInt1Pin = GpioPin(10);
 #endif
 
@@ -156,7 +158,7 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm2b,	AdcInput::none,		"gpio5"		},	// GPIO5
 	{ PwmOutput::pwm3a,	AdcInput::none,		"gpio6"		},	// GPIO6
 	{ PwmOutput::pwm3b,	AdcInput::none,		"gpio7"		},	// GPIO7
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 	{ PwmOutput::none,	AdcInput::none,		nullptr		},	// GPIO8 reserved for I2C SDA
 	{ PwmOutput::none,	AdcInput::none,		nullptr		},	// GPIO9 reserved for I2C SCL
 #else

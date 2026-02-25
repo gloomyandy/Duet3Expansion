@@ -161,7 +161,7 @@ namespace CanInterface
 }
 
 // Initialise this module and the CAN hardware
-void CanInterface::Init(CanAddress defaultBoardAddress, bool useAlternatePins, bool full) noexcept
+void CanInterface::Init(CanAddress defaultBoardAddress, unsigned int whichPort, bool useLaterPins, bool full) noexcept
 {
 	// Create the mutex
 	txFifoMutex.Create("CANtx");
@@ -182,31 +182,51 @@ void CanInterface::Init(CanAddress defaultBoardAddress, bool useAlternatePins, b
 
 	// Set up the CAN pins
 #if SAME5x
-	unsigned int whichPort;
-	if (useAlternatePins)
+	if (whichPort == 0)		// if using CAN0
 	{
-		SetPinFunction(PortAPin(23), GpioPinFunction::I);
-		SetPinFunction(PortAPin(22), GpioPinFunction::I);
-		whichPort = 0;											// use CAN0	on EXP1HCL
+		if (useLaterPins)
+		{
+			SetPinFunction(PortAPin(25), GpioPinFunction::I);
+			SetPinFunction(PortAPin(24), GpioPinFunction::I);
+		}
+		else
+		{
+			SetPinFunction(PortAPin(23), GpioPinFunction::I);
+			SetPinFunction(PortAPin(22), GpioPinFunction::I);
+		}
 	}
-	else
+	else					// using CAN1
 	{
-		SetPinFunction(PortBPin(13), GpioPinFunction::H);
-		SetPinFunction(PortBPin(12), GpioPinFunction::H);
-		whichPort = 1;											// use CAN1 on EXP3HC
+		if (useLaterPins)
+		{
+			SetPinFunction(PortBPin(15), GpioPinFunction::H);
+			SetPinFunction(PortBPin(14), GpioPinFunction::H);
+		}
+		else
+		{
+			SetPinFunction(PortBPin(13), GpioPinFunction::H);
+			SetPinFunction(PortBPin(12), GpioPinFunction::H);
+		}
 	}
 #elif SAMC21
-	if (useAlternatePins)
+	if (whichPort == 0)		// if using CAN0
 	{
-		SetPinFunction(PortBPin(23), GpioPinFunction::G);
-		SetPinFunction(PortBPin(22), GpioPinFunction::G);
+		if (useLaterPins)
+		{
+			SetPinFunction(PortBPin(23), GpioPinFunction::G);
+			SetPinFunction(PortBPin(22), GpioPinFunction::G);
+		}
+		else
+		{
+			SetPinFunction(PortAPin(25), GpioPinFunction::G);
+			SetPinFunction(PortAPin(24), GpioPinFunction::G);
+		}
 	}
-	else
+	else					// using CAN1 (only one set of pins available on SAMC21G)
 	{
-		SetPinFunction(PortAPin(25), GpioPinFunction::G);
-		SetPinFunction(PortAPin(24), GpioPinFunction::G);
+		SetPinFunction(PortBPin(11), GpioPinFunction::G);
+		SetPinFunction(PortBPin(10), GpioPinFunction::G);
 	}
-	const unsigned int whichPort = 0;							// we always use CAN0 on the SAMC21
 #endif
 
 	// Initialise the CAN hardware, using the timing data if it was valid

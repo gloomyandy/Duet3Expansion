@@ -296,12 +296,12 @@ void ScanningSensorHandler::Init(SharedI2CMaster& i2cDevice) noexcept
 		ConfigureGclk(GclkNumPA23, GclkSource::dpll, 3, true);
 		SetPinFunction(LDC1612ClockGenPin, GpioPinFunction::H);
 	}
-#elif defined(TOOL1RR)
+#elif defined(TOOL1RR) || defined(TOOLINDX)
 	// We use the 120MHz DPLL output divided by 4 to get 30MHz. It might be better to use 25MHz from the crystal directly for better stability.
 	static_assert(LDC1612::ClockFrequency == 25.0 || LDC1612::ClockFrequency == 30.0);
 	if constexpr(LDC1612::ClockFrequency == 25.0)
 	{
-		ConfigureGclk(GclkNumPB11, GclkSource::xosc0, 1, true);
+		ConfigureGclk(GclkNumPB11, (GclkSource)((uint8_t)GclkSource::xosc0 + AppGetXoscNumber()), 1, true);
 		SetPinFunction(LDC1612ClockGenPin, GpioPinFunction::M);
 	}
 	else if constexpr(LDC1612::ClockFrequency == 30.0)

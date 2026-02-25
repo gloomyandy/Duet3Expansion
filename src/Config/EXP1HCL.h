@@ -71,10 +71,10 @@ constexpr Pin DiagPins[NumDrivers] = { PortAPin(21) };
 #define SUPPORT_DMA_NEOPIXEL	0
 
 #ifdef DEBUG
-# define SUPPORT_I2C_SENSORS	0							// in debug mode the SERCOM is used for debugging
+# define NUM_I2C_CHANNELS		0							// in debug mode the SERCOM is used for debugging
 # define SUPPORT_LIS3DH			0
 #else
-# define SUPPORT_I2C_SENSORS	1
+# define NUM_I2C_CHANNELS		1
 # define SUPPORT_LIS3DH			1
 #endif
 
@@ -84,7 +84,8 @@ constexpr Pin DiagPins[NumDrivers] = { PortAPin(21) };
 #define USE_MPU					0
 #define USE_CACHE				1
 
-constexpr bool UseAlternateCanPins = true;
+constexpr unsigned int CANInstanceNumber = 0;
+constexpr bool UseLaterCanPins = false;
 
 constexpr size_t MaxPortsPerHeater = 1;
 
@@ -116,26 +117,27 @@ constexpr Pin ButtonPins[] = { PortAPin(20) };
 constexpr Pin EncoderCsPin = PortAPin(18);
 constexpr Pin MT6835CalPin = PortAPin(0);					// Pin spi.cs1 drives CAL on the MT6835 encoder board (version 2 EXP1HCL boards only)
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 
 // I2C using pins PA12,13
-constexpr uint8_t I2CSercomNumber = 2;
-constexpr Pin I2CSDAPin = PortAPin(12);
-constexpr GpioPinFunction I2CSDAPinPeriphMode = GpioPinFunction::C;
-constexpr Pin I2CSCLPin = PortAPin(13);
-constexpr GpioPinFunction I2CSCLPinPeriphMode = GpioPinFunction::C;
-# define I2C_HANDLER0		SERCOM2_0_Handler
-# define I2C_HANDLER1		SERCOM2_1_Handler
-# define I2C_HANDLER2		SERCOM2_2_Handler
-# define I2C_HANDLER3		SERCOM2_3_Handler
+constexpr uint8_t I2C0SercomNumber = 2;
+constexpr Pin I2C0SDAPin = PortAPin(12);
+constexpr GpioPinFunction I2C0SDAPinPeriphMode = GpioPinFunction::C;
+constexpr Pin I2C0SCLPin = PortAPin(13);
+constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::C;
+# define I2C0_HANDLER0		SERCOM2_0_Handler
+# define I2C0_HANDLER1		SERCOM2_1_Handler
+# define I2C0_HANDLER2		SERCOM2_2_Handler
+# define I2C0_HANDLER3		SERCOM2_3_Handler
 
 #endif
 
 #if SUPPORT_LIS3DH
 
-# if SUPPORT_I2C_SENSORS
+# if NUM_I2C_CHANNELS != 0
 
 #  define ACCELEROMETER_USES_SPI			(0)				// accelerometer is connected via I2C
+constexpr unsigned int Lis_I2CChannel = 0;
 constexpr Pin Lis3dhInt1Pin = PortAPin(20);					// same as io1.in
 
 # else

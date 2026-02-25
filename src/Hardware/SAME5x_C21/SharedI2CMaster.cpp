@@ -7,7 +7,7 @@
 
 #include <Hardware/SharedI2CMaster.h>
 
-#if SUPPORT_I2C_SENSORS && !RPXXXX
+#if NUM_I2C_CHANNELS != 0 && !RPXXXX
 
 #include "Serial.h"
 #include <AppNotifyIndices.h>
@@ -157,9 +157,9 @@ void SharedI2CMaster::Release() noexcept
 	}
 }
 
-void SharedI2CMaster::Diagnostics(const StringRef& reply) noexcept
+void SharedI2CMaster::Diagnostics(const StringRef& reply, unsigned int number) noexcept
 {
-	reply.lcatf("I2C bus errors %u, naks %u, contentions %u, other errors %u", busErrors, naks, contentions, otherErrors);
+	reply.lcatf("I2C %u bus errors %u, naks %u, contentions %u, other errors %u", number, busErrors, naks, contentions, otherErrors);
 	busErrors = naks = contentions = otherErrors = 0;
 }
 

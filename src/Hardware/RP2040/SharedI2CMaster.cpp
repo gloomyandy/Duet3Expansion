@@ -7,7 +7,7 @@
 
 #include <Hardware/SharedI2CMaster.h>
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 #define USE_I2C_DMA		(0)
 
 constexpr uint32_t DefaultSharedI2CClockFrequency = 400000;

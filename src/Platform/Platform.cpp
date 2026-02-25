@@ -26,7 +26,7 @@
 #include <Math/Isqrt.h>
 #include <Version.h>
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 # include <Hardware/SharedI2CMaster.h>
 #endif
 
@@ -110,8 +110,8 @@ namespace Platform
 	SharedSpiDevice *sharedSpi = nullptr;
 #endif
 
-#if SUPPORT_I2C_SENSORS
-	SharedI2CMaster *sharedI2C = nullptr;
+#if NUM_I2C_CHANNELS != 0
+	SharedI2CMaster *sharedI2C[NUM_I2C_CHANNELS] = { 0 };
 #endif
 
 #if HAS_VOLTAGE_MONITOR
@@ -237,15 +237,21 @@ namespace Platform
 	{
 		// Note, I2C interrupt priority is set up in the I2C driver
 
+#if SAME5x || SAMC21
+		if constexpr(CANInstanceNumber == 1)
+		{
+# if defined(ID_CAN1)
+			NVIC_SetPriority(CAN1_IRQn, NvicPriorityCan);
+# endif
+		}
+		else
+		{
+			NVIC_SetPriority(CAN0_IRQn, NvicPriorityCan);
+		}
+#endif
+
 #if SAME5x
 		NVIC_SetPriority(StepTcIRQn, NvicPriorityStep);
-# if defined(EXP3HC)
-		NVIC_SetPriority(CAN1_IRQn, NvicPriorityCan);
-# elif defined(EXP1HCL) || defined(M23CL) || defined(TOOL1RR) || defined(F3PTB)
-		NVIC_SetPriority(CAN0_IRQn, NvicPriorityCan);
-# else
-#  error CAN interrupt not specified
-# endif
 		// Set UART interrupt priority. Each SERCOM has up to 4 interrupts, numbered sequentially.
 # if NUM_SERIAL_PORTS >= 1
 		SetInterruptPriority(Serial0_IRQn, 4, NvicPriorityUart);
@@ -257,7 +263,6 @@ namespace Platform
 		SetInterruptPriority(EIC_0_IRQn, 16, NvicPriorityPins);
 #elif SAMC21
 		NVIC_SetPriority(StepTcIRQn, NvicPriorityStep);
-		NVIC_SetPriority(CAN0_IRQn, NvicPriorityCan);
 # if NUM_SERIAL_PORTS >= 1
 		NVIC_SetPriority(Serial0_IRQn, NvicPriorityUart);
 # endif
@@ -429,7 +434,7 @@ namespace Platform
 #if defined(EXP3HC)
 		const CanAddress switches = ReadBoardAddress();
 		return (switches == 0) ? CanId::Exp3HCFirmwareUpdateAddress : switches;
-#elif defined(TOOL1LC) || defined(TOOL1RR) || defined(F3PTB)
+#elif defined(TOOL1LC) || defined(TOOL1RR) || defined(F3PTB) || defined(TOOLINDX)
 		return CanId::ToolBoardDefaultAddress;
 #elif defined(SAMMYC21) || RPXXXX
 		return CanId::SammyC21DefaultAddress;
@@ -688,21 +693,33 @@ void Platform::Init()
 # endif
 #endif
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 # ifdef TOOL1LC
 	if (boardVariant != 0)
 # endif
 	{
-		SetPinFunction(I2CSDAPin, I2CSDAPinPeriphMode);
-		SetPinFunction(I2CSCLPin, I2CSCLPinPeriphMode);
+		SetPinFunction(I2C0SDAPin, I2C0SDAPinPeriphMode);
+		SetPinFunction(I2C0SCLPin, I2C0SCLPinPeriphMode);
 # if SAME5x || SAMC21
-		sharedI2C = new SharedI2CMaster(I2CSercomNumber);
+		sharedI2C[0] = new SharedI2CMaster(I2C0SercomNumber);
 # elif RPXXXX
-		sharedI2C = new SharedI2CMaster(I2CInstanceNumber);
+		sharedI2C[0] = new SharedI2CMaster(I2CInstanceNumber);
 # else
 # error Unsupported processor
 # endif
 	}
+#endif
+
+#if NUM_I2C_CHANNELS >= 2
+	SetPinFunction(I2C1SDAPin, I2C1SDAPinPeriphMode);
+	SetPinFunction(I2C1SCLPin, I2C1SCLPinPeriphMode);
+# if SAME5x || SAMC21
+		sharedI2C[1] = new SharedI2CMaster(I2C1SercomNumber);
+# elif RPXXXX
+#  error "RPXXXX does not currently support multiple I2C busses"
+# else
+# error Unsupported processor
+# endif
 #endif
 
 #ifdef ATEIO
@@ -721,7 +738,7 @@ void Platform::Init()
 # if ACCELEROMETER_USES_SPI
 		AccelerometerHandler::Init(*sharedSpi);
 # else
-		AccelerometerHandler::Init(*sharedI2C);
+		AccelerometerHandler::Init(GetSharedI2C(Lis_I2CChannel));
 # endif
 	}
 #endif
@@ -731,15 +748,15 @@ void Platform::Init()
 	if (boardVariant != 0)
 # endif
 	{
-		ScanningSensorHandler::Init(*sharedI2C);
+		ScanningSensorHandler::Init(GetSharedI2C(LDC1612_I2CChannel));
 	}
 #endif
 
 #if SUPPORT_AS5601
-	MFMHandler::Init(*sharedI2C);
+	MFMHandler::Init(GetSharedI2C(0));
 #endif
 
-	CanInterface::Init(GetCanAddress(), UseAlternateCanPins, true);
+	CanInterface::Init(GetCanAddress(), CANInstanceNumber, UseLaterCanPins, true);
 	lastPollTime = millis();
 }
 
@@ -752,7 +769,7 @@ void Platform::InitMinimal()
 #if RPXXXX
 	serialUSB.Start(NoPin);
 #endif
-	CanInterface::Init(GetCanAddress(), UseAlternateCanPins, false);
+	CanInterface::Init(GetCanAddress(), CANInstanceNumber, UseLaterCanPins, false);
 }
 
 void Platform::Spin()
@@ -1565,33 +1582,65 @@ uint8_t Platform::GetBoardVariant() noexcept
 #endif
 
 // Interrupt handlers
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 
 # if SAMC21
-#  ifndef I2C_HANDLER
-#   error "I2C_HANDLER not defined"
+#  ifndef I2C0_HANDLER
+#   error "I2C0_HANDLER not defined"
 #  endif
-	void I2C_HANDLER() noexcept
+	void I2C0_HANDLER() noexcept
 	{
-		Platform::sharedI2C->Interrupt();
+		Platform::sharedI2C[0]->Interrupt();
 	}
 # elif SAME5x
-#  if !defined(I2C_HANDLER0) || !defined(I2C_HANDLER1) || !defined(I2C_HANDLER3)
-#   error "I2C_HANDLER0, 1 or 3 not defined"
+#  if !defined(I2C0_HANDLER0) || !defined(I2C0_HANDLER1) || !defined(I2C0_HANDLER3)
+#   error "I2C0_HANDLER0, 1 or 3 not defined"
 #  endif
-	void I2C_HANDLER0() noexcept
+	void I2C0_HANDLER0() noexcept
 	{
-		Platform::sharedI2C->Interrupt();
+		Platform::sharedI2C[0]->Interrupt();
 	}
 
-	void I2C_HANDLER1() noexcept
+	void I2C0_HANDLER1() noexcept
 	{
-		Platform::sharedI2C->Interrupt();
+		Platform::sharedI2C[0]->Interrupt();
 	}
 
-	void I2C_HANDLER3() noexcept
+	void I2C0_HANDLER3() noexcept
 	{
-		Platform::sharedI2C->Interrupt();
+		Platform::sharedI2C[0]->Interrupt();
+	}
+# endif
+
+#endif
+
+#if NUM_I2C_CHANNELS >= 2
+
+# if SAMC21
+#  ifndef I2C1_HANDLER
+#   error "I2C1_HANDLER not defined"
+#  endif
+	void I2C1_HANDLER() noexcept
+	{
+		Platform::sharedI2C[1]->Interrupt();
+	}
+# elif SAME5x
+#  if !defined(I2C1_HANDLER0) || !defined(I2C1_HANDLER1) || !defined(I2C1_HANDLER3)
+#   error "I2C1_HANDLER0, 1 or 3 not defined"
+#  endif
+	void I2C1_HANDLER0() noexcept
+	{
+		Platform::sharedI2C[1]->Interrupt();
+	}
+
+	void I2C1_HANDLER1() noexcept
+	{
+		Platform::sharedI2C[1]->Interrupt();
+	}
+
+	void I2C1_HANDLER3() noexcept
+	{
+		Platform::sharedI2C[1]->Interrupt();
 	}
 # endif
 

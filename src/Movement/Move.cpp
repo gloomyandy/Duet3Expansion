@@ -57,6 +57,8 @@
 # endif
 #endif
 
+#define AVOID_SHORT_SEGMENTS	(1)
+
 #if 1	//debug
 unsigned int getCanMoveTimeoutErrs;
 #endif
@@ -872,18 +874,20 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 				break;															// new segment fits entirely before the existing one
 			}
 
+#if AVOID_SHORT_SEGMENTS
 			if (offset >= -MoveSegment::MinDuration && duration >= 10 * MoveSegment::MinDuration)	// if it starts only slightly earlier and we can reasonably shorten it
 			{
 				startTime = seg->GetStartTime();								// then just delay and shorten the new segment slightly, to avoid creating a tiny segment
-#if SEGMENT_DEBUG
+# if SEGMENT_DEBUG
 				debugPrintf("Adjusting(1) t=%" PRIu32 " a=%.4e", duration, (double)a);
-#endif
+# endif
 				duration += offset;
-#if SEGMENT_DEBUG
+# if SEGMENT_DEBUG
 				debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
-#endif
+# endif
 			}
 			else																// new segment starts before the existing one and can't be delayed/shortened so that it doesn't
+#endif
 			{
 				// Insert part of the new segment before the existing one, then merge the rest
 				const uint32_t firstDuration = -offset;
@@ -920,21 +924,22 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 		{
 			if (offset != 0)
 			{
+#if AVOID_SHORT_SEGMENTS
 				if (offset + MoveSegment::MinDuration >= (int32_t)seg->GetDuration() && duration >= 10 * MoveSegment::MinDuration)
 				{
 					// New segment starts just before the existing one ends, but we can delay and shorten it to start when the existing segment ends
-#if SEGMENT_DEBUG
+# if SEGMENT_DEBUG
 					debugPrintf("Adjusting(3) t=%" PRIu32 " a=%.4e", duration, (double)a);
-#endif
+# endif
 					const uint32_t delay = seg->GetDuration() - (uint32_t)offset;
 					startTime += delay;																	// postpone and shorten it a little
 					duration -= delay;
-#if SEGMENT_DEBUG
+# if SEGMENT_DEBUG
 					debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
-#endif
+# endif
 					goto nextSegment;																	// go round the loop again
 				}
-
+#endif
 				// The new segment overlaps the existing one and can't be delayed so that it doesn't, so split the existing one
 				prev = seg;
 				seg = seg->Split((uint32_t)offset);
@@ -948,19 +953,20 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 			const int32_t timeDifference = (int32_t)(duration - seg->GetDuration());
 			if (timeDifference > 0)
 			{
+#if AVOID_SHORT_SEGMENTS
 				if (timeDifference <= (int32_t)MoveSegment::MinDuration && duration >= 10 * MoveSegment::MinDuration)
 				{
 					// New segment is slightly longer then the old one but it can be shortened
-#if SEGMENT_DEBUG
+# if SEGMENT_DEBUG
 					debugPrintf("Adjusting(3) t=%" PRIu32 " a=%.4e", duration, (double)a);
-#endif
+# endif
 					duration -= (uint32_t)timeDifference;
-#if SEGMENT_DEBUG
+# if SEGMENT_DEBUG
 					debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
-#endif
+# endif
 					goto doMerge;
 				}
-
+#endif
 				// The existing segment is shorter in time than the new one, so add the new segment in two or more parts
 				const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + (motioncalc_t)0.5 * a * (motioncalc_t)seg->GetDuration()) * (motioncalc_t)seg->GetDuration();	// distance moved by the first part of the new segment
 #if SEGMENT_DEBUG

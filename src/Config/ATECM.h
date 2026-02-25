@@ -24,7 +24,7 @@
 #define SUPPORT_DRIVERS			0
 #define SUPPORT_THERMISTORS		0
 #define SUPPORT_SPI_SENSORS		0
-#define SUPPORT_I2C_SENSORS		0
+#define NUM_I2C_CHANNELS		0
 #define SUPPORT_DHT_SENSOR		0
 #define SUPPORT_SDADC			1
 
@@ -35,7 +35,8 @@
 
 constexpr size_t MaxPortsPerHeater = 1;
 
-constexpr bool UseAlternateCanPins = true;
+constexpr unsigned int CANInstanceNumber = 0;
+constexpr bool UseLaterCanPins = true;
 
 constexpr Pin BoardTypePins[] = { PortAPin(5), PortAPin(4) };
 constexpr Pin ButtonPins[] = { PortAPin(27) };

@@ -85,7 +85,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(5) };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
-#define SUPPORT_I2C_SENSORS		1
+#define NUM_I2C_CHANNELS		1
 #define SUPPORT_LIS3DH			1
 #define SUPPORT_DHT_SENSOR		0
 #define SUPPORT_LDC1612			1
@@ -132,14 +132,14 @@ constexpr Pin SSPIMisoPin = GpioPin(23);
 constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::Spi;
 #endif
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS != 0
 
 // I2C using pins 18,19
 constexpr uint8_t I2CInstanceNumber = 1;
-constexpr Pin I2CSDAPin = GpioPin(8);
-constexpr GpioPinFunction I2CSDAPinPeriphMode = GpioPinFunction::I2c;
-constexpr Pin I2CSCLPin = GpioPin(9);
-constexpr GpioPinFunction I2CSCLPinPeriphMode = GpioPinFunction::I2c;
+constexpr Pin I2C0SDAPin = GpioPin(8);
+constexpr GpioPinFunction I2C0SDAPinPeriphMode = GpioPinFunction::I2c;
+constexpr Pin I2C0SCLPin = GpioPin(9);
+constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::I2c;
 #endif
 
 #if SUPPORT_LIS3DH
