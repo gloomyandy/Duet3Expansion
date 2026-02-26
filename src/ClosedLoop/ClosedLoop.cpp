@@ -299,12 +299,12 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 			break;
 
 		case EncoderType::rotaryMagnetic:
-			encoder = CreateRotaryEncoder(magEncoderType, tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin);
+			encoder = CreateRotaryEncoder(magEncoderType, tempStepsPerRev, Platform::GetSharedSpi(Encoder_SpiChannel), EncoderCsPin);
 			CreateCalibrationTask();
 			break;
 
 		case EncoderType::linearComposite:
-			encoder = new LinearCompositeEncoder(tempCPR, tempStepsPerRev, *Platform::sharedSpi, EncoderCsPin, magEncoderType);
+			encoder = new LinearCompositeEncoder(tempCPR, tempStepsPerRev, Platform::GetSharedSpi(Encoder_SpiChannel), EncoderCsPin, magEncoderType);
 			CreateCalibrationTask();
 			break;
 

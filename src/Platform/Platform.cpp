@@ -56,6 +56,10 @@
 
 #if RPXXXX
 # include <hardware/structs/watchdog.h>
+# include <hardware/structs/sysinfo.h>
+# if NUM_SPI_CHANNELS > 0
+#  include<SPI.h>
+# endif
 #endif
 
 #if SAME5x
@@ -106,8 +110,8 @@ namespace Platform
 	static uint8_t boardVariant = 0;
 #endif
 
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO) || TMC51xx_USES_SHARED_SPI
-	SharedSpiDevice *sharedSpi = nullptr;
+#if NUM_SPI_CHANNELS > 0
+	SharedSpiDevice *sharedSpi[NUM_SPI_CHANNELS];
 #endif
 
 #if NUM_I2C_CHANNELS != 0
@@ -562,6 +566,9 @@ void Platform::Init()
 	SetPinMode(BoardTypePins[1], INPUT_PULLUP, false);
 	delayMicroseconds(10);
 	boardVariant = (digitalRead(BoardTypePins[1])) ? 0 : 1;
+#elif defined(MNBN17) && SUPPORT_TMC51xx
+	// Set to use SPI for driver control
+	SetPinMode(ConfigureDriverIOPin, OUTPUT_LOW);
 #endif
 
 	InitLeds();
@@ -679,15 +686,19 @@ void Platform::Init()
 	}
 #endif
 
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO) || TMC51xx_USES_SHARED_SPI
+#if NUM_SPI_CHANNELS > 0
+# if SAME5x || SAMC21
 	// Set the pin functions
 	SetPinFunction(SSPIMosiPin, SSPIMosiPinPeriphMode);
 	SetPinFunction(SSPISclkPin, SSPISclkPinPeriphMode);
 	SetPinFunction(SSPIMisoPin, SSPIMisoPinPeriphMode);
-# if SAME5x || SAMC21
-	sharedSpi = new SharedSpiDevice(SspiSercomNumber, SspiDataInPad);
+	sharedSpi[0] = new SharedSpiDevice(SspiSercomNumber, SspiDataInPad);
 # elif RPXXXX
-	sharedSpi = new SharedSpiDevice(SspiSpiInstanceNumber);
+	for(size_t spichan = 0; spichan < NUM_SPI_CHANNELS; spichan++)
+	{
+		SPI::getSPIDevice((SPIChannel)spichan)->initPins(SSPIPins[spichan][0], SSPIPins[spichan][1], SSPIPins[spichan][2]);
+		sharedSpi[spichan] = new SharedSpiDevice((SPIChannel)spichan);
+	}
 # else
 # error Unsupported processor
 # endif
@@ -723,7 +734,7 @@ void Platform::Init()
 #endif
 
 #ifdef ATEIO
-	ExtendedAnalog::Init(*sharedSpi);					// must init sharedSpi before calling this
+	ExtendedAnalog::Init(GetSharedSpi(ExtendedAdc_SpiChan));					// must init sharedSpi before calling this
 #endif
 
 	uniqueId.SetFromCurrentBoard();
@@ -736,7 +747,7 @@ void Platform::Init()
 # endif
 	{
 # if ACCELEROMETER_USES_SPI
-		AccelerometerHandler::Init(*sharedSpi);
+		AccelerometerHandler::Init(GetSharedSpi(Lis_SpiChannel));
 # else
 		AccelerometerHandler::Init(GetSharedI2C(Lis_I2CChannel));
 # endif
@@ -767,6 +778,13 @@ void Platform::InitMinimal()
 	InitVinMonitor();
 	InitialiseInterrupts();
 #if RPXXXX
+# if NUM_SPI_CHANNELS > 0
+	for(size_t spichan = 0; spichan < NUM_SPI_CHANNELS; spichan++)
+	{
+		SPI::getSPIDevice((SPIChannel)spichan)->initPins(SSPIPins[spichan][0], SSPIPins[spichan][1], SSPIPins[spichan][2]);
+		sharedSpi[spichan] = new SharedSpiDevice((SPIChannel)spichan);
+	}
+# endif
 	serialUSB.Start(NoPin);
 #endif
 	CanInterface::Init(GetCanAddress(), CANInstanceNumber, UseLaterCanPins, false);
@@ -1547,9 +1565,17 @@ void Platform::AppendBoardAndFirmwareDetails(const StringRef& reply) noexcept
 	reply.lcatf("Duet " BOARD_TYPE_NAME " rev %s firmware version " VERSION " (%s%s)",
 				(boardVariant == 1) ? "1.02 or later" : "1.01 or earlier",
 				DateText, TimeSuffix);
+#elif RPXXXX
+	reply.lcatf("Duet " BOARD_TYPE_NAME " (%s%s) firmware version " VERSION " (%s%s) Clock %.1fMHz",
+#if RP2350
+				"RP2350", ((sysinfo_hw->package_sel & 1) ? "A" : "B"),
 #else
-	reply.lcatf("Duet " BOARD_TYPE_NAME " firmware version " VERSION " (%s%s) Clock %.1fMHz",
+				"RP2040", "",
+#endif
 				DateText, TimeSuffix, (double)(SystemCoreClock/1000000.0f));
+#else
+	reply.lcatf("Duet " BOARD_TYPE_NAME " firmware version " VERSION " (%s%s)",
+				DateText, TimeSuffix);
 #endif
 }
 

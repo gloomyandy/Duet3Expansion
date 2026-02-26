@@ -81,6 +81,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(22) };
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		0
 #define NUM_I2C_CHANNELS		0	//temporary
+#define NUM_SPI_CHANNELS		0
 #define SUPPORT_LIS3DH			0	//temporary
 #define SUPPORT_DHT_SENSOR		0
 
@@ -113,7 +114,7 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico u
 constexpr Pin LedPins[] = { GpioPin(25) };
 constexpr bool LedActiveHigh = true;
 
-#if SUPPORT_SPI_SENSORS
+#if NUM_SPI_CHANNELS > 0
 
 // Shared SPI using pins PA16,17,18. If changing this, also change the available pins in the pin table.
 constexpr uint8_t SspiSercomNumber = 1;
@@ -229,7 +230,7 @@ const NvicPriority NvicPriorityAdc = 3;
 const NvicPriority NvicPriorityUSB = 3;
 
 #if SUPPORT_CAN && USE_SPICAN
-constexpr uint8_t spiCanSpiInstanceNumber = 0;
+constexpr uint8_t spiCan_SpiChannel = 0;
 constexpr Pin SPICanMosiPin = GpioPin(19);
 constexpr GpioPinFunction SPICanMosiPinPeriphMode = GpioPinFunction::Spi;
 constexpr Pin SPICanSclkPin = GpioPin(18);

@@ -86,6 +86,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(5) };
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
 #define NUM_I2C_CHANNELS		1
+#define NUM_SPI_CHANNELS		2
 #define SUPPORT_LIS3DH			1
 #define SUPPORT_DHT_SENSOR		0
 #define SUPPORT_LDC1612			1
@@ -120,16 +121,15 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico u
 constexpr Pin LedPins[] = { GpioPin(1) };
 constexpr bool LedActiveHigh = false;
 
-#if SUPPORT_SPI_SENSORS
-
+#if NUM_SPI_CHANNELS > 0
 // Shared SPI pin connections
-constexpr uint8_t SspiSpiInstanceNumber = 0;
-constexpr Pin SSPIMosiPin = GpioPin(20);
-constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPISclkPin = GpioPin(22);
-constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPIMisoPin = GpioPin(23);
-constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::Spi;
+// 													Clock, Miso, Mosi
+constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(22), GpioPin(23), GpioPin(20)},
+													{GpioPin(10), GpioPin(12), GpioPin(11)} };
+#endif
+
+#if SUPPORT_SPI_SENSORS
+constexpr unsigned int Temperature_SpiChannel = 0;
 #endif
 
 #if NUM_I2C_CHANNELS != 0
@@ -145,6 +145,7 @@ constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::I2c;
 #if SUPPORT_LIS3DH
 
 #define ACCELEROMETER_USES_SPI			(1)					// 0 if the accelerometer is connected via I2C, 1 if via SPI
+constexpr unsigned int Lis_SpiChannel = 0;
 constexpr Pin Lis3dhCsPin = GpioPin(21);
 constexpr Pin Lis3dhInt1Pin = GpioPin(24);
 
@@ -238,13 +239,7 @@ const NvicPriority NvicPriorityUSB = 3;
 
 #if SUPPORT_CAN && USE_SPICAN
 
-constexpr uint8_t spiCanSpiInstanceNumber = 1;
-constexpr Pin SPICanMosiPin = GpioPin(11);
-constexpr GpioPinFunction SPICanMosiPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SPICanSclkPin = GpioPin(10);
-constexpr GpioPinFunction SPICanSclkPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SPICanMisoPin = GpioPin(12);
-constexpr GpioPinFunction SPICanMisoPinPeriphMode = GpioPinFunction::Spi;
+constexpr uint8_t spiCan_SpiChannel = 1;
 constexpr Pin SPICanCsPin = GpioPin(13);
 
 #endif

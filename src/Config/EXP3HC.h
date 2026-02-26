@@ -41,6 +41,7 @@
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
 #define NUM_I2C_CHANNELS		0
+#define NUM_SPI_CHANNELS		1
 #define SUPPORT_DHT_SENSOR		0
 #define SUPPORT_DMA_NEOPIXEL	0
 
@@ -119,6 +120,7 @@ constexpr Pin SSPISclkPin = PortCPin(17);
 constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::C;
 constexpr Pin SSPIMisoPin = PortCPin(19);
 constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
+constexpr unsigned int Temperature_SpiChannel = 0;
 
 #if 1	// temporary inductive heater test
 

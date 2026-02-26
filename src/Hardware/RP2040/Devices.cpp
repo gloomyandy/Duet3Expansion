@@ -16,9 +16,9 @@
 #include <TinyUsbInterface.h>
 #include <SerialCDC_tusb.h>
 #if SUPPORT_CAN && USE_SPICAN
+# include <Platform.h>
+# include <SharedSpiClient.h>
 # include <CanSpi.h>
-# include <GPIO/GpioPorts.h>
-# include "hardware/spi.h"
 # include "StepTimer.h"
 #endif
 
@@ -43,17 +43,13 @@ void DeviceInit() noexcept
 
 #if SUPPORT_CAN && USE_SPICAN
 // SPICAN SPI interface
-spi_inst_t *spiCanHardware = (spiCanSpiInstanceNumber == 0) ? spi0 : spi1;
+SharedSpiClient *spiCanHardware;
 extern "C" bool DRV_SPI_Initialize()
 {
 	debugPrintf("SPI init start\n");
-	SetPinFunction(SPICanMosiPin, SPICanMosiPinPeriphMode);
-	SetPinFunction(SPICanSclkPin, SPICanSclkPinPeriphMode);
-	SetPinFunction(SPICanMisoPin, SPICanMisoPinPeriphMode);
+	spiCanHardware = new SharedSpiClient(Platform::GetSharedSpi(spiCan_SpiChannel), 15000000, SpiMode::mode0, NoPin, false);
 	IoPort::SetPinMode(SPICanCsPin, OUTPUT_HIGH);
-	uint32_t ret = spi_init(spiCanHardware, 15000000);
-	debugPrintf("SPI init freq %d\n", (int)ret);
-	spi_set_format(spiCanHardware, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
+	spiCanHardware->Select(1000);
 	debugPrintf("SPI init complete\n");
     return true;
 }
@@ -69,11 +65,9 @@ extern "C" void DRV_SPI_Deselect()
 extern "C" int8_t DRV_SPI_TransferData(uint32_t index, uint8_t *SpiTxData, uint8_t *SpiRxData, size_t spiTransferSize)
 {
 	IoPort::WriteDigital(SPICanCsPin, 0);
-	const int bytesTransferred = (SpiRxData == nullptr) ? spi_write_blocking(spiCanHardware, SpiTxData, spiTransferSize)
-								: (SpiTxData == nullptr) ? spi_read_blocking(spiCanHardware, 0xFF, SpiRxData, spiTransferSize)
-									: spi_write_read_blocking(spiCanHardware, SpiTxData, SpiRxData, spiTransferSize);
+	const bool ret = spiCanHardware->TransceivePacket(SpiTxData, SpiRxData, spiTransferSize);
 	IoPort::WriteDigital(SPICanCsPin, 1);
-	return !(bytesTransferred == (int)spiTransferSize);
+	return !ret;
 }
 
 extern "C" uint32_t DRV_SPI_GetStepTimerTicks()

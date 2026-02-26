@@ -37,6 +37,7 @@
 #define TMC51xx_USES_SHARED_SPI	1
 #define SUPPORT_SLOW_DRIVERS	0
 #define SUPPORT_DELTA_MOVEMENT	0
+#define NUM_SPI_CHANNELS		2
 
 #define SUPPORT_TMC51xx			1
 #define SUPPORT_TMC2660			0
@@ -108,22 +109,26 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico u
 constexpr Pin LedPins[] = { GpioPin(15) };
 constexpr bool LedActiveHigh = false;
 
-#if SUPPORT_SPI_SENSORS || TMC51xx_USES_SHARED_SPI
-
+#if NUM_SPI_CHANNELS > 0
 // Shared SPI pin connections
-constexpr uint8_t SspiSpiInstanceNumber = 0;
-constexpr Pin SSPIMosiPin = GpioPin(3);
-constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPISclkPin = GpioPin(2);
-constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPIMisoPin = GpioPin(4);
-constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::Spi;
-
+// 													Clock, Miso, Mosi
+constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(2), GpioPin(4), GpioPin(3)},
+													{GpioPin(10), GpioPin(8), GpioPin(11)} };
 #endif
+
+#if TMC51xx_USES_SHARED_SPI
+constexpr unsigned int Tmc5160_SpiChannel = 0;
+#endif
+
+#if SUPPORT_SPI_SENSORS
+constexpr unsigned int Temperature_SpiChannel = 0;
+#endif
+
 
 #if SUPPORT_LIS3DH
 
 #define ACCELEROMETER_USES_SPI			(1)					// 0 if the accelerometer is connected via I2C, 1 if via SPI
+constexpr unsigned int Lis_SpiChannel = 0;
 constexpr Pin Lis3dhCsPin = GpioPin(9);
 constexpr Pin Lis3dhInt1Pin = GpioPin(29);
 
@@ -205,13 +210,7 @@ const NvicPriority NvicPriorityAdc = 3;
 const NvicPriority NvicPriorityUSB = 3;
 
 #if SUPPORT_CAN && USE_SPICAN
-constexpr uint8_t spiCanSpiInstanceNumber = 1;
-constexpr Pin SPICanMosiPin = GpioPin(11);
-constexpr GpioPinFunction SPICanMosiPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SPICanSclkPin = GpioPin(10);
-constexpr GpioPinFunction SPICanSclkPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SPICanMisoPin = GpioPin(8);
-constexpr GpioPinFunction SPICanMisoPinPeriphMode = GpioPinFunction::Spi;
+constexpr uint8_t spiCan_SpiChannel = 1;
 constexpr Pin SPICanCsPin = GpioPin(9);
 #endif
 

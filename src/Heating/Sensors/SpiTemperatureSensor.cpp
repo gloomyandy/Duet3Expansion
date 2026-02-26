@@ -12,7 +12,7 @@
 #include <Platform/Tasks.h>
 
 SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *name, SpiMode spiMode, uint32_t clockFreq)
-	: SensorWithPort(sensorNum, name), device(Platform::GetSharedSpi(), clockFreq, spiMode, NoPin, false)
+	: SensorWithPort(sensorNum, name), device(Platform::GetSharedSpi(Temperature_SpiChannel), clockFreq, spiMode, NoPin, false)
 {
 }
 

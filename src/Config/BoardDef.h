@@ -29,6 +29,8 @@
 # include "ATEIO.h"
 #elif defined(RPI_PICO)
 # include "RPi_Pico.h"
+#elif defined(TOOLINDX)
+# include "TOOLINDX.h"
 #elif defined(FLY36RRF)
 # include "Fly36_RRF.h"
 #elif defined(FLYSB2040V1_0)
@@ -57,8 +59,8 @@
 # include "FlyM2.h"
 #elif defined(RP2350TEST)
 # include "RP2350Test.h"
-#elif defined(TOOLINDX)
-# include "TOOLINDX.h"
+#elif defined(MNBN17)
+# include "MnBN17r1_5.h"
 #else
 # error Board type not defined
 #endif

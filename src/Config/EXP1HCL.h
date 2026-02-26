@@ -68,6 +68,7 @@ constexpr Pin DiagPins[NumDrivers] = { PortAPin(21) };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
+#define NUM_SPI_CHANNELS		1
 #define SUPPORT_DMA_NEOPIXEL	0
 
 #ifdef DEBUG
@@ -109,6 +110,7 @@ constexpr float VinDividerRatio = (100.0 + 5.1)/5.1;
 constexpr float V12DividerRatio = (60.4 + 4.7)/4.7;
 constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;
 constexpr float V12MonitorVoltageRange = V12DividerRatio * 3.3;
+constexpr unsigned int Temperature_SpiChannel = 0;
 
 constexpr Pin TempSensePins[NumThermistorInputs] = { PortBPin(8), PortAPin(7) };
 constexpr Pin ButtonPins[] = { PortAPin(20) };
@@ -116,6 +118,7 @@ constexpr Pin ButtonPins[] = { PortAPin(20) };
 // Encoder and quadrature decoder interface
 constexpr Pin EncoderCsPin = PortAPin(18);
 constexpr Pin MT6835CalPin = PortAPin(0);					// Pin spi.cs1 drives CAL on the MT6835 encoder board (version 2 EXP1HCL boards only)
+constexpr unsigned int Encoder_SpiChannel = 0;
 
 #if NUM_I2C_CHANNELS != 0
 

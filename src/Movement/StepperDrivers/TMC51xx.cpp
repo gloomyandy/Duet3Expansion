@@ -30,7 +30,7 @@
 
 static inline Move& GetMoveInstance() noexcept { return reprap.GetMove(); }
 
-#elif defined(EXP3HC) || defined(EXP1HCL) || defined(M23CL) || defined(PITBV1_0) || defined(PITBV2_0) || defined(STRIDEMAXV2_0) || defined(RP2350TEST)
+#elif defined(EXP3HC) || defined(EXP1HCL) || defined(M23CL) || defined(PITBV1_0) || defined(PITBV2_0) || defined(STRIDEMAXV2_0) || defined(RP2350TEST) || defined(MNBN17)
 
 static inline Move& GetMoveInstance() noexcept { return *moveInstance; }
 
@@ -1833,7 +1833,7 @@ void SmartDrivers::Init() noexcept
 #endif
 
 #if TMC51xx_USES_SHARED_SPI
-	spiDevice = new SharedSpiClient(*Platform::sharedSpi, DriversSpiClockFrequency, SpiMode::mode3, NoPin, false);
+	spiDevice = new SharedSpiClient(Platform::GetSharedSpi(Tmc5160_SpiChannel), DriversSpiClockFrequency, SpiMode::mode3, NoPin, false);
 #else
 	SetPinFunction(TMC51xxMosiPin, TMC51xxMosiPinPeriphMode);
 	SetPinFunction(TMC51xxMisoPin, TMC51xxMisoPinPeriphMode);

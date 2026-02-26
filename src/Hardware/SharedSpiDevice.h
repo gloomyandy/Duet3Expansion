@@ -13,12 +13,12 @@
 
 #include "RepRapFirmware.h"
 
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO) || TMC51xx_USES_SHARED_SPI
+#if NUM_SPI_CHANNELS > 0
 
 #include <RTOSIface/RTOSIface.h>
 
 #if RPXXXX
-# include "hardware/spi.h"
+# include "SPI.h"
 #endif
 
 enum class SpiMode : uint8_t
@@ -26,13 +26,14 @@ enum class SpiMode : uint8_t
 	mode0 = 0, mode1, mode2, mode3
 };
 
+
 class SharedSpiDevice
 {
 public:
 #if SAME5x || SAMC21
 	SharedSpiDevice(uint8_t sercomNum, uint32_t dataInPad) noexcept;
 #elif RPXXXX
-	SharedSpiDevice(uint8_t spiInstanceNum) noexcept;
+	SharedSpiDevice(SPIChannel dev) noexcept;
 #endif
 
 	void Disable() const noexcept;
@@ -52,11 +53,13 @@ private:
 
 	Sercom * const hardware;
 #elif RPXXXX
-	spi_inst_t *hardware;
+	SPI *hardware;
 #endif
-
+protected:
 	Mutex mutex;
 };
+
+
 
 #endif
 

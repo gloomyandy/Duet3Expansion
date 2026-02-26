@@ -70,6 +70,7 @@ constexpr Pin DiagPins[NumDrivers] = { PortAPin(21) };
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		0							// we have no SPI temperature sensors but we need the SharedSPI channel for the encoder
 #define NUM_I2C_CHANNELS		0
+#define NUM_SPI_CHANNELS		1
 #define SUPPORT_DHT_SENSOR		0
 #define SUPPORT_SDADC			0
 #define NUM_SERIAL_PORTS		0
@@ -114,6 +115,7 @@ constexpr Pin BrakePwmPin = PortAPin(1);
 
 // Encoder and quadrature decoder interface
 constexpr Pin EncoderCsPin = PortAPin(18);
+constexpr unsigned int Encoder_SpiChannel = 0;
 
 // Shared SPI (used for interface to encoders, not for temperature sensors)
 constexpr uint8_t SspiSercomNumber = 1;

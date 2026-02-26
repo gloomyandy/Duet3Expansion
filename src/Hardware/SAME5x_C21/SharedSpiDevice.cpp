@@ -7,7 +7,7 @@
 
 #include <Hardware/SharedSpiDevice.h>
 
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO)
+#if NUM_SPI_CHANNELS > 0
 
 #include <Hardware/IoPorts.h>
 #include "DmacManager.h"

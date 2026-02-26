@@ -3,37 +3,37 @@
  *
  *  Created on: 28 Dec 2022
  *      Author: David
+ *  Modified 23 Dec 2025 to support HW and PIO based SPI devices
+ *      Author: Andy
  */
 
 #include <Hardware/SharedSpiDevice.h>
+#if RPXXXX
+#if NUM_SPI_CHANNELS > 0
+static const char *names[] = { "SPI0", "SPI1", "SPI2"};
 
-#if RPXXXX && (SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO) || TMC51xx_USES_SHARED_SPI)
-
-SharedSpiDevice::SharedSpiDevice(uint8_t spiInstanceNum) noexcept
-	: hardware((spiInstanceNum == 0) ? spi0 : spi1)
+SharedSpiDevice::SharedSpiDevice(SPIChannel dev) noexcept
+	: hardware(SPI::getSPIDevice(dev))
 {
-	mutex.Create("SPI");
+	mutex.Create(names[dev]);
 }
 
 void SharedSpiDevice::Disable() const noexcept
 {
-	spi_deinit(hardware);
 }
 
 void SharedSpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) const noexcept
 {
-	spi_init(hardware, freq);
-	spi_set_format(hardware, 8, ((uint8_t)mode & 2) ? SPI_CPOL_1 : SPI_CPOL_0, ((uint8_t)mode & 1) ? SPI_CPHA_1 : SPI_CPHA_0, SPI_MSB_FIRST);
+	hardware->configureDevice(8, (uint32_t)mode, freq);
 }
 
 bool SharedSpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data, size_t len) const noexcept
 {
-	const int bytesTransferred = (rx_data == nullptr) ? spi_write_blocking(hardware, tx_data, len)
-								: (tx_data == nullptr) ? spi_read_blocking(hardware, 0xFF, rx_data, len)
-									: spi_write_read_blocking(hardware, tx_data, rx_data, len);
-	return bytesTransferred == (int)len;
+	return hardware->transceivePacket(tx_data, rx_data, len) == SPI_OK;
 }
 
+
+#endif
 #endif
 
 // End
