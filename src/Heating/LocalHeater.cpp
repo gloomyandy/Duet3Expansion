@@ -65,7 +65,7 @@ LocalHeater::~LocalHeater()
 bool LocalHeater::IsCustom() const noexcept
 {
 #if SUPPORT_INDUCTIVE_HEATER
-	return ports[0].GetPin() == InductiveHeaterPin;
+	return ports[0].IsInductiveHeaterPort();
 #else
 	return false;
 #endif
@@ -77,7 +77,7 @@ void LocalHeater::SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept
 	const CanRequestId rid = buf.msg.setDefaultHeaterModel.requestId;
 	const CanAddress src = buf.id.Src();
 #if SUPPORT_INDUCTIVE_HEATER
-	if (ports[0].GetPin() == InductiveHeaterPin)
+	if (ports[0].IsInductiveHeaterPort())
 	{
 		model.SetDefaultModel(InductiveHeaterDefaultModel);
 	}
@@ -154,9 +154,10 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 			return GCodeResult::error;
 		}
 #if SUPPORT_INDUCTIVE_HEATER
-		if (ports[0].GetPin() == InductiveHeaterPin)
+		if (ports[0].IsInductiveHeaterPort())
 		{
 			model.SetDefaultModel(InductiveHeaterDefaultModel);			// override the default model parameters
+			maxHeatingFaultTime = CustomHeaterMaxFaultTime;
 		}
 #endif
 	}
