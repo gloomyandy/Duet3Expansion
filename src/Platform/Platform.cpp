@@ -50,6 +50,10 @@
 # include "InductiveHeaterPort.h"
 #endif
 
+#if SUPPORT_LP5817
+# include "LedStatusControl.h"
+#endif
+
 #ifdef ATEIO
 # include <Hardware/ATEIO/ExtendedAnalog.h>
 #endif
@@ -121,8 +125,9 @@ namespace Platform
 #if SUPPORT_ADS131M02
 	ADS131M02 *loadCellAdc = nullptr;
 #endif
+
 #if SUPPORT_LP5817
-	LP5817 *lp5817 = nullptr;
+	LedStatusControl *ledStatusControl = nullptr;
 #endif
 
 #if HAS_VOLTAGE_MONITOR
@@ -742,7 +747,7 @@ void Platform::Init()
 	loadCellAdc = new ADS131M02;
 #endif
 #if SUPPORT_LP5817
-	lp5817 = new LP5817(GetSharedI2C(LP5817_I2CChannel));
+	ledStatusControl = new LedStatusControl(LP5817_I2CChannel);
 #endif
 
 #ifdef ATEIO

@@ -14,8 +14,8 @@
 #include <General/SafeVsnprintf.h>
 
 // Private constants
-const uint32_t InitialTuningReadingInterval = 250;	// the initial reading interval in milliseconds
-const uint32_t TempSettleTimeout = 20000;	// how long we allow the initial temperature to settle
+const uint32_t InitialTuningReadingInterval = 250;		// the initial reading interval in milliseconds
+const uint32_t TempSettleTimeout = 20000;				// how long we allow the initial temperature to settle
 
 // Variables used during heater tuning
 static float tuningPwm;									// the PWM to use, 0..1
@@ -65,7 +65,7 @@ LocalHeater::~LocalHeater()
 bool LocalHeater::IsCustom() const noexcept
 {
 #if SUPPORT_INDUCTIVE_HEATER
-	return ports[0].GetPin() == InductiveHeaterPin;
+	return ports[0].IsInductiveHeaterPort();
 #else
 	return false;
 #endif
@@ -77,7 +77,7 @@ void LocalHeater::SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept
 	const CanRequestId rid = buf.msg.setDefaultHeaterModel.requestId;
 	const CanAddress src = buf.id.Src();
 #if SUPPORT_INDUCTIVE_HEATER
-	if (ports[0].GetPin() == InductiveHeaterPin)
+	if (ports[0].IsInductiveHeaterPort())
 	{
 		model.SetDefaultModel(InductiveHeaterDefaultModel);
 	}
@@ -154,9 +154,10 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 			return GCodeResult::error;
 		}
 #if SUPPORT_INDUCTIVE_HEATER
-		if (ports[0].GetPin() == InductiveHeaterPin)
+		if (ports[0].IsInductiveHeaterPort())
 		{
 			model.SetDefaultModel(InductiveHeaterDefaultModel);			// override the default model parameters
+			maxHeatingFaultTime = CustomHeaterMaxFaultTime;
 		}
 #endif
 	}
@@ -403,7 +404,12 @@ void LocalHeater::Spin() noexcept
 				break;
 
 			case HeaterMode::stable:
-				if (fabsf(error) > GetMaxTemperatureExcursion() && temperature > MaxAmbientTemperature)
+				// Check for maximum temperature excursion exceeded when we were at a stable temperature.
+				if (   fabsf(error) > GetMaxTemperatureExcursion()
+					&& (   error > 0.0											// if the temperature we are reading has dropped unexpectedly, e.g. indirect sensor can no longer see a tool
+						|| temperature > MaxAmbientTemperature					// or the temperature reading is too high and greater than a reasonable ambient temperature (should we use chamber temperature instead, for a tool heater?)
+					   )
+				   )
 				{
 					++heatingFaultCount;
 					if (heatingFaultCount * Heat::NormalHeaterPollInterval > GetMaxHeatingFaultTime() * SecondsToMillis)

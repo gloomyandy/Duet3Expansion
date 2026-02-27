@@ -80,21 +80,21 @@ protected:
 	float GetTargetTemperature() const noexcept { return requestedTemperature; }
 	float GetHighestTemperatureLimit() const noexcept;
 
-	HeaterMonitor monitors[MaxMonitorsPerHeater];	// embedding them in the Heater uses less memory than dynamic allocation
-	volatile float lastFanPwm;						// The fan PWM when we last calculated heater feedforward for the fan
-	volatile float lastExtrusionPwmBoost;			// The last value of extrusion boost we applied
-	volatile float extrusionTemperatureBoost;		// the amount of extrusion temperature boost we are currently applying
+	HeaterMonitor monitors[MaxMonitorsPerHeater];						// embedding them in the Heater uses less memory than dynamic allocation
+	volatile float lastFanPwm;											// The fan PWM when we last calculated heater feedforward for the fan
+	volatile float lastExtrusionPwmBoost;								// The last value of extrusion boost we applied
+	volatile float extrusionTemperatureBoost;							// the amount of extrusion temperature boost we are currently applying
 
 	FopDt model;
+	float maxHeatingFaultTime = DefaultMaxHeatingFaultTime;				// how long a heater fault is permitted to persist before a heater fault is raised
 
 private:
 	unsigned int heaterNumber;
-	int sensorNumber;								// the sensor number used by this heater
-	float requestedTemperature;						// the required temperature
-	float maxTempExcursion;							// the maximum temperature excursion permitted while maintaining the setpoint
-	float maxHeatingFaultTime;						// how long a heater fault is permitted to persist before a heater fault is raised
-	uint32_t maxBadTemperatureCount;				// the number of consecutive bad sensor readings we allow before raising a fault
-	HeaterFunction function;						// function of this heater when it was switched on
+	int sensorNumber = -1;												// the sensor number used by this heater
+	float requestedTemperature = 0.0;									// the required temperature
+	float maxTempExcursion = DefaultMaxTempExcursion;					// the maximum temperature excursion permitted while maintaining the setpoint
+	uint32_t maxBadTemperatureCount = DefaultMaxBadTemperatureCount;	// the number of consecutive bad sensor readings we allow before raising a fault
+	HeaterFunction function = HeaterFunction::tool;						// function of this heater when it was switched on
 };
 
 #endif /* SRC_HEATING_HEATER_H_ */

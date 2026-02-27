@@ -31,16 +31,13 @@
 # include <Hardware/Drivers/ADS131M02.h>
 #endif
 
-#if SUPPORT_LP5817
-# include <Hardware/Drivers/LP5817.h>
-#endif
-
 #if RP2040
 # include <hardware/structs/sio.h>
 #endif
 
 class CanMessageDiagnosticTest;
 class CanMessageBuffer;
+class LedStatusControl;
 
 #if HAS_CPU_TEMP_SENSOR
 constexpr size_t McuTempReadingsAveraged = 8;
@@ -122,8 +119,8 @@ namespace Platform
 	inline ADS131M02 *GetLoadCellAdc() noexcept { return loadCellAdc; }
 #endif
 #if SUPPORT_LP5817
-	extern LP5817 *lp5817;
-	inline LP5817 *GetLp5817() noexcept { return lp5817; }
+	extern LedStatusControl *ledStatusControl;
+	inline LedStatusControl *GetStatusLedControl() noexcept { return ledStatusControl; }
 #endif
 
 	// We don't really want the following to be writable, but we've no choice because we want to inline functions that access them
