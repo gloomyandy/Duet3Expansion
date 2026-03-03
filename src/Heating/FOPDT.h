@@ -10,11 +10,11 @@
 #ifndef SRC_HEATING_FOPDT_H_
 #define SRC_HEATING_FOPDT_H_
 
-#include <cstdint>
-#include "GCodeResult.h"
+#include <RepRapFirmware.h>
+#include <HeaterModel.h>
 
 class StringRef;
-class CanMessageHeaterModelV2;
+class CanMessageHeaterModelV3;
 
 // This is how PID parameters are stored internally
 struct PidParameters
@@ -40,14 +40,14 @@ public:
 	FopDt() noexcept;
 
 	void Reset() noexcept;
-	bool SetParameters(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
-	void SetDefaultToolParameters() noexcept;
-	void SetDefaultBedOrChamberParameters() noexcept;
+	bool SetParameters(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept;
+	void SetDefaultModel(const HeaterModel& model) noexcept;
+	const HeaterModel& GetBasicModel() const noexcept { return basicModel; }
 
 	// Stored parameters
-	float GetDeadTime() const noexcept { return deadTime; }
+	float GetDeadTime() const noexcept { return basicModel.deadTime; }
 	float GetMaxPwm() const noexcept { return maxPwm; }
-	bool UsePid() const noexcept { return usePid; }
+	bool UsePid() const noexcept { return basicModel.usePid; }
 	bool IsInverted() const noexcept { return inverted; }
 	bool IsEnabled() const noexcept { return enabled; }
 
@@ -72,15 +72,9 @@ private:
 	void SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcept;
 	static float EstimateMaxTemperatureRise(float hr, float cr, float cre) noexcept;
 
-	float heatingRate;						// the rate at which the heater heats up at full PWM with no cooling
-	float basicCoolingRate;					// the rate at which the heater cools down when it is 100C above ambient and the fan is off
-	float fanCoolingRate;					// the additional cooling rate at 100C above ambient with the fan on at full PWM
-	float coolingRateExponent;				// how the basic cooling rate varies with temperature difference
-	float deadTime;
+	HeaterModel basicModel;
 	float maxPwm;
-	float standardVoltage;					// power voltage reading at which tuning was done, or 0 if unknown
 	bool enabled;
-	bool usePid;
 	bool inverted;
 	bool pidParametersOverridden;
 

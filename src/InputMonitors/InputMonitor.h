@@ -33,7 +33,7 @@ public:
 
 #if SUPPORT_LDC1612
 	void SetTriggered() noexcept;
-	void AnalogInterrupt(uint32_t reading) noexcept;			// this is public if LKDC1612 support is configured
+	void AnalogInterrupt(int32_t reading) noexcept;			// this is public if LKDC1612 support is configured
 #endif
 
 	static void Init() noexcept;
@@ -48,20 +48,20 @@ public:
 	static unsigned int AddAnalogHandleDataV0(uint8_t *buffer, size_t spaceLeft) noexcept;
 
 	static void CommonDigitalPortInterrupt(CallbackParameter cbp) noexcept;
-	static void CommonAnalogPortInterrupt(CallbackParameter cbp, uint32_t reading) noexcept;
+	static void CommonAnalogPortInterrupt(CallbackParameter cbp, int32_t reading) noexcept;
 
 private:
 	bool IsDigital() const noexcept { return threshold == 0; }
 	bool Activate() noexcept;
 	void Deactivate() noexcept;
 	void DigitalInterrupt() noexcept;
-	uint32_t GetAnalogValue() const noexcept;
+	int32_t GetAnalogValue() const noexcept;
 
 #if SUPPORT_LDC1612
 	GCodeResult SetDriveLevel(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept;
 	GCodeResult SelectTouchMode(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept;
 #else
-	void AnalogInterrupt(uint32_t reading) noexcept;			// this is private unless LKDC1612 support is configured
+	void AnalogInterrupt(int32_t reading) noexcept;			// this is private unless LDC1612 support is configured
 #endif
 
 	static bool Delete(uint16_t hndl) noexcept;
@@ -70,7 +70,7 @@ private:
 	InputMonitor *next;
 	IoPort port;
 	uint32_t whenLastSent;
-	uint32_t threshold;
+	int32_t threshold;
 	uint16_t handle;
 	uint16_t minInterval;
 	bool active;

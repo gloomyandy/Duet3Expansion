@@ -60,6 +60,7 @@
 #define SUPPORT_TMC2209			0
 #define SUPPORT_TMC2240			1
 #endif
+#define SUPPORT_TMC2240_SPI		0
 
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
@@ -93,11 +94,11 @@ constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in m
 constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
 #endif
 
-constexpr float MaximumMotorCurrent = 1600.0;
+constexpr float MaxMotorCurrent = 1600.0;
 constexpr float MaximumStandstillCurrent = 1200.0;
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
-constexpr Pin GlobalTmc22xxEnablePin = GpioPin(16);
+constexpr Pin GlobalTmcEnablePin = GpioPin(16);
 constexpr Pin Tmc22xxUartPin = GpioPin(15);
 
 constexpr Pin StepPins[NumDrivers] = { GpioPin(14) };
@@ -124,7 +125,9 @@ constexpr Pin DriverDiagPins[NumDrivers] = { NoPin };
 
 #define PIN_TODO	GpioPin(NoPin)	//TEMPORARY! Used when we haven't assigned a pin yet.
 
-constexpr bool UseAlternateCanPins = false;
+constexpr unsigned int CANInstanceNumber = 0;
+constexpr bool UseLaterCanPins = false;
+
 
 constexpr size_t MaxPortsPerHeater = 1;
 
@@ -154,15 +157,11 @@ constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(2), GpioPin(4), GpioPi
 													{GpioPin(10), GpioPin(8), GpioPin(11)} };
 #endif
 
-<<<<<<< HEAD
-#if NUM_I2C_CHANNELS
-=======
 #if SUPPORT_SPI_SENSORS
 constexpr unsigned int Temperature_SpiChannel = 0;
 #endif
->>>>>>> v3.6-dev-rp2350
 
-#if SUPPORT_I2C_SENSORS
+#if NUM_I2C_CHANNELS > 0
 // I2C using pins 18,19
 constexpr uint8_t I2CInstanceNumber = 1;
 constexpr Pin I2C0SDAPin = GpioPin(6);
@@ -183,6 +182,7 @@ constexpr Pin Lis3dhInt1Pin = GpioPin(25);
 #if SUPPORT_LDC1612
 constexpr uint16_t LDC1612_I2CAddress = 0x2B;				// pin 4 is tied high on the Grove board
 constexpr Pin LDC1612InterruptPin = GpioPin(29);			// this is brought out to a test pad
+constexpr unsigned int LDC1612_I2CChannel = 0;
 #endif
 
 // Table of pin functions that we are allowed to use

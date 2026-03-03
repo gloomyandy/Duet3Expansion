@@ -43,16 +43,17 @@
 #define HAS_SMART_DRIVERS		1
 #define HAS_STALL_DETECT		1
 #define SINGLE_DRIVER			1
-#define TMC51xx_USES_SEPARATE_CS		0
-#define TMC51xx_USES_SEPARATE_ENABLE	0
-#define TMC51xx_USES_SHARED_SPI	1
+#define TMCSPI_USES_SEPARATE_CS		0
+#define TMCSPI_USES_SEPARATE_ENABLE	0
+#define TMC_USES_SHARED_SPI	1
 #define SUPPORT_SLOW_DRIVERS	0
 #define SUPPORT_DELTA_MOVEMENT	0
 
-#define SUPPORT_TMC51xx			1
+#define SUPPORT_TMC51xx			0
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			0
-#define SUPPORT_TMC2240			1
+#define SUPPORT_TMC2240			0
+#define SUPPORT_TMC2240_SPI		1
 #define SUPPORT_INPUT_SHAPING	1
 
 
@@ -63,22 +64,24 @@ constexpr size_t MaxSmartDrivers = 1;
 constexpr uint32_t Tmc2240CurrentRange = 0x03;								// which current range we set the TMC2240 to (3A)
 constexpr uint32_t Tmc2240SlopeControl = 0x01;								// which slope control we set the TMC2240 to (200V/us)
 constexpr float Tmc2240Rref = 12.0;											// TMC2240 reference resistor in Kohms
+constexpr float DriverFullScaleCurrent = 24000/Tmc2240Rref;					// in mA, assuming we set the range bits in the DRV_CONF register to 0x01
+constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;			// with RRef = 15K this works out as 1.6A so this is the maximum current we can ask for
 
-constexpr float MaximumMotorCurrent = 2000.0;		// TMC2240
+constexpr float MaxMotorCurrent = DriverFullScaleCurrent;
 
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
-#if TMC51xx_USES_SEPARATE_ENABLE
+#if TMCSPI_USES_SEPARATE_ENABLE
 constexpr Pin Tmc51xxEnablePins[] = {GpioPin(14)};
 #else
-constexpr Pin GlobalTmc51xxEnablePin = GpioPin(14);
+constexpr Pin GlobalTmcEnablePin = GpioPin(14);
 #endif
-#if TMC51xx_USES_SEPARATE_CS
+#if TMCSPI_USES_SEPARATE_CS
 constexpr Pin Tmc51xxCSPins[] = {GpioPin(15)};
 #else
-constexpr Pin GlobalTmc51xxCSPin = GpioPin(15);
+constexpr Pin GlobalTmcCSPin = GpioPin(15);
 #endif
-#if TMC51xx_USES_SHARED_SPI
+#if TMC_USES_SHARED_SPI
 constexpr unsigned int Tmc5160_SpiChannel = 2;
 #endif
 
@@ -92,9 +95,9 @@ constexpr Pin StepPins[NumDrivers] = { GpioPin(7) };
 #define HAS_SMART_DRIVERS		1
 #define HAS_STALL_DETECT		1
 #define SINGLE_DRIVER			1
-#define TMC51xx_USES_SEPARATE_CS		0
-#define TMC51xx_USES_SEPARATE_ENABLE	0
-#define TMC51xx_USES_SHARED_SPI	1
+#define TMCSPI_USES_SEPARATE_CS		0
+#define TMCSPI_USES_SEPARATE_ENABLE	0
+#define TMC_USES_SHARED_SPI	1
 #define SUPPORT_SLOW_DRIVERS	0
 #define SUPPORT_DELTA_MOVEMENT	0
 
@@ -102,26 +105,27 @@ constexpr Pin StepPins[NumDrivers] = { GpioPin(7) };
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			0
 #define SUPPORT_TMC2240			0
+#define SUPPORT_TMC2240_SPI		0
 #define SUPPORT_INPUT_SHAPING	1
 
 
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
-constexpr float MaxTmc5160Current = 2500.0;
+constexpr float MaxMotorCurrent = 2500.0;
 constexpr uint32_t DefaultStandstillCurrentPercent = 71;
 constexpr float Tmc5160SenseResistor = 0.075;
 
-#if TMC51xx_USES_SEPARATE_ENABLE
+#if TMCSPI_USES_SEPARATE_ENABLE
 constexpr Pin Tmc51xxEnablePins[] = {GpioPin(14)};
 #else
-constexpr Pin GlobalTmc51xxEnablePin = GpioPin(14);
+constexpr Pin GlobalTmcEnablePin = GpioPin(14);
 #endif
-#if TMC51xx_USES_SEPARATE_CS
+#if TMCSPI_USES_SEPARATE_CS
 constexpr Pin Tmc51xxCSPins[] = {GpioPin(15)};
 #else
-constexpr Pin GlobalTmc51xxCSPin = GpioPin(15);
+constexpr Pin GlobalTmcCSPin = GpioPin(15);
 #endif
-#if TMC51xx_USES_SHARED_SPI
+#if TMC_USES_SHARED_SPI
 constexpr unsigned int Tmc5160_SpiChannel = 0;
 #endif
 
@@ -143,6 +147,7 @@ constexpr Pin StepPins[NumDrivers] = { GpioPin(7) };
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			1
 #define SUPPORT_TMC2240			0
+#define SUPPORT_TMC2240_SPI		0
 
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
@@ -166,11 +171,11 @@ constexpr float DriverSenseResistor = 0.11 + 0.02;							// in ohms
 constexpr float DriverVRef = 180.0;											// in mV
 constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
 constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
-constexpr float MaximumMotorCurrent = 1600.0;
+constexpr float MaxMotorCurrent = 1600.0;
 constexpr float MaximumStandstillCurrent = 1200.0;
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
-constexpr Pin GlobalTmc22xxEnablePin = GpioPin(14);
+constexpr Pin GlobalTmcEnablePin = GpioPin(14);
 constexpr Pin Tmc22xxUartPin = GpioPin(15);
 
 constexpr Pin StepPins[NumDrivers] = { GpioPin(7) };
@@ -196,7 +201,9 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(27) };
 
 #define PIN_TODO	GpioPin(NoPin)	//TEMPORARY! Used when we haven't assigned a pin yet.
 
-constexpr bool UseAlternateCanPins = false;
+constexpr unsigned int CANInstanceNumber = 0;
+constexpr bool UseLaterCanPins = false;
+
 
 constexpr size_t MaxPortsPerHeater = 1;
 

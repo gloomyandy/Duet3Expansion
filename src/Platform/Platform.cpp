@@ -46,6 +46,14 @@
 # include <ClosedLoop/ClosedLoop.h>
 #endif
 
+#if SUPPORT_INDUCTIVE_HEATER
+# include "InductiveHeaterPort.h"
+#endif
+
+#if SUPPORT_LP5817
+# include "LedStatusControl.h"
+#endif
+
 #ifdef ATEIO
 # include <Hardware/ATEIO/ExtendedAnalog.h>
 #endif
@@ -118,6 +126,14 @@ namespace Platform
 	SharedI2CMaster *sharedI2C[NUM_I2C_CHANNELS] = { 0 };
 #endif
 
+#if SUPPORT_ADS131M02
+	ADS131M02 *loadCellAdc = nullptr;
+#endif
+
+#if SUPPORT_LP5817
+	LedStatusControl *ledStatusControl = nullptr;
+#endif
+
 #if HAS_VOLTAGE_MONITOR
 	static volatile uint16_t currentVin, highestVin, lowestVin;
 //	static uint16_t lastUnderVoltageValue, lastOverVoltageValue;
@@ -147,6 +163,19 @@ namespace Platform
 #endif
 #if HAS_12V_MONITOR
 	static AveragingFilter<VinReadingsAveraged> v12Filter;
+#endif
+
+#if SUPPORT_INDUCTIVE_HEATER
+	static InductiveHeaterPort inductiveHeaterPort;
+#endif
+
+#if NUM_CURRENT_SENSORS != 0
+	static int32_t currentSensorReadings[NUM_CURRENT_SENSORS] = { 0 };
+	static int32_t currentSensorCallbackThresholds[NUM_CURRENT_SENSORS] = { 0 };
+	static CallbackParameter currentSensorCallbackParameters[NUM_CURRENT_SENSORS];
+	static StandardCallbackFunction *null currentSensorCallbackFunctions[NUM_CURRENT_SENSORS] = { 0 };
+
+	void CurrentSensorAinCallback(CallbackParameter cp, int32_t val) noexcept;
 #endif
 
 #if SAME5x
@@ -326,18 +355,12 @@ namespace Platform
 	{
 		Heat::SwitchOffAll();
 #if SUPPORT_DRIVERS
-# if SUPPORT_TMC51xx
-#  if TMC51xx_USES_SEPARATE_ENABLE
+
+# if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI || SUPPORT_TMC22xx
+#  if TMCSPI_USES_SEPARATE_ENABLE || (TMC22xx_HAS_ENABLE_PINS && TMC22xx_VARIABLE_NUM_DRIVERS)
 		SmartDrivers::TurnDriversOff();
 #  else
-		IoPort::WriteDigital(GlobalTmc51xxEnablePin, true);
-#  endif
-# endif
-# if SUPPORT_TMC22xx
-#  if TMC22xx_HAS_ENABLE_PINS && TMC22xx_VARIABLE_NUM_DRIVERS
-		SmartDrivers::TurnDriversOff();
-#  else
-		IoPort::WriteDigital(GlobalTmc22xxEnablePin, true);
+		IoPort::WriteDigital(GlobalTmcEnablePin, true);
 #  endif
 # endif
 		moveInstance->DisableAllDrives();
@@ -566,12 +589,16 @@ void Platform::Init()
 	SetPinMode(BoardTypePins[1], INPUT_PULLUP, false);
 	delayMicroseconds(10);
 	boardVariant = (digitalRead(BoardTypePins[1])) ? 0 : 1;
-#elif defined(MNBN17) && SUPPORT_TMC51xx
+#elif defined(MNBN17) && SUPPORT_TMC2240_SPI
 	// Set to use SPI for driver control
 	SetPinMode(ConfigureDriverIOPin, OUTPUT_LOW);
 #endif
 
 	InitLeds();
+
+#if SUPPORT_INDUCTIVE_HEATER
+	inductiveHeaterPort.Init();
+#endif
 
 	// Turn all outputs off
 	for (size_t pin = 0; pin < ARRAY_SIZE(PinTable); ++pin)
@@ -614,8 +641,10 @@ void Platform::Init()
 		}
 	}
 
+	InitialiseInterrupts();											// set interrupt priorities before we enable any interrupts
+
 #if defined(SAMMYC21) && USE_SERIAL_DEBUG
-	uart0.begin(115200);						// set up the UART with the same baud rate as the bootloader
+	uart0.begin(115200);											// set up the UART with the same baud rate as the bootloader
 #elif HAS_USB_SERIAL
 	serialUSB.Start(NoPin);
 #elif USE_SERIAL_DEBUG
@@ -627,6 +656,15 @@ void Platform::Init()
 	// Initialise the rest of the IO subsystem
 #if SAME5x
 	ADC_temperature_init();
+#endif
+
+#if NUM_CURRENT_SENSORS != 0
+	// Initialise the current sensor system. Each sensor is associated with an ADC input.
+	for (size_t sensorNum = 0; sensorNum < NUM_CURRENT_SENSORS; ++sensorNum)
+	{
+		IoPort::SetPinMode(CurrentSensorPins[sensorNum], AIN);
+		AnalogIn::EnableChannel(PinToAdcChannel(CurrentSensorPins[sensorNum]), Platform::CurrentSensorAinCallback, CallbackParameter(sensorNum), 1);
+	}
 #endif
 
 #if HAS_ADDRESS_SWITCHES
@@ -733,13 +771,18 @@ void Platform::Init()
 # endif
 #endif
 
+#if SUPPORT_ADS131M02
+	loadCellAdc = new ADS131M02;
+#endif
+#if SUPPORT_LP5817
+	ledStatusControl = new LedStatusControl(LP5817_I2CChannel);
+#endif
+
 #ifdef ATEIO
 	ExtendedAnalog::Init(GetSharedSpi(ExtendedAdc_SpiChan));					// must init sharedSpi before calling this
 #endif
 
 	uniqueId.SetFromCurrentBoard();
-
-	InitialiseInterrupts();
 
 #if SUPPORT_LIS3DH
 # ifdef TOOL1LC
@@ -1123,11 +1166,17 @@ void Platform::InitThermistorFilter(const IoPort& port) noexcept
 	const int adcFilterChannel = GetAveragingFilterIndex(port);
 	if (adcFilterChannel >= 0)
 	{
-		ThermistorAveragingFilter& filter = thermistorFilters[adcFilterChannel];
-		filter.Init((1u << AnalogIn::AdcBits) - 1);
-		const AdcInput adcChan = IoPort::PinToAdcInput(port.GetPin(), port.UseAlternateConfig());
-		AnalogIn::EnableChannel(adcChan, filter.CallbackFeedIntoFilter, CallbackParameter(&filter), 1);
+		InitThermistorFilter(port.GetPin(), (unsigned int)adcFilterChannel, port.UseAlternateConfig());
 	}
+}
+
+// This one is used for direct initialisation of a filter channel
+void Platform::InitThermistorFilter(Pin p, unsigned int adcFilterChannel, bool useAlternateConfig) noexcept
+{
+	ThermistorAveragingFilter& filter = thermistorFilters[adcFilterChannel];
+	filter.Init((1u << AnalogIn::AdcBits) - 1);
+	const AdcInput adcChan = IoPort::PinToAdcInput(p, useAlternateConfig);
+	AnalogIn::EnableChannel(adcChan, filter.CallbackFeedIntoFilter, CallbackParameter(&filter), 1);
 }
 
 ThermistorAveragingFilter *Platform::GetAdcFilter(unsigned int filterNumber)
@@ -1157,6 +1206,27 @@ ThermistorAveragingFilter *Platform::GetVrefFilter(unsigned int filterNumber)
 #else
 	return &thermistorFilters[VrefFilterIndex];
 #endif
+}
+
+#endif
+
+#if NUM_CURRENT_SENSORS != 0
+
+void Platform::CurrentSensorAinCallback(CallbackParameter cp, int32_t val) noexcept
+{
+	const size_t sensorNumber = cp.u32;
+	if (sensorNumber < NUM_CURRENT_SENSORS)
+	{
+		currentSensorReadings[sensorNumber] = val;
+		if (currentSensorCallbackThresholds[sensorNumber] != 0 && val > currentSensorCallbackThresholds[sensorNumber])
+		{
+			StandardCallbackFunction *null const cbfunc = currentSensorCallbackFunctions[sensorNumber];
+			if (cbfunc != nullptr)
+			{
+				(*cbfunc)(currentSensorCallbackParameters[sensorNumber]);
+			}
+		}
+	}
 }
 
 #endif
@@ -1546,6 +1616,33 @@ MinCurMax Platform::GetV12Voltages(bool resetMinMax) noexcept
 float Platform::GetCurrentV12Voltage() noexcept
 {
 	return AdcReadingToV12Voltage(currentV12);
+}
+
+#endif
+
+#if SUPPORT_INDUCTIVE_HEATER
+
+void Platform::SetInductiveHeaterPwm(float pwm) noexcept
+{
+	inductiveHeaterPort.SetPwm(pwm);
+}
+
+#endif
+
+#if NUM_CURRENT_SENSORS != 0
+
+// Get the current read from the specified sensor
+float Platform::GetCurrentSensorReading(size_t sensorNumber) noexcept
+{
+	return std::ldexp((float)currentSensorReadings[sensorNumber] * CurrentSensorFullScaleCurrents[sensorNumber], -AnalogIn::AdcBits);
+}
+
+// Set up a callback when the current exceed the specified threshold. Set the threshold to zero or the function to nullptr to stop getting callbacks.
+void Platform::SetCurrentSensorCallbackThreshold(size_t sensorNumber, float val, StandardCallbackFunction *null func, CallbackParameter param) noexcept
+{
+	currentSensorCallbackParameters[sensorNumber] = param;
+	currentSensorCallbackThresholds[sensorNumber] = (uint32_t)(std::ldexp(val, AnalogIn::AdcBits)/CurrentSensorFullScaleCurrents[sensorNumber]);
+	currentSensorCallbackFunctions[sensorNumber] = func;
 }
 
 #endif

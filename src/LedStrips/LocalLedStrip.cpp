@@ -59,7 +59,9 @@ GCodeResult LocalLedStrip::CommonConfigure(CanMessageGenericParser& parser, cons
 		}
 
 #if SUPPORT_DMA_NEOPIXEL
-# if SAME5x || SAMC21
+# if SAME5x && NEOPIXEL_USES_QSPI
+		useDma = port.GetPin() == NeopixelOutPin;
+# elif SAME5x || SAMC21
 		sercom = PinTable[port.GetPin()].sercomOut;
 		useDma = (sercom != SercomIo::none);
 # else
@@ -114,7 +116,22 @@ GCodeResult LocalLedStrip::AllocateChunkBuffer(const StringRef& reply) noexcept
 // Set up the SPI port
 void LocalLedStrip::SetupSpi() noexcept
 {
-# if SAME5x || SAMC21
+# if SAME5x && NEOPIXEL_USES_QSPI
+	hri_mclk_set_AHBMASK_QSPI_bit(MCLK);
+	hri_mclk_clear_AHBMASK_QSPI_2X_bit(MCLK);			// we don't need the 2x clock
+	hri_mclk_set_APBCMASK_QSPI_bit(MCLK);
+
+	QSPI->CTRLA.reg = QSPI_CTRLA_SWRST;										// software reset
+#  if USE_16BIT_SPI
+	QSPI->CTRLB.reg = QSPI_CTRLB_DATALEN_16BITS;							// SPI mode, 16 bits per transfer
+#  else
+	QSPI->CTRLB.reg = QSPI_CTRLB_DATALEN_8BITS;								// SPI mode, 8 bits per transfer
+#  endif
+	QSPI->BAUD.reg = QSPI_BAUD_CPOL | QSPI_BAUD_CPHA | QSPI_BAUD_BAUD(SystemCoreClockFreq/frequency - 1);
+	QSPI->CTRLA.reg = QSPI_CTRLA_ENABLE;
+	SetPinFunction(NeopixelOutPin, NeopixelOutPinFunction);
+
+# elif SAME5x || SAMC21
 	const uint8_t sercomNumber = GetDeviceNumber(sercom);
 	Serial::EnableSercomClock(sercomNumber);
 
@@ -218,7 +235,15 @@ void LocalLedStrip::LedParams::ApplyBrightness() noexcept
 // DMA the data. Must be a multiple of 2 bytes if USE_16BIT_SPI is true.
 void LocalLedStrip::DmaSendChunkBuffer(size_t numBytes) noexcept
 {
-# if SAME5x || SAMC21
+# if SAME5x && NEOPIXEL_USES_QSPI
+	DmacManager::DisableChannel(DmacChanLedTx);
+	DmacManager::SetTriggerSource(DmacChanLedTx, DmaTrigSource::qspi_tx);
+	DmacManager::SetBtctrl(DmacChanLedTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_BYTE | DMAC_BTCTRL_BLOCKACT_NOACT);
+	DmacManager::SetSourceAddress(DmacChanLedTx, chunkBuffer);
+	DmacManager::SetDestinationAddress(DmacChanLedTx, &QSPI->TXDATA.reg);
+	DmacManager::SetDataLength(DmacChanLedTx, numBytes);					// must do this last!
+	DmacManager::EnableChannel(DmacChanLedTx, DmacPrioLed);
+# elif SAME5x || SAMC21
 //	Sercom *const hardware = Serial::GetSercom(GetDeviceNumber(sercom));
 //	hardware->SPI.CTRLA.bit.ENABLE = 0;
 //	hri_sercomspi_wait_for_sync(hardware, SERCOM_SPI_CTRLA_ENABLE);

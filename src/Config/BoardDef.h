@@ -99,6 +99,7 @@
 # define SUPPORT_TMC22xx				0
 # define SUPPORT_TMC2660				0
 # define SUPPORT_TMC51xx				0
+# define SUPPORT_TMC2240_SPI			0
 # define SUPPORT_SLOW_DRIVERS			0
 constexpr size_t NumDrivers = 0;
 #endif
@@ -143,6 +144,14 @@ constexpr size_t NumDrivers = 0;
 # define SUPPORT_TCA6408A				0
 #endif
 
+#ifndef SUPPORT_LP5817
+# define SUPPORT_LP5817					0
+#endif
+
+#ifndef SUPPORT_ADS131M02
+# define SUPPORT_ADS131M02				0
+#endif
+
 #ifndef SUPPORT_TPiS_1T_1086_L5_5
 # define SUPPORT_TPiS_1T_1086_L5_5		0
 #endif
@@ -151,12 +160,28 @@ constexpr size_t NumDrivers = 0;
 # define SUPPORT_INDUCTIVE_HEATER		0
 #endif
 
+#ifndef NUM_CURRENT_SENSORS
+# define NUM_CURRENT_SENSORS			0
+#endif
+
 #ifndef USE_SPICAN
 # define USE_SPICAN						0
 #endif
 
+#ifndef NEOPIXEL_USES_QSPI
+# define NEOPIXEL_USES_QSPI				0
+#endif
+
 #ifndef BOARD_USES_UF2_BINARY
 # define BOARD_USES_UF2_BINARY			0
+#endif
+
+#ifndef HEATER_POLL_RATE_MULTIPLIER
+# define HEATER_POLL_RATE_MULTIPLIER	(1)			// how many times faster we run the temperature control loop than the standard 4Hz
+#endif
+
+#ifndef CUSTOM_THERMISTORS
+# define CUSTOM_THERMISTORS				0
 #endif
 
 #endif /* SRC_CONFIG_BOARDDEF_H_ */

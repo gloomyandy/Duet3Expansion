@@ -42,6 +42,7 @@
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			1
 #define SUPPORT_TMC2240			0
+#define SUPPORT_TMC2240_SPI		0
 
 constexpr size_t NumDrivers = 2;
 constexpr size_t MaxSmartDrivers = 2;
@@ -66,7 +67,7 @@ constexpr float DriverSenseResistor = 0.11 + 0.02;							// in ohms
 constexpr float DriverVRef = 180.0;											// in mV
 constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
 constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
-constexpr float MaximumMotorCurrent = 1600.0;
+constexpr float MaxMotorCurrent = 1600.0;
 constexpr float MaximumStandstillCurrent = 1200.0;
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
@@ -97,7 +98,9 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(19), NoPin };
 
 #define PIN_TODO	GpioPin(NoPin)	//TEMPORARY! Used when we haven't assigned a pin yet.
 
-constexpr bool UseAlternateCanPins = false;
+constexpr unsigned int CANInstanceNumber = 0;
+constexpr bool UseLaterCanPins = false;
+
 
 constexpr size_t MaxPortsPerHeater = 1;
 

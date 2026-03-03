@@ -12,7 +12,7 @@
 
 #if SUPPORT_TCA6408A
 
-#include "SharedI2CClient.h"
+#include <Hardware/SharedI2CClient.h>
 
 // TCA6408A I2C expander class
 class TCA6408A : public SharedI2CClient
@@ -27,7 +27,7 @@ public:
 	void Poll() noexcept;												// update the output and read the inputs
 
 private:
-	enum class TCA6408ARegister
+	enum class TCA6408ARegister : uint8_t
 	{
 		input = 0, output, polarityInversion, config					// these are all 8-bit registers
 	};

@@ -38,6 +38,7 @@
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			1
 #define SUPPORT_TMC2240			0
+#define SUPPORT_TMC2240_SPI		0
 
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
@@ -49,16 +50,16 @@ constexpr size_t MaxSmartDrivers = 1;
 #define TMC22xx_VARIABLE_NUM_DRIVERS	0
 #define TMC22xx_USE_SLAVEADDR			0
 
-constexpr Pin GlobalTmc22xxEnablePin = PortBPin(2);
+constexpr Pin GlobalTmcEnablePin = PortBPin(2);
 
-constexpr uint8_t TMC22xxSercomNumber = 3;
-Sercom * const SERCOM_TMC22xx = SERCOM3;
+constexpr uint8_t TMCSercomNumber = 3;
+Sercom * const SERCOM_TMC = SERCOM3;
 
-constexpr Pin TMC22xxSercomTxPin = PortAPin(22);
-constexpr GpioPinFunction TMC22xxSercomTxPinPeriphMode = GpioPinFunction::C;
-constexpr Pin TMC22xxSercomRxPin = PortAPin(20);
-constexpr GpioPinFunction TMC22xxSercomRxPinPeriphMode = GpioPinFunction::D;
-constexpr uint8_t TMC22xxSercomRxPad = 2;
+constexpr Pin TMCSercomTxPin = PortAPin(22);
+constexpr GpioPinFunction TMCSercomTxPinPeriphMode = GpioPinFunction::C;
+constexpr Pin TMCSercomRxPin = PortAPin(20);
+constexpr GpioPinFunction TMCSercomRxPinPeriphMode = GpioPinFunction::D;
+constexpr uint8_t TMCSercomRxPad = 2;
 
 // Define the baud rate used to send/receive data to/from the drivers.
 // If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
@@ -69,12 +70,12 @@ constexpr uint8_t TMC22xxSercomRxPad = 2;
 constexpr uint32_t DriversBaudRate = 200000;
 constexpr uint32_t TransferTimeout = 10;									// any transfer should complete within 10 ticks @ 1ms/tick
 
+// TOOL1LC uses a TMC2209 driver
 constexpr float DriverSenseResistor = 0.091 + 0.02 + 0.003;					// in ohms. Added the 0.003 to make the max current a round 1600mA.
 constexpr float DriverVRef = 180.0;											// in mV
 constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
 constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
-constexpr float MaximumMotorCurrent = 1600.0;
-constexpr float MaximumStandstillCurrent = 1200.0;
+constexpr float MaxMotorCurrent = 1600.0;
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
 PortGroup * const StepPio = &(PORT->Group[0]);		// the PIO that all the step pins are on

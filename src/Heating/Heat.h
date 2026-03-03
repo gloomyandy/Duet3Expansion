@@ -19,13 +19,14 @@
 class TemperatureSensor;
 class FopDt;
 struct CanMessageGeneric;
-struct CanMessageHeaterModelV2;
+struct CanMessageHeaterModelV3;
 struct CanMessageSetHeaterFaultDetectionParameters;
 struct CanMessageSetHeaterMonitors;
 struct CanMessageHeaterFeedForwardV1;
 struct CanMessageSensorTemperatures;
-struct CanMessageSetHeaterTemperature;
+struct CanMessageSetHeaterTemperatureV1;
 struct CanMessageHeaterTuningCommand;
+class CanMessageBuffer;
 
 namespace Heat
 {
@@ -34,11 +35,13 @@ namespace Heat
 	void Init() noexcept;												// Set everything up
 	void Exit() noexcept;												// Shut everything down
 
-	GCodeResult ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+	GCodeResult ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply, uint8_t& extra) noexcept;
 	GCodeResult ProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
-	GCodeResult ProcessM307V1(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
+	GCodeResult ProcessM307(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept;
 	GCodeResult SetFaultDetection(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept;
 	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;
+
+	void SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept;			// set and report the default model for a heater
 
 	void SwitchOffAll() noexcept;										// Turn all heaters off
 	void ResetFault(int heater) noexcept;								// Reset a heater fault - only call this if you know what you are doing
@@ -48,7 +51,7 @@ namespace Heat
 	void ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemperatures& msg) noexcept;
 
 	// Methods that relate to a particular heater
-	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
+	GCodeResult SetTemperature(const CanMessageSetHeaterTemperatureV1& msg, const StringRef& reply) noexcept;
 	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept;
 	GCodeResult FeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept;
 
@@ -73,6 +76,8 @@ namespace Heat
 
 	void NewDriverFault() noexcept;
 	void NewHeaterFault() noexcept;
+
+	constexpr uint32_t NormalHeaterPollInterval = HeatSampleIntervalMillis / HEATER_POLL_RATE_MULTIPLIER;
 };
 
 #endif /* SRC_HEATING_HEAT_H_ */

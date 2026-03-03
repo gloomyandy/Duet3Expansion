@@ -15,12 +15,16 @@
 # include <Hardware/ATEIO/ExtendedAnalog.h>
 #endif
 
-#ifdef TOOL1LC
+#if defined(TOOL1LC) || SUPPORT_INDUCTIVE_HEATER
 # include <Platform/Platform.h>
 #endif
 
 #if SUPPORT_LDC1612
 # include <CommandProcessing/ScanningSensorHandler.h>
+#endif
+
+#if SUPPORT_LP5817
+# include <Platform/LedStatusControl.h>
 #endif
 
 #if SUPPORT_OVERRIDE_STEP_PIN
@@ -146,6 +150,13 @@ bool IoPort::SetMode(PinAccess access) noexcept
 		}
 		else
 #endif
+#if SUPPORT_ADS131M02
+			if (chan == AdcInput::ads131m02 && access == PinAccess::readAnalog)
+			{
+				// nothing needed here
+			}
+			else
+#endif
 		{
 			if (chan != AdcInput::none)
 			{
@@ -190,7 +201,7 @@ bool IoPort::ReadDigital() const noexcept
 	return false;
 }
 
-uint32_t IoPort::ReadAnalog() const noexcept
+int32_t IoPort::ReadAnalog() const noexcept
 {
 	if (IsValid())
 	{
@@ -199,6 +210,13 @@ uint32_t IoPort::ReadAnalog() const noexcept
 		if (chan == AdcInput::ldc1612)
 		{
 			return ScanningSensorHandler::GetReading();
+		}
+#endif
+#if SUPPORT_ADS131M02
+		if (chan == AdcInput::ads131m02)
+		{
+			ADS131M02 *const loadCellAdc = Platform::GetLoadCellAdc();
+			return (loadCellAdc == nullptr) ? std::numeric_limits<int32_t>::min() : loadCellAdc->GetLatestData();
 		}
 #endif
 		if (chan != AdcInput::none)
@@ -360,13 +378,18 @@ void IoPort::AppendBasicDetails(const StringRef& str) const noexcept
 	{
 		str.catf(" pin ");
 		AppendPinName(str);
-		if (logicalPinModes[pin] == INPUT_PULLUP)
+#if SUPPORT_INDUCTIVE_HEATER
+		if (pin != InductiveHeaterPin)
+#endif
 		{
-			str.cat(", pullup enabled");
-		}
-		else if (logicalPinModes[pin] == INPUT)
-		{
-			str.cat(", pullup disabled");
+			if (logicalPinModes[pin] == INPUT_PULLUP)
+			{
+				str.cat(", pullup enabled");
+			}
+			else if (logicalPinModes[pin] == INPUT)
+			{
+				str.cat(", pullup disabled");
+			}
 		}
 	}
 	else
@@ -584,7 +607,11 @@ PwmPort::PwmPort() noexcept
 // Append the frequency if the port is valid
 void PwmPort::AppendFrequency(const StringRef& str) const noexcept
 {
-	if (IsValid())
+	if (IsValid()
+#if SUPPORT_INDUCTIVE_HEATER
+		&& pin != InductiveHeaterPin
+#endif
+	   )
 	{
 		str.catf(" frequency %uHz", frequency);
 	}
@@ -612,9 +639,9 @@ void PwmPort::WriteAnalog(float pwm) const noexcept
 			for (size_t i = 0; i < NumDrivers; i++)
 			{
 				fastDigitalWriteHigh(StepPins[i]);
-#if DIFFERENTIAL_STEPPER_OUTPUTS
+# if DIFFERENTIAL_STEPPER_OUTPUTS
 				fastDigitalWriteLow(InvertedStepPins[i]);
-#endif
+# endif
 			}
 		}
 		else
@@ -622,15 +649,35 @@ void PwmPort::WriteAnalog(float pwm) const noexcept
 			for (size_t i = 0; i < NumDrivers; i++)
 			{
 				fastDigitalWriteLow(StepPins[i]);
-#if DIFFERENTIAL_STEPPER_OUTPUTS
+# if DIFFERENTIAL_STEPPER_OUTPUTS
 				fastDigitalWriteHigh(InvertedStepPins[i]);
-#endif
+# endif
 			}
 			moveInstance->EnableStepPins();
 		}
 		return;
 	}
 #endif
+
+#if SUPPORT_INDUCTIVE_HEATER
+	if (pin == InductiveHeaterPin)
+	{
+		Platform::SetInductiveHeaterPwm(pwm);
+		return;
+	}
+#endif
+#if SUPPORT_LP5817
+	if (pin == LP5817Pin)
+	{
+		LedStatusControl *const ledDriver = Platform::GetStatusLedControl();
+		if (ledDriver != nullptr)
+		{
+			const uint32_t val = lrintf(std::ldexpf(pwm, 24));
+			ledDriver->SetTestColour(val);
+		}
+	}
+#endif
+
 	IoPort::WriteAnalog(pin, ((totalInvert) ? 1.0 - pwm : pwm), frequency);
 }
 

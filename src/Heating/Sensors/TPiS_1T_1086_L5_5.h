@@ -13,16 +13,77 @@
 #if SUPPORT_TPiS_1T_1086_L5_5
 
 #include "I2CTemperatureSensor.h"
+#include "AdditionalOutputSensor.h"
+
+class CanMessageGenericParser;
 
 class TPiS_1T_1086_L5_5 : public I2CTemperatureSensor
 {
 public:
-	TPiS_1T_1086_L5_5(unsigned int sensorNum);
-	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) override;
+	TPiS_1T_1086_L5_5(unsigned int sensorNum) noexcept;
 
-	static constexpr const char *TypeName = "tpis1t1086";
+	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
+
+	static constexpr const char *TypeName = "thermopile_tpis.object";
+
+	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 2; }
+	TemperatureError GetAdditionalOutput(float& t, uint8_t outputNumber) noexcept override;
 
 	void Poll() override;
+
+private:
+	static SensorTypeDescriptor typeDescriptor;
+
+	static constexpr uint32_t TPis_I2C_timeout = 25;					// timeout in milliseconds when waiting to acquire the I2C bus
+
+	static constexpr float FovAndEmissivityCorrection = 0.45;			// Calibration factor for reduced emissivity and/or reduced FOV coverage
+
+	// Calibration constants read from EPROM
+	uint16_t TempCalibPtat25;
+	uint16_t TempCalibM;
+	uint32_t TempCalibUo;
+	uint32_t TempCalibUout1;
+	uint8_t TempCalibTobj1;
+
+	// Calibration constants calculated from the above
+	float recipTempCalibM;
+	float recipCorrectedK;
+
+	// Latest raw readings from the sensor
+	float ambientTemperatureDegK;
+	float objectTemperatureDegK;
+
+	// Parameters for the thermistor that measures the surround temperature
+	float r25, beta, shC, seriesR;										// configured parameters
+	float shA, shB;														// derived parameters
+	float environmentTemperature = BadErrorTemperature;
+	TemperatureError thermistorResult = TemperatureError::notReady;
+
+	static constexpr unsigned int AdcOversampleBits = 2;				// we use 2-bit oversampling
+	static constexpr int32_t OversampledAdcRange = 1u << (AnalogIn::AdcBits + AdcOversampleBits);	// The readings we pass in should be in range 0..(AdcRange - 1)
+};
+
+// This class represents the TPiS_1T_1086_L5_5 ambient temperature sensor
+class TPiS_AmbientTemperatureSensor : public AdditionalOutputSensor
+{
+public:
+	TPiS_AmbientTemperatureSensor(unsigned int sensorNum) noexcept;
+	~TPiS_AmbientTemperatureSensor() noexcept;
+
+	static constexpr const char *TypeName = "thermopile_tpis.ambient";
+
+private:
+	static SensorTypeDescriptor typeDescriptor;
+};
+
+// This class represents the environment temperature sensor
+class TPiS_EnvironmentTemperatureSensor : public AdditionalOutputSensor
+{
+public:
+	TPiS_EnvironmentTemperatureSensor(unsigned int sensorNum) noexcept;
+	~TPiS_EnvironmentTemperatureSensor() noexcept;
+
+	static constexpr const char *TypeName = "thermopile_tpis.environment";
 
 private:
 	static SensorTypeDescriptor typeDescriptor;

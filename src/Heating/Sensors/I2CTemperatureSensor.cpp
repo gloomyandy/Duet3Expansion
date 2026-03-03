@@ -11,9 +11,8 @@
 
 #include <Platform/Platform.h>
 
-I2CTemperatureSensor::I2CTemperatureSensor(unsigned int sensorNum, const char *name, unsigned int i2cNumber, uint16_t address)
-	: TemperatureSensor(sensorNum, name),
-	  device(Platform::GetSharedI2C(i2cNumber), address)
+I2CTemperatureSensor::I2CTemperatureSensor(unsigned int sensorNum, const char *name, unsigned int i2cNumber, uint16_t address) noexcept
+	: TemperatureSensor(sensorNum, name), device(Platform::GetSharedI2C(i2cNumber), address)
 {
 	//TODO
 }

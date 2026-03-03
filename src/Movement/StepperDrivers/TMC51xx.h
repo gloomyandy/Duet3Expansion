@@ -10,7 +10,7 @@
 
 #include <RepRapFirmware.h>
 
-#if SUPPORT_TMC51xx
+#if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
 
 #include "DriverMode.h"
 #include <atomic>
@@ -59,7 +59,7 @@ namespace SmartDrivers
 	GCodeResult SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept;
 	extern std::atomic<uint16_t> driverStallsToNotify;
 
-#if SUPPORT_TMC2240
+#if SUPPORT_TMC2240_SPI
 	float GetDriverTemperature(size_t driver) noexcept;
 #endif
 };

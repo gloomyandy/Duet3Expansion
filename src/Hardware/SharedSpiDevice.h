@@ -15,47 +15,22 @@
 
 #if NUM_SPI_CHANNELS > 0
 
+#include "SpiDevice.h"
 #include <RTOSIface/RTOSIface.h>
 
-#if RPXXXX
-# include "SPI.h"
-#endif
-
-enum class SpiMode : uint8_t
-{
-	mode0 = 0, mode1, mode2, mode3
-};
-
-
-class SharedSpiDevice
+class SharedSpiDevice : public SpiDevice
 {
 public:
 #if SAME5x || SAMC21
-	SharedSpiDevice(uint8_t sercomNum, uint32_t dataInPad) noexcept;
+	SharedSpiDevice(uint8_t sercomNum, uint32_t dataInPad, uint32_t dataOutPad) noexcept;
 #elif RPXXXX
 	SharedSpiDevice(SPIChannel dev) noexcept;
 #endif
 
-	void Disable() const noexcept;
-	void SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) const noexcept;
-	bool TransceivePacket(const uint8_t *tx_data, uint8_t *rx_data, size_t len) const noexcept;
 	bool Take(uint32_t timeout) noexcept { return mutex.Take(timeout); }					// get ownership of this SPI, return true if successful
 	void Release() noexcept { mutex.Release(); }
 
-	static constexpr uint32_t DefaultSharedSpiClockFrequency = 2000000;
-
 private:
-
-#if SAME5x || SAMC21
-	bool waitForTxReady() const noexcept;
-	bool waitForTxEmpty() const noexcept;
-	bool waitForRxReady() const noexcept;
-
-	Sercom * const hardware;
-#elif RPXXXX
-	SPI *hardware;
-#endif
-protected:
 	Mutex mutex;
 };
 

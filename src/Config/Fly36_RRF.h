@@ -45,6 +45,7 @@
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			1
 #define SUPPORT_TMC2240			0
+#define SUPPORT_TMC2240_SPI		0
 
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
@@ -68,19 +69,19 @@ constexpr float DriverSenseResistor = 0.11 + 0.02;							// in ohms
 constexpr float DriverVRef = 180.0;											// in mV
 constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
 constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
-constexpr float MaximumMotorCurrent = 1600.0;
+constexpr float MaxMotorCurrent = 1600.0;
 constexpr float MaximumStandstillCurrent = 1200.0;
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
 #if BOARD_REV == 1
-constexpr Pin GlobalTmc22xxEnablePin = GpioPin(13);
+constexpr Pin GlobalTmcEnablePin = GpioPin(13);
 constexpr Pin Tmc22xxUartPin = GpioPin(15);
 
 constexpr Pin StepPins[NumDrivers] = { GpioPin(7) };
 constexpr Pin DirectionPins[NumDrivers] = { GpioPin(6) };
 constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(14) };
 #else
-constexpr Pin GlobalTmc22xxEnablePin = GpioPin(25);
+constexpr Pin GlobalTmcEnablePin = GpioPin(25);
 constexpr Pin Tmc22xxUartPin = GpioPin(1);
 
 constexpr Pin StepPins[NumDrivers] = { GpioPin(24) };
@@ -105,7 +106,9 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(22) };
 
 #define PIN_TODO	GpioPin(NoPin)	//TEMPORARY! Used when we haven't assigned a pin yet.
 
-constexpr bool UseAlternateCanPins = false;
+constexpr unsigned int CANInstanceNumber = 0;
+constexpr bool UseLaterCanPins = false;
+
 
 constexpr size_t MaxPortsPerHeater = 1;
 

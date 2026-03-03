@@ -173,6 +173,10 @@ constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 
 #define DEGREE_SYMBOL	"\xC2\xB0"									// degree-symbol encoding in UTF8
 
+// Conversion functions
+inline constexpr float ConvertDegCToDegK(float degC) noexcept { return degC - ABS_ZERO; }
+inline constexpr float ConvertDegKToDegC(float degK) noexcept { return degK + ABS_ZERO; }
+
 constexpr uint32_t UpdateBootloaderMagicValue = 0x0b00140ad;		// magic number that we write to the user area word 3 to indicate that the bootloader is to be updated
 constexpr size_t UpdateBootloaderMagicWordIndex = 9;				// which word in the user area we write the value to
 #if RPXXXX

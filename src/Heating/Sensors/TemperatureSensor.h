@@ -78,6 +78,9 @@ public:
 	// Return the sensor number
 	unsigned int GetSensorNumber() const { return sensorNumber; }
 
+	// Return the most recent status
+	TemperatureError GetLastResult() const noexcept { return lastResult; }
+
 	// Return the code for the most recent error
 	TemperatureError GetLastError() const { return lastRealError; }
 

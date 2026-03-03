@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include <Hardware/SharedSpiDevice.h>
+#include <Hardware/SpiDevice.h>
 
 #if NUM_SPI_CHANNELS > 0
 
@@ -23,12 +23,12 @@ constexpr uint32_t SpiTimeout = 10000;
 
 // SharedSpiDevice members
 
-SharedSpiDevice::SharedSpiDevice(uint8_t sercomNum, uint32_t dataInPad) noexcept : hardware(Serial::Sercoms[sercomNum])
+SpiDevice::SpiDevice(uint8_t sercomNum, uint32_t dataInPad, uint32_t dataOutPad) noexcept : hardware(Serial::Sercoms[sercomNum])
 {
 	Serial::EnableSercomClock(sercomNum);
 
 	// Set up the SERCOM
-	const uint32_t regCtrlA = SERCOM_SPI_CTRLA_MODE(3) | SERCOM_SPI_CTRLA_DIPO(dataInPad) | SERCOM_SPI_CTRLA_DOPO(0) | SERCOM_SPI_CTRLA_FORM(0);
+	const uint32_t regCtrlA = SERCOM_SPI_CTRLA_MODE(3) | SERCOM_SPI_CTRLA_DIPO(dataInPad) | SERCOM_SPI_CTRLA_DOPO(dataOutPad) | SERCOM_SPI_CTRLA_FORM(0);
 	const uint32_t regCtrlB = 0;												// 8 bits, slave select disabled, receiver disabled for now
 #if SAME5x
 	const uint32_t regCtrlC = 0;												// not 32-bit mode
@@ -51,7 +51,7 @@ SharedSpiDevice::SharedSpiDevice(uint8_t sercomNum, uint32_t dataInPad) noexcept
 #if SAME5x
 	hri_sercomspi_write_CTRLC_reg(hardware, regCtrlC);
 #endif
-	hri_sercomspi_write_BAUD_reg(hardware, SERCOM_SPI_BAUD_BAUD(Serial::SercomFastGclkFreq/(2 * DefaultSharedSpiClockFrequency) - 1));
+	hri_sercomspi_write_BAUD_reg(hardware, SERCOM_SPI_BAUD_BAUD(Serial::SercomFastGclkFreq/(2 * DefaultSpiClockFrequency) - 1));
 	hri_sercomspi_write_DBGCTRL_reg(hardware, SERCOM_I2CM_DBGCTRL_DBGSTOP);		// baud rate generator is stopped when CPU halted by debugger
 
 #if 0	// if using DMA
@@ -73,18 +73,16 @@ SharedSpiDevice::SharedSpiDevice(uint8_t sercomNum, uint32_t dataInPad) noexcept
 #endif
 
 	hardware->SPI.CTRLB.bit.RXEN = 1;
-
-	mutex.Create("SPI");
 }
 
-void SharedSpiDevice::Disable() const noexcept
+void SpiDevice::Disable() const noexcept
 {
 	hardware->SPI.CTRLA.bit.ENABLE = 0;
 	hri_sercomspi_wait_for_sync(hardware, SERCOM_SPI_CTRLA_ENABLE);
 }
 
 // Wait for transmitter ready returning true if timed out
-inline bool SharedSpiDevice::waitForTxReady() const noexcept
+inline bool SpiDevice::waitForTxReady() const noexcept
 {
 	uint32_t timeout = SpiTimeout;
 	while (!(hardware->SPI.INTFLAG.bit.DRE))
@@ -98,7 +96,7 @@ inline bool SharedSpiDevice::waitForTxReady() const noexcept
 }
 
 // Wait for transmitter empty returning true if timed out
-inline bool SharedSpiDevice::waitForTxEmpty() const noexcept
+inline bool SpiDevice::waitForTxEmpty() const noexcept
 {
 	uint32_t timeout = SpiTimeout;
 	while (!(hardware->SPI.INTFLAG.bit.TXC))
@@ -112,7 +110,7 @@ inline bool SharedSpiDevice::waitForTxEmpty() const noexcept
 }
 
 // Wait for receive data available returning true if timed out
-inline bool SharedSpiDevice::waitForRxReady() const noexcept
+inline bool SpiDevice::waitForRxReady() const noexcept
 {
 	uint32_t timeout = SpiTimeout;
 	while (!(hardware->SPI.INTFLAG.bit.RXC))
@@ -125,7 +123,7 @@ inline bool SharedSpiDevice::waitForRxReady() const noexcept
 	return false;
 }
 
-void SharedSpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) const noexcept
+void SpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) const noexcept
 {
 	// We have to disable SPI device in order to change the baud rate and mode
 	Disable();
@@ -146,7 +144,7 @@ void SharedSpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) cons
 	hri_sercomspi_wait_for_sync(hardware, SERCOM_SPI_CTRLA_ENABLE);
 }
 
-bool SharedSpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data, size_t len) const noexcept
+bool SpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data, size_t len) const noexcept
 {
 	for (uint32_t i = 0; i < len; ++i)
 	{

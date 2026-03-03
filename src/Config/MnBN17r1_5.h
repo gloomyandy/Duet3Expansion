@@ -41,15 +41,16 @@
 #define SUPPORT_DELTA_MOVEMENT	0
 
 #define SUPPORT_CLOSED_LOOP     0
-#define SUPPORT_TMC51xx			1
-#define SUPPORT_TMC2240			1
+#define SUPPORT_TMC51xx			0
+#define SUPPORT_TMC2240			0
+#define SUPPORT_TMC2240_SPI		1
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			0
 #define SUPPORT_TMC2209			0
 
-#define TMC51xx_USES_SHARED_SPI 1
-#define TMC51xx_USES_SEPARATE_CS		0
-#define TMC51xx_USES_SEPARATE_ENABLE	0
+#define TMC_USES_SHARED_SPI 	1
+#define TMCSPI_USES_SEPARATE_CS		0
+#define TMCSPI_USES_SEPARATE_ENABLE	0
 
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
@@ -58,8 +59,10 @@ constexpr size_t MaxSmartDrivers = 1;
 constexpr uint32_t Tmc2240CurrentRange = 0x03;								// which current range we set the TMC2240 to (3A)
 constexpr uint32_t Tmc2240SlopeControl = 0x01;								// which slope control we set the TMC2240 to (200V/us)
 constexpr float Tmc2240Rref = 12.0;											// TMC2240 reference resistor in Kohms
+constexpr float DriverFullScaleCurrent = 24000/Tmc2240Rref;					// in mA, assuming we set the range bits in the DRV_CONF register to 0x01
+constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;			// with RRef = 15K this works out as 1.6A so this is the maximum current we can ask for
 
-constexpr float MaximumMotorCurrent = 2000.0;		// TMC2240
+constexpr float MaxMotorCurrent = DriverFullScaleCurrent;
 
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
@@ -67,8 +70,8 @@ constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 constexpr Pin StepPins[NumDrivers]         = { GpioPin(3) }; // GPIO3 DRV_STEP
 constexpr Pin DirectionPins[NumDrivers]    = { GpioPin(2) }; // GPIO2 DRV_DIR
 
-constexpr Pin GlobalTmc51xxEnablePin = GpioPin(0);
-constexpr Pin GlobalTmc51xxCSPin	 = GpioPin(5);
+constexpr Pin GlobalTmcEnablePin = GpioPin(0);
+constexpr Pin GlobalTmcCSPin	 = GpioPin(5);
 constexpr unsigned int Tmc5160_SpiChannel = 0;
 
 #if HAS_STALL_DETECT
@@ -84,7 +87,6 @@ constexpr Pin ConfigureDriverIOPin = GpioPin(29);	// GPIO29 DRV_UART_ENA - pull 
 
 #define SUPPORT_THERMISTORS		0
 #define SUPPORT_SPI_SENSORS		0
-#define NUM_SPI_CHANNELS		1
 #define SUPPORT_LIS3DH			0
 #define SUPPORT_DHT_SENSOR		0
 #define SUPPORT_LDC1612			0
@@ -106,7 +108,9 @@ constexpr unsigned int Temperature_SpiChannel = 0;
 #endif
 
 
-constexpr bool UseAlternateCanPins = false;
+constexpr unsigned int CANInstanceNumber = 0;
+constexpr bool UseLaterCanPins = false;
+
 
 constexpr size_t MaxPortsPerHeater = 1;
 

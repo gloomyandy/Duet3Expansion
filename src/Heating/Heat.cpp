@@ -19,7 +19,7 @@ Licence: GPL
 ****************************************************************************************************/
 
 #include "Heat.h"
-#include "Heater.h"
+#include "LocalHeater.h"
 #include <Platform/Platform.h>
 #include <Platform/TaskPriorities.h>
 #include <Movement/Move.h>
@@ -42,10 +42,6 @@ Licence: GPL
 # include <CommandProcessing/AccelerometerHandler.h>
 #endif
 
-#if SUPPORT_INDUCTIVE_HEATER
-# include "InductiveHeater.h"
-#endif
-
 #include <Platform/Tasks.h>
 
 // The task stack size must be large enough for calls to debugPrintf when a heater fault occurs.
@@ -57,10 +53,6 @@ namespace Heat
 {
 	// Private members
 	static Heater* heaters[MaxHeaters];							// A PID controller for each heater
-
-#if SUPPORT_INDUCTIVE_HEATER
-	InductiveHeater inductiveHeater;
-#endif
 
 	static TemperatureSensor * volatile sensorsRoot = nullptr;	// The sensor list, which must be maintained in sensor number order because the Heat task assumes that
 
@@ -202,10 +194,6 @@ void Heat::Init() noexcept
 	retractionMinTemp = DefaultMinRetractionTemperature;
 	coldExtrude = false;
 
-#if SUPPORT_INDUCTIVE_HEATER
-	inductiveHeater.Init();
-#endif
-
 	heaterTask = new Task<HeaterTaskStackWords>;
 	heaterTask->Create(Heat::TaskLoop, "HEAT", nullptr, TaskPriority::HeatPriority);
 }
@@ -231,11 +219,14 @@ void Heat::Exit() noexcept
 // - Broadcast the status of our motor drivers
 [[noreturn]] void Heat::TaskLoop(void *) noexcept
 {
+#if HEATER_POLL_RATE_MULTIPLIER > 1
+	unsigned int iterationCount = 0;
+#endif
 	uint32_t nextWakeTime = millis();
 	for (;;)
 	{
 		// Wait until we are woken or it's time to send another regular broadcast. If we are really unlucky, we could end up waiting for one tick too long.
-		nextWakeTime += HeatSampleIntervalMillis;
+		nextWakeTime += Heat::NormalHeaterPollInterval;
 		{
 			const uint32_t now = millis();
 			int32_t delayTime = (int32_t)(nextWakeTime - now);
@@ -270,6 +261,16 @@ void Heat::Exit() noexcept
 		const uint32_t startTime = millis();
 		if ((int32_t)(startTime - nextWakeTime) >= 0)
 		{
+#if HEATER_POLL_RATE_MULTIPLIER > 1
+			++iterationCount;
+			const bool doSend = (iterationCount == HEATER_POLL_RATE_MULTIPLIER);
+			if (doSend)
+			{
+				iterationCount = 0;
+			}
+#else
+			constexpr bool doSend = true;
+#endif
 			{
 				// Walk the sensor list and poll all sensors
 				// Also prepare to broadcast our sensor temperatures
@@ -282,7 +283,7 @@ void Heat::Exit() noexcept
 					for (TemperatureSensor *currentSensor = sensorsRoot; currentSensor != nullptr; currentSensor = currentSensor->GetNext())
 					{
 						currentSensor->Poll();
-						if (currentSensor->GetBoardAddress() == CanInterface::GetCanAddress() && sensorsFound < ARRAY_SIZE(sensorTempsMsg->temperatureReports))
+						if (doSend && currentSensor->GetBoardAddress() == CanInterface::GetCanAddress() && sensorsFound < ARRAY_SIZE(sensorTempsMsg->temperatureReports))
 						{
 							const unsigned int sn = currentSensor->GetSensorNumber();
 							if (sn >= nextUnreportedSensor && sn < 64)
@@ -317,111 +318,117 @@ void Heat::Exit() noexcept
 				}
 
 				// Broadcast our sensor temperatures
-				lastSensorsBroadcastWhich = sensorTempsMsg->whichSensors;	// for diagnostics
-				lastSensorsBroadcastWhen = millis();						// for diagnostics
-				lastSensorsFound = sensorsFound;
-				if (sensorsFound != 0)
+				if (doSend)
 				{
-					buf.dataLength = sensorTempsMsg->GetActualDataLength(sensorsFound);
-					CanInterface::Send(&buf);
-				}
-			}
-
-			// See if we are tuning a heater, or have finished tuning one
-			if (heaterBeingTuned != -1)
-			{
-				const auto h = FindHeater(heaterBeingTuned);
-				if (h.IsNotNull() && h->IsTuning())
-				{
-					auto msg = buf.SetupRequestMessageNoRid<CanMessageHeaterTuningReport>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
-					if (LocalHeater::GetTuningCycleData(*msg))
+					lastSensorsBroadcastWhich = sensorTempsMsg->whichSensors;	// for diagnostics
+					lastSensorsBroadcastWhen = millis();						// for diagnostics
+					lastSensorsFound = sensorsFound;
+					if (sensorsFound != 0)
 					{
-						msg->SetStandardFields(heaterBeingTuned);
+						buf.dataLength = sensorTempsMsg->GetActualDataLength(sensorsFound);
 						CanInterface::Send(&buf);
 					}
 				}
+			}
+
+			if (doSend)
+			{
+				// See if we are tuning a heater, or have finished tuning one
+				if (heaterBeingTuned != -1)
+				{
+					const auto h = FindHeater(heaterBeingTuned);
+					if (h.IsNotNull() && h->IsTuning())
+					{
+						auto msg = buf.SetupRequestMessageNoRid<CanMessageHeaterTuningReport>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+						if (LocalHeater::GetTuningCycleData(*msg))
+						{
+							msg->SetStandardFields(heaterBeingTuned);
+							CanInterface::Send(&buf);
+						}
+					}
+					else
+					{
+						heaterBeingTuned = -1;
+					}
+				}
+
+				if (newHeaterFaultState == 0)
+				{
+					SendHeatersStatus(buf);						// send the status of our heaters
+				}
 				else
 				{
-					heaterBeingTuned = -1;
+					newHeaterFaultState = 0;					// we recently sent it, so send it again next time
 				}
-			}
 
-			if (newHeaterFaultState == 0)
-			{
-				SendHeatersStatus(buf);						// send the status of our heaters
-			}
-			else
-			{
-				newHeaterFaultState = 0;					// we recently sent it, so send it again next time
-			}
-
-			// Broadcast our fan RPMs
-			{
-				CanMessageFansReport * const msg = buf.SetupRequestMessageNoRid<CanMessageFansReport>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
-				const unsigned int numReported = FansManager::PopulateFansReport(*msg);
-				if (numReported != 0)
+				// Broadcast our fan RPMs
 				{
-					buf.dataLength = msg->GetActualDataLength(numReported);
-					CanInterface::Send(&buf);
+					CanMessageFansReport * const msg = buf.SetupRequestMessageNoRid<CanMessageFansReport>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+					const unsigned int numReported = FansManager::PopulateFansReport(*msg);
+					if (numReported != 0)
+					{
+						buf.dataLength = msg->GetActualDataLength(numReported);
+						CanInterface::Send(&buf);
+					}
 				}
-			}
 
 #if SUPPORT_DRIVERS
-			if (newDriverFaultState == 0)
-			{
-				moveInstance->SendDriversStatus(buf);		// send the status of our drivers
-			}
-			else
-			{
-				newDriverFaultState = 0;					// we recently sent it, so send it again next time
-			}
-#endif
-
-			// Announce ourselves to the main board, if it hasn't acknowledged us already
-			if (!CanInterface::SendAnnounce(&buf))
-			{
-				// We didn't need to send an announcement so send a board health message instead
-				CanMessageBoardStatusV0 * const boardStatusMsg = buf.SetupRequestMessageNoRid<CanMessageBoardStatusV0>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
-				boardStatusMsg->Clear();
-
-				const StepTimer::Ticks movementDelayNeeded = StepTimer::CheckMovementDelayIncreasedNoClear();
-				if (movementDelayNeeded != 0)
+				if (newDriverFaultState == 0)
 				{
-					boardStatusMsg->movementDelay = movementDelayNeeded;
-					boardStatusMsg->hasMovementDelay = true;
+					moveInstance->SendDriversStatus(buf);		// send the status of our drivers
 				}
 				else
 				{
-					boardStatusMsg->neverUsedRam = Tasks::GetNeverUsedRam();
+					newDriverFaultState = 0;					// we recently sent it, so send it again next time
 				}
+#endif
 
-				// We must add fields in the following order: VIN, V12, MCU temperature
-				size_t index = 0;
+				// Announce ourselves to the main board, if it hasn't acknowledged us already
+				if (!CanInterface::SendAnnounce(&buf))
+				{
+					// We didn't need to send an announcement so send a board health message instead
+					CanMessageBoardStatusV0 * const boardStatusMsg = buf.SetupRequestMessageNoRid<CanMessageBoardStatusV0>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+					boardStatusMsg->Clear();
+
+					const StepTimer::Ticks movementDelayNeeded = StepTimer::CheckMovementDelayIncreasedNoClear();
+					if (movementDelayNeeded != 0)
+					{
+						boardStatusMsg->movementDelay = movementDelayNeeded;
+						boardStatusMsg->hasMovementDelay = true;
+					}
+					else
+					{
+						boardStatusMsg->neverUsedRam = Tasks::GetNeverUsedRam();
+					}
+
+					// We must add fields in the following order: VIN, V12, MCU temperature
+					size_t index = 0;
 #if HAS_VOLTAGE_MONITOR
-				boardStatusMsg->values[index++] = Platform::GetPowerVoltages(false);
-				boardStatusMsg->hasVin = true;
+					boardStatusMsg->values[index++] = Platform::GetPowerVoltages(false);
+					boardStatusMsg->hasVin = true;
 #endif
 #if HAS_12V_MONITOR
-				boardStatusMsg->values[index++] = Platform::GetV12Voltages(false);
-				boardStatusMsg->hasV12 = true;
+					boardStatusMsg->values[index++] = Platform::GetV12Voltages(false);
+					boardStatusMsg->hasV12 = true;
 #endif
 #if HAS_CPU_TEMP_SENSOR
-				boardStatusMsg->values[index++] = Platform::GetMcuTemperatures();
-				boardStatusMsg->hasMcuTemp = true;
+					boardStatusMsg->values[index++] = Platform::GetMcuTemperatures();
+					boardStatusMsg->hasMcuTemp = true;
 #endif
 #if SUPPORT_LIS3DH
-				boardStatusMsg->hasAccelerometer = AccelerometerHandler::IsPresent();
+					boardStatusMsg->hasAccelerometer = AccelerometerHandler::IsPresent();
 #endif
 #if SUPPORT_CLOSED_LOOP
-				boardStatusMsg->hasClosedLoop = true;
+					boardStatusMsg->hasClosedLoop = true;
 #endif
 #if SUPPORT_LDC1612
-				boardStatusMsg->hasInductiveSensor = true;
+					boardStatusMsg->hasInductiveSensor = true;
 #endif
-				// Add the analog handle data
-				boardStatusMsg->numAnalogHandles = InputMonitor::AddAnalogHandleDataV0((uint8_t*)boardStatusMsg + boardStatusMsg->GetAnalogHandlesOffset(), boardStatusMsg->GetMaxAnalogHandleSpace());
-				buf.dataLength = boardStatusMsg->GetActualDataLength();
-				CanInterface::Send(&buf);
+					// Add the analog handle data
+					boardStatusMsg->numAnalogHandles = InputMonitor::AddAnalogHandleDataV0((uint8_t*)boardStatusMsg + boardStatusMsg->GetAnalogHandlesOffset(), boardStatusMsg->GetMaxAnalogHandleSpace());
+					buf.dataLength = boardStatusMsg->GetActualDataLength();
+					CanInterface::Send(&buf);
+				}
 			}
 
 			Platform::KickHeatTaskWatchdog();				// tell Platform that we are alive
@@ -430,7 +437,7 @@ void Heat::Exit() noexcept
 	}
 }
 
-GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply, uint8_t& extra) noexcept
 {
 	CanMessageGenericParser parser(msg, M950HeaterParams);
 	uint16_t heater;
@@ -460,15 +467,14 @@ GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef&
 
 		WriteLocker lock(heatersLock);
 
-		Heater *oldHeater = nullptr;
-		std::swap(oldHeater, heaters[heater]);
-		delete oldHeater;
+		DeleteObject(heaters[heater]);
 
 		Heater *newHeater = new LocalHeater(heater);
 		const GCodeResult rslt = newHeater->ConfigurePortAndSensor(pinName.c_str(), freq, sensorNumber, reply);
 		if (Succeeded(rslt))
 		{
 			heaters[heater] = newHeater;
+			extra = (newHeater->IsCustom()) ? 1 : 0;			// set lowest bit of 'extra' if it is a known heater type with custom parameters
 		}
 		else
 		{
@@ -491,10 +497,10 @@ GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef&
 	return h->ReportDetails(reply);
 }
 
-GCodeResult Heat::ProcessM307V1(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept
+GCodeResult Heat::ProcessM307(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heater);
-	return (h.IsNotNull()) ? h->SetModel(msg.heater, msg, reply) : UnknownHeater(msg.heater, reply);
+	return (h.IsNotNull()) ? h->SetModel(msg, reply) : UnknownHeater(msg.heater, reply);
 }
 
 GCodeResult Heat::ProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept
@@ -563,6 +569,24 @@ GCodeResult Heat::SetFaultDetection(const CanMessageSetHeaterFaultDetectionParam
 	return (h.IsNotNull())
 			? h->SetFaultDetectionParameters(msg, reply)
 				: UnknownHeater(msg.heater, reply);
+}
+
+// Set and report the default model for a heater
+void Heat::SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept
+{
+	const auto h = FindHeater(buf.msg.setDefaultHeaterModel.heater);
+	if (h.IsNotNull())
+	{
+		h->SetDefaultHeaterModel(buf);
+	}
+	else
+	{
+		const CanRequestId rid = buf.msg.setDefaultHeaterModel.requestId;
+		const CanAddress src = buf.id.Src();
+		auto msg = buf.SetupResponseMessage<CanMessageStandardReply>(rid, CanInterface::GetCanAddress(), src);
+		msg->resultCode = (uint32_t)GCodeResult::error;
+		strcpy(msg->text, "unknown heater");
+	}
 }
 
 GCodeResult Heat::SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept
@@ -634,7 +658,7 @@ void Heat::ResetFault(int heater) noexcept
 	}
 }
 
-GCodeResult Heat::SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept
+GCodeResult Heat::SetTemperature(const CanMessageSetHeaterTemperatureV1& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heaterNumber);
 	return (h.IsNotNull()) ? h->SetTemperature(msg, reply) : UnknownHeater(msg.heaterNumber, reply);

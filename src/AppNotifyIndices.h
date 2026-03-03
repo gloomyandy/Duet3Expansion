@@ -21,6 +21,7 @@ namespace NotifyIndices
 	constexpr uint32_t Heat = AccelerometerDataCollector;
 	constexpr uint32_t Tmc = AccelerometerDataCollector;
 	constexpr uint32_t Move = AccelerometerDataCollector;
+	constexpr uint32_t Ads131M02 = AccelerometerDataCollector;
 	constexpr uint32_t ClosedLoopDataTransmission = AccelerometerDataCollector;
 	constexpr uint32_t CanMessageQueue = I2C + 3;
 	constexpr uint32_t LDC1612 = AccelerometerDataCollector;

@@ -1,16 +1,15 @@
 /*
- * InductiveHeater.cpp
+ * InductiveHeaterPort.cpp
  *
- *  Created on: 21 Dec 2025
+ *  Created on: 29 Dec 2025
  *      Author: David
- *
- *  Support for inductive heaters
  */
 
-#include "InductiveHeater.h"
+#include "InductiveHeaterPort.h"
 
 #if SUPPORT_INDUCTIVE_HEATER
 
+#include <Platform/Platform.h>
 #include <Timers.h>
 
 #if SAME5x
@@ -25,12 +24,12 @@
 # error Unsupported processor
 #endif
 
-InductiveHeater::InductiveHeater() noexcept
+InductiveHeaterPort::InductiveHeaterPort()
 {
-	// Nothing needed here yet, we do the work in the Init function
+	// Nothing to do here
 }
 
-void InductiveHeater::Init() noexcept
+void InductiveHeaterPort::Init() noexcept
 {
 	// Set up the oscillator TCC to generate a square wave at the coil resonant frequency
 	EnableTccClock(InductiveHeaterOscTccDeviceNumber, GclkNum120MHz);	// use the 120MHz GCLK to get the best frequency setting resolution
@@ -104,17 +103,10 @@ void InductiveHeater::Init() noexcept
 
 	// Finally, set the FET drive pin to be the CCL3 output
 	SetPinFunction(InductiveHeaterCCLOutPin, InductiveHeaterCCLOutPinPeriphMode);
-
-#if 1
-	// TEST: set fixed PWM value
-	delay(100);						// we need to complete at least 1 cycle to allow the previous PER value to go
-	const float val = 0.2;
-	SetPwm(val);
-#endif
 }
 
 // Set the PWM value in the range 0..1
-void InductiveHeater::SetPwm(float pwm) noexcept
+void InductiveHeaterPort::SetPwm(float pwm) noexcept
 {
 	const uint32_t ccIdeal = (uint32_t)(pwm * (float)pwmTimerPeriod);
 	const uint32_t cc = ccIdeal - (ccIdeal % oscTimerPeriod);

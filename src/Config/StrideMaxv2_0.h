@@ -32,9 +32,9 @@
 #define HAS_SMART_DRIVERS		1
 #define HAS_STALL_DETECT		1
 #define SINGLE_DRIVER			0
-#define TMC51xx_USES_SEPARATE_CS		1
-#define TMC51xx_USES_SEPARATE_ENABLE	1
-#define TMC51xx_USES_SHARED_SPI	1
+#define TMCSPI_USES_SEPARATE_CS		1
+#define TMCSPI_USES_SEPARATE_ENABLE	1
+#define TMC_USES_SHARED_SPI	1
 #define SUPPORT_SLOW_DRIVERS	0
 #define SUPPORT_DELTA_MOVEMENT	0
 
@@ -42,11 +42,12 @@
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			0
 #define SUPPORT_TMC2240			0
+#define SUPPORT_TMC2240_SPI		0
 #define SUPPORT_INPUT_SHAPING	1
 
 constexpr size_t NumDrivers = 2;
 constexpr size_t MaxSmartDrivers = 2;
-constexpr float MaxTmc5160Current = 6300.0;
+constexpr float MaxMotorCurrent = 6300.0;
 constexpr uint32_t DefaultStandstillCurrentPercent = 71;
 constexpr float Tmc5160SenseResistor = 0.050;
 
@@ -73,7 +74,9 @@ constexpr Pin DirectionPins[NumDrivers] = { GpioPin(5), GpioPin(23) };
 
 #define PIN_TODO	GpioPin(NoPin)	//TEMPORARY! Used when we haven't assigned a pin yet.
 
-constexpr bool UseAlternateCanPins = false;
+constexpr unsigned int CANInstanceNumber = 0;
+constexpr bool UseLaterCanPins = false;
+
 
 constexpr size_t MaxPortsPerHeater = 1;
 
@@ -111,7 +114,7 @@ constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(2), GpioPin(4), GpioPi
 constexpr unsigned int Temperature_SpiChannel = 0;
 #endif
 
-#if TMC51xx_USES_SHARED_SPI
+#if TMC_USES_SHARED_SPI
 constexpr unsigned int Tmc5160_SpiChannel = 0;
 #endif
 

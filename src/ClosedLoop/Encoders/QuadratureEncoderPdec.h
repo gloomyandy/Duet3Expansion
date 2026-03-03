@@ -10,7 +10,7 @@
 
 #include "RelativeEncoder.h"
 
-#if SUPPORT_CLOSED_LOOP && SAME5x
+#if SUPPORT_CLOSED_LOOP && SUPPORT_QUADRATURE_ENCODER
 
 #include <General/FreelistManager.h>
 

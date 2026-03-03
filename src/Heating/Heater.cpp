@@ -14,7 +14,7 @@
 Heater::Heater(unsigned int num)
 	: heaterNumber(num), sensorNumber(-1), requestedTemperature(0.0),
 	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime), maxBadTemperatureCount(DefaultMaxBadTemperatureCount),
-	  isBedOrChamber(false)
+	  function(HeaterFunction::tool)
 {
 	Heater::ResetHeater();
 }
@@ -73,16 +73,13 @@ float Heater::GetHighestTemperatureLimit() const noexcept
 	return limit;
 }
 
-GCodeResult Heater::SetModel(unsigned int heater, const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept
+// This function may be overridden in class LocalHeater if the heater characteristics are fixed
+GCodeResult Heater::SetModel(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept
 {
 	const bool rslt = model.SetParameters(msg, reply);
 	if (rslt)
 	{
-		if (model.IsEnabled())
-		{
-			return UpdateModel(reply);
-		}
-		else
+		if (!model.IsEnabled())
 		{
 			ResetHeater();
 		}
@@ -92,48 +89,48 @@ GCodeResult Heater::SetModel(unsigned int heater, const CanMessageHeaterModelV2&
 	return GCodeResult::error;
 }
 
-GCodeResult Heater::SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply)
+GCodeResult Heater::SetTemperature(const CanMessageSetHeaterTemperatureV1& msg, const StringRef& reply)
 {
 	switch (msg.command)
 	{
-	case CanMessageSetHeaterTemperature::commandNone:
+	case CanMessageSetHeaterTemperatureV1::commandNone:
 		requestedTemperature = msg.setPoint;
 		model.CalcPidConstants(requestedTemperature);
 		return GCodeResult::ok;
 
-	case CanMessageSetHeaterTemperature::commandOff:
-		isBedOrChamber = msg.isBedOrChamber;
+	case CanMessageSetHeaterTemperatureV1::commandOff:
+		function = (HeaterFunction)msg.function;
 		requestedTemperature = msg.setPoint;
 		model.CalcPidConstants(requestedTemperature);
 		SwitchOff();
 		return GCodeResult::ok;
 
-	case CanMessageSetHeaterTemperature::commandOn:
-		isBedOrChamber = msg.isBedOrChamber;
+	case CanMessageSetHeaterTemperatureV1::commandOn:
+		function = (HeaterFunction)msg.function;
 		requestedTemperature = msg.setPoint;
 		model.CalcPidConstants(requestedTemperature);
 		return SwitchOn(reply);
 
-	case CanMessageSetHeaterTemperature::commandResetFault:
-		isBedOrChamber = msg.isBedOrChamber;
+	case CanMessageSetHeaterTemperatureV1::commandResetFault:
+		function = (HeaterFunction)msg.function;
 		requestedTemperature = msg.setPoint;
 		model.CalcPidConstants(requestedTemperature);
 		ResetFault();
 		return GCodeResult::ok;
 
-	case CanMessageSetHeaterTemperature::commandSuspend:
-		isBedOrChamber = msg.isBedOrChamber;
+	case CanMessageSetHeaterTemperatureV1::commandSuspend:
+		function = (HeaterFunction)msg.function;
 		Suspend(true);
 		return GCodeResult::ok;
 
-	case CanMessageSetHeaterTemperature::commandUnsuspend:
-		isBedOrChamber = msg.isBedOrChamber;
+	case CanMessageSetHeaterTemperatureV1::commandUnsuspend:
+		function = (HeaterFunction)msg.function;
 		requestedTemperature = msg.setPoint;
 		model.CalcPidConstants(requestedTemperature);
 		Suspend(false);
 		return GCodeResult::ok;
 
-	case CanMessageSetHeaterTemperature::commandReset:
+	case CanMessageSetHeaterTemperatureV1::commandReset:
 		ResetHeater();
 		return GCodeResult::ok;
 

@@ -37,6 +37,7 @@
 #define SUPPORT_TMC51xx			1
 #define SUPPORT_TMC22xx			0
 #define SUPPORT_TMC2660			0
+#define SUPPORT_TMC2240_SPI		0
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
@@ -48,12 +49,14 @@
 #define USE_MPU					0
 #define USE_CACHE				1
 
+#define SUPPORT_INDUCTIVE_HEATER		(0)		// enables temporary support for testing inductive heater code
+
 constexpr unsigned int CANInstanceNumber = 1;
 constexpr bool UseLaterCanPins = false;
 
 constexpr size_t NumDrivers = 3;
 constexpr size_t MaxSmartDrivers = 3;
-constexpr float MaxTmc5160Current = 6300.0;									// the maximum current we allow the TMC5160/5161 drivers to be set to
+constexpr float MaxMotorCurrent = 6300.0;									// the maximum current we allow the TMC5160/5161 drivers to be set to
 constexpr uint32_t DefaultStandstillCurrentPercent = 71;
 constexpr float Tmc5160SenseResistor = 0.050;
 
@@ -67,19 +70,19 @@ constexpr float DefaultThermistorSeriesR = 2200.0;
 constexpr float VrefTopResistor = 15.0;
 constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / NumThermistorInputs) * 4700.0/((DefaultThermistorSeriesR / NumThermistorInputs) + 4700.0);
 																			// there are 3 temperature sensing channels and a 4K7 load resistor
-constexpr Pin GlobalTmc51xxEnablePin = PortBPin(23);
-constexpr Pin GlobalTmc51xxCSPin = PortBPin(22);
+constexpr Pin GlobalTmcEnablePin = PortBPin(23);
+constexpr Pin GlobalTmcCSPin = PortBPin(22);
 
-#define TMC51xx_USES_SERCOM	1
-Sercom * const SERCOM_TMC51xx = SERCOM0;
-constexpr uint8_t SERCOM_TMC51xx_NUMBER = 0;
+#define TMC_USES_SERCOM			1
+Sercom * const SERCOM_TMC = SERCOM0;
+constexpr uint8_t TmcSercomNumber = 0;
 
-constexpr Pin TMC51xxMosiPin = PortBPin(24);
-constexpr GpioPinFunction TMC51xxMosiPinPeriphMode = GpioPinFunction::C;
-constexpr Pin TMC51xxSclkPin = PortBPin(25);
-constexpr GpioPinFunction TMC51xxSclkPinPeriphMode = GpioPinFunction::C;
-constexpr Pin TMC51xxMisoPin = PortCPin(25);
-constexpr GpioPinFunction TMC51xxMisoPinPeriphMode = GpioPinFunction::C;
+constexpr Pin TMCMosiPin = PortBPin(24);
+constexpr GpioPinFunction TMCMosiPinPeriphMode = GpioPinFunction::C;
+constexpr Pin TMCSclkPin = PortBPin(25);
+constexpr GpioPinFunction TMCSclkPinPeriphMode = GpioPinFunction::C;
+constexpr Pin TMCMisoPin = PortCPin(25);
+constexpr GpioPinFunction TMCMisoPinPeriphMode = GpioPinFunction::C;
 
 PortGroup * const StepPio = &(PORT->Group[0]);		// the PIO that all the step pins are on
 constexpr Pin StepPins[NumDrivers] = { PortAPin(25), PortAPin(27), PortAPin(1) };
@@ -114,6 +117,7 @@ constexpr Pin TempSensePins[NumThermistorInputs] = { PortCPin(3), PortBPin(8), P
 // Shared SPI
 constexpr uint8_t SspiSercomNumber = 6;
 constexpr uint32_t SspiDataInPad = 3;
+constexpr uint32_t SspiDataOutPad = 0;
 constexpr Pin SSPIMosiPin = PortCPin(16);
 constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::C;
 constexpr Pin SSPISclkPin = PortCPin(17);
@@ -122,9 +126,7 @@ constexpr Pin SSPIMisoPin = PortCPin(19);
 constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
 constexpr unsigned int Temperature_SpiChannel = 0;
 
-#if 1	// temporary inductive heater test
-
-#define SUPPORT_INDUCTIVE_HEATER		(1)
+#if SUPPORT_INDUCTIVE_HEATER	// temporary inductive heater code test
 
 // Definitions for inductive heater support
 constexpr unsigned int InductiveHeaterOscTccDeviceNumber = 3;	// number of the TCC we can use to generate the ~120kHz signal to excite the resonant circuit. May be a 16-bit TCC.
@@ -260,11 +262,19 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PC29 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PC30 not on 100-pin chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PC31 not on 100-pin chip
+#if SUPPORT_INDUCTIVE_HEATER
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx, "nozzleheat"	},	// inductive heater
+#endif
 };
 
 constexpr size_t NumPins = ARRAY_SIZE(PinTable);
-constexpr size_t NumRealPins = 3 * 32;					// 32 pins on each of ports A, B, C
-static_assert(NumPins == NumRealPins);					// no virtual pins in this table
+constexpr size_t NumRealPins = 3 * 32;								// 32 pins on each of ports A, B, C
+constexpr size_t NumVirtualPins = SUPPORT_INDUCTIVE_HEATER;
+static_assert(NumPins == NumRealPins + NumVirtualPins);
+
+#if SUPPORT_INDUCTIVE_HEATER
+constexpr Pin InductiveHeaterPin = NumRealPins;						// pin number when the user selects the inductive nozzle heater
+#endif
 
 // Timer/counter used to generate step pulses and other sub-millisecond timings
 TcCount32 * const StepTc = &(TC6->COUNT32);

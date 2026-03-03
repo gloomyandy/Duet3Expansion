@@ -108,8 +108,8 @@ extern "C" void SERCOM2_3_Handler()
 
 void DeviceInit() noexcept
 {
-#if defined(EXP1HCL) || defined(M23CL)
-	SetPinMode(ClockGenPin, OUTPUT_LOW);			// default the TMC clock to its internal clock until we program the clock generator
+#if defined(EXP1HCL) || defined(M23CL) || defined(TOOLINDX)
+	SetPinMode(TmcClockPin, OUTPUT_LOW);			// default the TMC clock to its internal clock until we program the clock generator
 #endif
 	AnalogIn::Init(NvicPriorityAdc);
 	AnalogOut::Init();

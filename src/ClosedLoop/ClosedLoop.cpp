@@ -36,6 +36,7 @@
 using std::atomic;
 using std::numeric_limits;
 
+# include "Encoders/AbsoluteRotaryEncoder.h"
 # include "Encoders/QuadratureEncoderPdec.h"
 # include "Encoders/LinearCompositeEncoder.h"
 
@@ -54,7 +55,7 @@ using std::numeric_limits;
 # include <CanMessageGenericTables.h>
 # include <AppNotifyIndices.h>
 
-# if SUPPORT_TMC51xx
+# if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
 #  include "Movement/StepperDrivers/TMC51xx.h"
 # else
 #  error Cannot support closed loop with the specified hardware
@@ -117,22 +118,22 @@ void ClosedLoop::SetMotorPhase(uint16_t phase, float magnitude) noexcept
 	coilA = (int16_t)lrintf(cosine * magnitude);
 	coilB = (int16_t)lrintf(sine * magnitude);
 
-# if SUPPORT_TMC51xx && SINGLE_DRIVER
+# if (SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI) && SINGLE_DRIVER
 	SmartDrivers::SetMotorPhases(driverNumber, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF);
 # else
 #  error Multi driver code not implemented
 # endif
 }
 
-static_assert(ClockGenGclkNumber == GclkClosedLoop);							// check that this GCLK number has been reserved
+static_assert(TmcClockGclkNumber == GclkNumApp1 || TmcClockGclkNumber == GclkNumApp2);	// check that this GCLK number has been reserved for application use
 
 static void GenerateTmcClock()
 {
 	// Currently we program DPLL0 to generate 120MHz output, so to get 15MHz with 1:1 ratio we divide by 8.
 	// We could divide by 7 instead giving 17.143MHz with 25ns and 33.3ns times. TMC2160A max is 18MHz, minimum 16ns and 16ns low.
 	// Max SPI clock frequency is half this clock frequency.
-	ConfigureGclk(ClockGenGclkNumber, GclkSource::dpll0, 8, true);
-	SetPinFunction(ClockGenPin, ClockGenPinPeriphMode);
+	ConfigureGclk(TmcClockGclkNumber, GclkSource::dpll0, 8, true);
+	SetPinFunction(TmcClockPin, TmcClockPinPeriphMode);
 	SmartDrivers::SetTmcExternalClock(15000000);
 }
 
@@ -144,7 +145,7 @@ static void GenerateTmcClock()
 
 void ClosedLoop::InitInstance() noexcept
 {
-	SetPinMode(EncoderCsPin, OUTPUT_HIGH);											// make sure that any attached SPI encoder is not selected
+	SetPinMode(EncoderCsPin, OUTPUT_HIGH);										// make sure that any attached SPI encoder is not selected
 
 	// Initialise to default error thresholds
 	errorThresholds[0] = DefaultClosedLoopPositionWarningThreshold;
@@ -303,14 +304,18 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 			CreateCalibrationTask();
 			break;
 
+#if SUPPORT_COMPOSITE_ENCODER
 		case EncoderType::linearComposite:
 			encoder = new LinearCompositeEncoder(tempCPR, tempStepsPerRev, Platform::GetSharedSpi(Encoder_SpiChannel), EncoderCsPin, magEncoderType);
 			CreateCalibrationTask();
 			break;
+#endif
 
+#if SUPPORT_QUADRATURE_ENCODER
 		case EncoderType::rotaryQuadrature:
 			encoder = new QuadratureEncoderPdec((uint32_t)tempCPR, tempStepsPerRev);
 			break;
+#endif
 		}
 
 		if (encoder != nullptr)
@@ -326,6 +331,11 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 				DeleteObject(encoder);
 			}
 			return rslt;
+		}
+		else if (tempEncoderType != EncoderType::none)
+		{
+			reply.printf("unsupported encoder type %u", (unsigned int)tempEncoderType);
+			return GCodeResult::error;
 		}
 	}
 

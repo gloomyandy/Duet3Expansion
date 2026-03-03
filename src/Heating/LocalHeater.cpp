@@ -14,8 +14,8 @@
 #include <General/SafeVsnprintf.h>
 
 // Private constants
-const uint32_t InitialTuningReadingInterval = 250;	// the initial reading interval in milliseconds
-const uint32_t TempSettleTimeout = 20000;	// how long we allow the initial temperature to settle
+const uint32_t InitialTuningReadingInterval = 250;		// the initial reading interval in milliseconds
+const uint32_t TempSettleTimeout = 20000;				// how long we allow the initial temperature to settle
 
 // Variables used during heater tuning
 static float tuningPwm;									// the PWM to use, 0..1
@@ -61,6 +61,57 @@ LocalHeater::~LocalHeater()
 	}
 }
 
+// Returns true if this is a custom heater with unusual default model parameters
+bool LocalHeater::IsCustom() const noexcept
+{
+#if SUPPORT_INDUCTIVE_HEATER
+	return ports[0].GetPin() == InductiveHeaterPin;
+#else
+	return false;
+#endif
+}
+
+// Set and return the default model for this heater
+void LocalHeater::SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept
+{
+	const CanRequestId rid = buf.msg.setDefaultHeaterModel.requestId;
+	const CanAddress src = buf.id.Src();
+#if SUPPORT_INDUCTIVE_HEATER
+	if (ports[0].GetPin() == InductiveHeaterPin)
+	{
+		model.SetDefaultModel(InductiveHeaterDefaultModel);
+	}
+	else
+#endif
+	{
+		switch ((HeaterFunction)buf.msg.setDefaultHeaterModel.heaterFunction)
+		{
+		default:
+			{
+				auto msg1 = buf.SetupResponseMessage<CanMessageStandardReply>(rid, CanInterface::GetCanAddress(), src);
+				strcpy(msg1->text, "unknown heater function");
+				msg1->resultCode = (uint32_t)GCodeResult::error;
+			}
+			return;
+
+		case HeaterFunction::tool:
+			model.SetDefaultModel(DefaultToolHeaterModel);
+			break;
+
+		case HeaterFunction::bed:
+			model.SetDefaultModel(DefaultBedHeaterModel);
+			break;
+
+		case HeaterFunction::chamber:
+			model.SetDefaultModel(DefaultChamberHeaterModel);
+			break;
+		}
+	}
+	auto msg2 = buf.SetupResponseMessage<CanMessageHeaterModelReport>(rid, CanInterface::GetCanAddress(), src);
+	msg2->model = model.GetBasicModel();
+	msg2->resultCode = (uint32_t)GCodeResult::ok;
+}
+
 float LocalHeater::GetTemperature() const noexcept
 {
 	return temperature;
@@ -102,6 +153,12 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 		{
 			return GCodeResult::error;
 		}
+#if SUPPORT_INDUCTIVE_HEATER
+		if (ports[0].GetPin() == InductiveHeaterPin)
+		{
+			model.SetDefaultModel(InductiveHeaterDefaultModel);			// override the default model parameters
+		}
+#endif
 	}
 	else
 	{
@@ -237,12 +294,6 @@ void LocalHeater::SwitchOff() noexcept
 	lastExtrusionTemperatureBoost = 0.0;
 }
 
-// This is called when the heater model has been updated. Returns true if successful.
-GCodeResult LocalHeater::UpdateModel(const StringRef& reply) noexcept
-{
-	return GCodeResult::ok;
-}
-
 // This is the main heater control loop function
 void LocalHeater::Spin() noexcept
 {
@@ -272,7 +323,7 @@ void LocalHeater::Spin() noexcept
 		badTemperatureCount = 0;
 		if ((previousTemperaturesGood & (1u << (NumPreviousTemperatures - 1))) != 0)
 		{
-			const float tentativeDerivative = ((float)SecondsToMillis/HeatSampleIntervalMillis) * (temperature - previousTemperatures[previousTemperatureIndex])
+			const float tentativeDerivative = ((float)SecondsToMillis/Heat::NormalHeaterPollInterval) * (temperature - previousTemperatures[previousTemperatureIndex])
 							/ (float)(NumPreviousTemperatures);
 			// Some sensors give occasional temperature spikes. We don't expect the temperature to increase by more than 10C/second.
 			if (fabsf(tentativeDerivative) <= 10.0)
@@ -327,10 +378,10 @@ void LocalHeater::Spin() noexcept
 							const float expectedTemperatureRise = expectedRate * actualInterval;
 							const float actualTemperatureRise = temperature - lastTemperatureValue;
 							// Bed heaters sometimes have much slower long term heating rates than their short term heating rates, so allow them a lower measured heating rate
-							if (actualTemperatureRise < expectedTemperatureRise * ((IsBedOrChamber()) ? MinBedTemperatureRiseFactor : MinToolTemperatureRiseFactor))
+							if (actualTemperatureRise < expectedTemperatureRise * MinTemperatureRiseFactors[(unsigned int)GetFunction()])
 							{
 								++heatingFaultCount;
-								if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
+								if (heatingFaultCount * Heat::NormalHeaterPollInterval > GetMaxHeatingFaultTime() * SecondsToMillis)
 								{
 									RaiseHeaterFault(HeaterFaultType::temperatureRisingTooSlowly,
 														"expected %.2f" DEGREE_SYMBOL "C/sec measured %.2f" DEGREE_SYMBOL "C/sec",
@@ -352,10 +403,15 @@ void LocalHeater::Spin() noexcept
 				break;
 
 			case HeaterMode::stable:
-				if (fabsf(error) > GetMaxTemperatureExcursion() && temperature > MaxAmbientTemperature)
+				// Check for maximum temperature excursion exceeded when we were at a stable temperature.
+				if (   fabsf(error) > GetMaxTemperatureExcursion()
+					&& (   error > 0.0											// if the temperature we are reading has dropped unexpectedly, e.g. indirect sensor can no longer see a tool
+						|| temperature > MaxAmbientTemperature					// or the temperature reading is too high and greater than a reasonable ambient temperature (should we use chamber temperature instead, for a tool heater?)
+					   )
+				   )
 				{
 					++heatingFaultCount;
-					if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
+					if (heatingFaultCount * Heat::NormalHeaterPollInterval > GetMaxHeatingFaultTime() * SecondsToMillis)
 					{
 						RaiseHeaterFault(HeaterFaultType::exceededAllowedExcursion,
 											"target %.1f" DEGREE_SYMBOL "C actual %.1f" DEGREE_SYMBOL "C",
@@ -421,7 +477,7 @@ void LocalHeater::Spin() noexcept
 					{
 						TaskCriticalSectionLocker lock;					// avoid a race with tasks that implement feedforward
 						iAccumulator = constrain<float>
-										(iAccumulator + (error * params.kP * params.recipTi * HeatSampleIntervalMillis * MillisToSeconds),
+										(iAccumulator + (error * params.kP * params.recipTi * Heat::NormalHeaterPollInterval * MillisToSeconds),
 											0.0, GetModel().GetMaxPwm());
 						lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, GetModel().GetMaxPwm());
 					}
@@ -482,7 +538,7 @@ void LocalHeater::Spin() noexcept
 
 		// Set the heater power and update the average PWM
 		SetHeater(lastPwm);
-		constexpr float avgFactor = HeatSampleIntervalMillis/(HeatPwmAverageTime * SecondsToMillis);
+		constexpr float avgFactor = Heat::NormalHeaterPollInterval/(HeatPwmAverageTime * SecondsToMillis);
 		averagePWM = (averagePWM * (1.0 - avgFactor)) + (lastPwm * avgFactor);
 
 		// For temperature sensors which do not require frequent sampling and averaging,

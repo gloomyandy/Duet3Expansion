@@ -27,12 +27,17 @@
 # include <Hardware/LISAccelerometer.h>
 #endif
 
+#if SUPPORT_ADS131M02
+# include <Hardware/Drivers/ADS131M02.h>
+#endif
+
 #if RPXXXX
 # include <hardware/structs/sio.h>
 #endif
 
 class CanMessageDiagnosticTest;
 class CanMessageBuffer;
+class LedStatusControl;
 
 #if HAS_CPU_TEMP_SENSOR
 constexpr size_t McuTempReadingsAveraged = 8;
@@ -92,7 +97,7 @@ enum class ErrorCode : uint32_t
 };
 
 typedef Bitmap<uint16_t> DebugFlags;
-static constexpr uint16_t DefaultDebugFlags = 0x00FF;
+constexpr uint16_t DefaultDebugFlags = 0x00FF;
 
 class IoPort;
 
@@ -107,6 +112,15 @@ namespace Platform
 #if NUM_I2C_CHANNELS != 0
 	extern SharedI2CMaster *sharedI2C[NUM_I2C_CHANNELS];
 	inline SharedI2CMaster& GetSharedI2C(unsigned int n) noexcept { return *sharedI2C[n]; }
+#endif
+
+#if SUPPORT_ADS131M02
+	extern ADS131M02 *loadCellAdc;
+	inline ADS131M02 *GetLoadCellAdc() noexcept { return loadCellAdc; }
+#endif
+#if SUPPORT_LP5817
+	extern LedStatusControl *ledStatusControl;
+	inline LedStatusControl *GetStatusLedControl() noexcept { return ledStatusControl; }
 #endif
 
 	// We don't really want the following to be writable, but we've no choice because we want to inline functions that access them
@@ -134,14 +148,23 @@ namespace Platform
 #endif
 
 #if SUPPORT_THERMISTORS
+	// These are the functions normally used when a port name has been specified
 	int GetAveragingFilterIndex(const IoPort&) noexcept;
 	void InitThermistorFilter(const IoPort& port) noexcept;
+
+	// This one is used for direct initialisation of a filter channel
+	void InitThermistorFilter(Pin p, unsigned int adcFilterChannel, bool useAlternateConfig) noexcept;
+
 	ThermistorAveragingFilter *GetAdcFilter(unsigned int filterNumber) noexcept;
 
 # if HAS_VREF_MONITOR
 	ThermistorAveragingFilter *GetVssaFilter(unsigned int filterNumber) noexcept;
 	ThermistorAveragingFilter *GetVrefFilter(unsigned int filterNumber) noexcept;
 # endif
+#endif
+
+#if SUPPORT_INDUCTIVE_HEATER
+	void SetInductiveHeaterPwm(float pwm) noexcept;
 #endif
 
 	const MinCurMax& GetMcuTemperatures() noexcept;
@@ -174,6 +197,16 @@ namespace Platform
 #if HAS_12V_MONITOR
 	MinCurMax GetV12Voltages(bool resetMinMax) noexcept;
 	float GetCurrentV12Voltage() noexcept;
+#endif
+
+#if NUM_CURRENT_SENSORS != 0
+	float GetCurrentSensorReading(size_t sensorNumber) noexcept
+		pre(sensorNumber < NUM_CURRENT_SENSORS);
+	inline constexpr const char *GetCurrentSensorName(size_t sensorNumber) noexcept
+		pre(sensorNumber < NUM_CURRENT_SENSORS)
+		{ return CurrentSensorNames[sensorNumber]; }
+	void SetCurrentSensorCallbackThreshold(size_t sensorNumber, float val, StandardCallbackFunction *null func, CallbackParameter param) noexcept
+		pre(sensorNumber < NUM_CURRENT_SENSORS);
 #endif
 
 	inline uint32_t GetDateTime() noexcept { return realTime; }

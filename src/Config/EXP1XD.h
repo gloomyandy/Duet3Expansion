@@ -37,6 +37,7 @@
 #define SUPPORT_TMC51xx			0
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			0
+#define SUPPORT_TMC2240_SPI		0
 
 constexpr size_t NumDrivers = 1;
 

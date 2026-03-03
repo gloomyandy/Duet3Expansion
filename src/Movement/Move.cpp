@@ -1502,7 +1502,7 @@ void Move::SetMotorCurrent(size_t driver, float current) noexcept
 // TMC driver temperatures
 float Move::GetTmcDriversTemperature()
 {
-#if defined(TOOL1RR) || defined(F3PTB) || SUPPORT_TMC2240
+#if defined(TOOL1RR) || defined(F3PTB) || SUPPORT_TMC2240 || SUPPORT_TMC2240_SPI
 	// TEMPORARY code until we have more general support for TMC2240 and other drivers that report temperature
 	// The TOOL1RR has a single TMC2240 driver so report the temperature of that
 	return SmartDrivers::GetDriverTemperature(0);
@@ -1795,7 +1795,7 @@ GCodeResult Move::ProcessM569(const CanMessageGeneric& msg, const StringRef& rep
 					  );
 		}
 
-# if SUPPORT_TMC22xx || SUPPORT_TMC51xx
+# if SUPPORT_TMC22xx || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
 		if (SmartDrivers::GetDriverMode(drive) == DriverMode::stealthChop)
 		{
 			const uint32_t tcoolthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tcoolthrs);

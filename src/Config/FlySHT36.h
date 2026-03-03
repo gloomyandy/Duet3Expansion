@@ -69,6 +69,7 @@
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			1
 #define SUPPORT_TMC2240			0
+#define SUPPORT_TMC2240_SPI		0
 
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
@@ -92,11 +93,11 @@ constexpr float DriverSenseResistor = 0.11 + 0.02;							// in ohms
 constexpr float DriverVRef = 180.0;											// in mV
 constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
 constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
-constexpr float MaximumMotorCurrent = 1600.0;
+constexpr float MaxMotorCurrent = 1600.0;
 constexpr float MaximumStandstillCurrent = 1200.0;
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
-constexpr Pin GlobalTmc22xxEnablePin = GpioPin(14);
+constexpr Pin GlobalTmcEnablePin = GpioPin(14);
 constexpr Pin Tmc22xxUartPin = GpioPin(15);
 
 constexpr Pin StepPins[NumDrivers] = { GpioPin(7) };
@@ -127,7 +128,9 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(27) };
 
 #define PIN_TODO	GpioPin(NoPin)	//TEMPORARY! Used when we haven't assigned a pin yet.
 
-constexpr bool UseAlternateCanPins = false;
+constexpr unsigned int CANInstanceNumber = 0;
+constexpr bool UseLaterCanPins = false;
+
 
 constexpr size_t MaxPortsPerHeater = 1;
 
@@ -190,6 +193,7 @@ constexpr Pin Lis3dhInt1Pin = GpioPin(25);
 #if SUPPORT_LDC1612
 constexpr uint16_t LDC1612_I2CAddress = 0x2B;				// pin 4 is tied high on the Grove board
 constexpr Pin LDC1612InterruptPin = GpioPin(29);			// this is brought out to a test pad
+constexpr unsigned int LDC1612_I2CChannel = 0;
 #endif
 
 // Table of pin functions that we are allowed to use

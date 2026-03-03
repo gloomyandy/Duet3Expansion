@@ -1,25 +1,23 @@
 /*
- * InductiveHeater.h
+ * InductiveHeaterPort.h
  *
- *  Created on: 21 Dec 2025
+ *  Created on: 29 Dec 2025
  *      Author: David
- *
- *  Support for inductive heaters
  */
 
-#ifndef SRC_HEATING_INDUCTIVEHEATER_H_
-#define SRC_HEATING_INDUCTIVEHEATER_H_
+#ifndef SRC_PLATFORM_INDUCTIVEHEATERPORT_H_
+#define SRC_PLATFORM_INDUCTIVEHEATERPORT_H_
 
 #include <RepRapFirmware.h>
 
 #if SUPPORT_INDUCTIVE_HEATER
 
-class InductiveHeater
+class InductiveHeaterPort
 {
 public:
-	InductiveHeater() noexcept;
-	void Init() noexcept;												// set up the timers etc. and turn the output off
-	void SetPwm(float pwm) noexcept;									// set the PWM value in the range 0..1
+	InductiveHeaterPort() noexcept;
+	void Init() noexcept;
+	void SetPwm(float pwm) noexcept;									// pwm is a fraction in [0,1]
 
 private:
 	static constexpr uint32_t OscResonantFrequency = 120'000;			//TODO set the correct value here
@@ -32,4 +30,4 @@ private:
 
 #endif
 
-#endif /* SRC_HEATING_INDUCTIVEHEATER_H_ */
+#endif /* SRC_PLATFORM_INDUCTIVEHEATERPORT_H_ */

@@ -7,7 +7,7 @@
 
 #include <RepRapFirmware.h>
 
-#if SUPPORT_CLOSED_LOOP && SAME5x
+#if SUPPORT_CLOSED_LOOP && SUPPORT_QUADRATURE_ENCODER
 
 #include "QuadratureEncoderPdec.h"
 #include <hri_mclk_e54.h>
