@@ -23,6 +23,10 @@
 # include <CommandProcessing/ScanningSensorHandler.h>
 #endif
 
+#if SUPPORT_LP5817
+# include <Platform/LedStatusControl.h>
+#endif
+
 #if SUPPORT_OVERRIDE_STEP_PIN
 # include <RepRapFirmware.h>
 # include <Movement/Move.h>
@@ -375,7 +379,7 @@ void IoPort::AppendBasicDetails(const StringRef& str) const noexcept
 		str.catf(" pin ");
 		AppendPinName(str);
 #if SUPPORT_INDUCTIVE_HEATER
-		if (pin != InductiveHeaterPin)
+		if (!IsInductiveHeaterPort())
 #endif
 		{
 			if (logicalPinModes[pin] == INPUT_PULLUP)
@@ -605,7 +609,7 @@ void PwmPort::AppendFrequency(const StringRef& str) const noexcept
 {
 	if (IsValid()
 #if SUPPORT_INDUCTIVE_HEATER
-		&& pin != InductiveHeaterPin
+		&& !IsInductiveHeaterPort()
 #endif
 	   )
 	{
@@ -656,7 +660,7 @@ void PwmPort::WriteAnalog(float pwm) const noexcept
 #endif
 
 #if SUPPORT_INDUCTIVE_HEATER
-	if (pin == InductiveHeaterPin)
+	if (IsInductiveHeaterPort())
 	{
 		Platform::SetInductiveHeaterPwm(pwm);
 		return;
@@ -665,11 +669,11 @@ void PwmPort::WriteAnalog(float pwm) const noexcept
 #if SUPPORT_LP5817
 	if (pin == LP5817Pin)
 	{
-		LP5817 *const ledDriver = Platform::GetLp5817();
+		LedStatusControl *const ledDriver = Platform::GetStatusLedControl();
 		if (ledDriver != nullptr)
 		{
 			const uint32_t val = lrintf(std::ldexpf(pwm, 24));
-			ledDriver->SetColour(val);
+			ledDriver->SetTestColour(val);
 		}
 	}
 #endif

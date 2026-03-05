@@ -13,9 +13,13 @@
 #include <CAN/CanInterface.h>
 #include <General/SafeVsnprintf.h>
 
+#if SUPPORT_LP5817
+# include <Platform/LedStatusControl.h>
+#endif
+
 // Private constants
-const uint32_t InitialTuningReadingInterval = 250;	// the initial reading interval in milliseconds
-const uint32_t TempSettleTimeout = 20000;	// how long we allow the initial temperature to settle
+const uint32_t InitialTuningReadingInterval = 250;		// the initial reading interval in milliseconds
+const uint32_t TempSettleTimeout = 20000;				// how long we allow the initial temperature to settle
 
 // Variables used during heater tuning
 static float tuningPwm;									// the PWM to use, 0..1
@@ -65,7 +69,7 @@ LocalHeater::~LocalHeater()
 bool LocalHeater::IsCustom() const noexcept
 {
 #if SUPPORT_INDUCTIVE_HEATER
-	return ports[0].GetPin() == InductiveHeaterPin;
+	return ports[0].IsInductiveHeaterPort();
 #else
 	return false;
 #endif
@@ -77,7 +81,7 @@ void LocalHeater::SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept
 	const CanRequestId rid = buf.msg.setDefaultHeaterModel.requestId;
 	const CanAddress src = buf.id.Src();
 #if SUPPORT_INDUCTIVE_HEATER
-	if (ports[0].GetPin() == InductiveHeaterPin)
+	if (ports[0].IsInductiveHeaterPort())
 	{
 		model.SetDefaultModel(InductiveHeaterDefaultModel);
 	}
@@ -142,6 +146,9 @@ void LocalHeater::ResetHeater() noexcept
 	averagePWM = lastPwm = 0.0;
 	heatingFaultCount = 0;
 	temperature = BadErrorTemperature;
+#if SUPPORT_LP5817
+	UpdateStatusLed();
+#endif
 }
 
 // Configure the heater port and the sensor number
@@ -154,9 +161,10 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 			return GCodeResult::error;
 		}
 #if SUPPORT_INDUCTIVE_HEATER
-		if (ports[0].GetPin() == InductiveHeaterPin)
+		if (ports[0].IsInductiveHeaterPort())
 		{
 			model.SetDefaultModel(InductiveHeaterDefaultModel);			// override the default model parameters
+			maxHeatingFaultTime = CustomHeaterMaxFaultTime;
 		}
 #endif
 	}
@@ -255,6 +263,9 @@ GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 
 	const float target = min<float>(GetTargetTemperature() + extrusionTemperatureBoost, GetHighestTemperatureLimit());
 	UpdateHeaterMode(target);
+#if SUPPORT_LP5817
+	UpdateStatusLed();
+#endif
 	return GCodeResult::ok;
 }
 
@@ -275,6 +286,9 @@ void LocalHeater::UpdateHeaterMode(float targetTemperature) noexcept
 		}
 		heatingFaultCount = 0;
 		mode = newMode;
+#if SUPPORT_LP5817
+		UpdateStatusLed();
+#endif
 	}
 }
 
@@ -292,6 +306,9 @@ void LocalHeater::SwitchOff() noexcept
 	}
 	Heater::SwitchOff();
 	lastExtrusionTemperatureBoost = 0.0;
+#if SUPPORT_LP5817
+	UpdateStatusLed();
+#endif
 }
 
 // This is the main heater control loop function
@@ -400,10 +417,18 @@ void LocalHeater::Spin() noexcept
 						}
 					}
 				}
+#if SUPPORT_LP5817
+				UpdateStatusLed();
+#endif
 				break;
 
 			case HeaterMode::stable:
-				if (fabsf(error) > GetMaxTemperatureExcursion() && temperature > MaxAmbientTemperature)
+				// Check for maximum temperature excursion exceeded when we were at a stable temperature.
+				if (   fabsf(error) > GetMaxTemperatureExcursion()
+					&& (   error > 0.0											// if the temperature we are reading has dropped unexpectedly, e.g. indirect sensor can no longer see a tool
+						|| temperature > MaxAmbientTemperature					// or the temperature reading is too high and greater than a reasonable ambient temperature (should we use chamber temperature instead, for a tool heater?)
+					   )
+				   )
 				{
 					++heatingFaultCount;
 					if (heatingFaultCount * Heat::NormalHeaterPollInterval > GetMaxHeatingFaultTime() * SecondsToMillis)
@@ -425,6 +450,9 @@ void LocalHeater::Spin() noexcept
 					// We have cooled to close to the target temperature, so we should now maintain that temperature
 					mode = HeaterMode::stable;
 					heatingFaultCount = 0;
+#if SUPPORT_LP5817
+					UpdateStatusLed();
+#endif
 				}
 				else
 				{
@@ -553,6 +581,9 @@ void LocalHeater::ResetFault() noexcept
 	badTemperatureCount = 0;
 	if (mode == HeaterMode::fault)
 	{
+#if SUPPORT_LP5817
+		Platform::GetStatusLedControl()->ClearError(LedStatusCode::heatingFault);
+#endif
 		mode = HeaterMode::off;
 		SwitchOff();
 	}
@@ -751,7 +782,7 @@ void LocalHeater::Suspend(bool sus) noexcept
 
 // Raise a heater fault. This turns off the heater, sets its state to 'fault', and sends an event to the main board.
 // The length of text to be included must not exceed 55 characters + terminator, else it will be truncated.
-void LocalHeater::RaiseHeaterFault(HeaterFaultType type, const char *format, ...) noexcept
+void LocalHeater::RaiseHeaterFault(HeaterFaultType type, const char *_ecv_array format, ...) noexcept
 {
 	lastPwm = 0.0;
 	SetHeater(0.0);
@@ -762,7 +793,40 @@ void LocalHeater::RaiseHeaterFault(HeaterFaultType type, const char *format, ...
 		va_start(vargs, format);
 		CanInterface::RaiseEvent(EventType::heater_fault, (uint16_t)type, GetHeaterNumber(), format, vargs);
 		va_end(vargs);
+#if SUPPORT_LP5817
+		Platform::GetStatusLedControl()->SetErrorOrTransient(LedStatusCode::heatingFault);
+#endif
 	}
 }
+
+#if SUPPORT_LP5817
+
+void LocalHeater::UpdateStatusLed() noexcept
+{
+	switch (mode)
+	{
+	case HeaterMode::heating:
+		Platform::GetStatusLedControl()->SetStatus(LedStatusCode::heating, constrain<float>((temperature - 25.0)/(GetTargetTemperature() - 25.0), 0.0, 1.0));
+		break;
+
+	case HeaterMode::cooling:
+		Platform::GetStatusLedControl()->SetStatus(LedStatusCode::cooling);
+		break;
+
+	case HeaterMode::stable:
+		Platform::GetStatusLedControl()->SetStatus(LedStatusCode::atTarget);
+		break;
+
+	case HeaterMode::off:
+		Platform::GetStatusLedControl()->SetStatus(LedStatusCode::cold);
+		break;
+
+	//TODO what about the tuning states?
+	default:
+		break;
+	}
+}
+
+#endif
 
 // End

@@ -107,6 +107,10 @@ public:
 	bool SetAnalogCallback(AnalogInCallbackFunction fn, CallbackParameter cbp, uint32_t ticksPerCall) noexcept;
 	void ClearAnalogCallback() noexcept;
 
+#if SUPPORT_INDUCTIVE_HEATER
+	bool IsInductiveHeaterPort() const noexcept { return pin == InductiveHeaterPin; }
+#endif
+
 	// Initialise static data
 	static void Init() noexcept;
 

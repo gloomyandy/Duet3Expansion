@@ -8,10 +8,11 @@
 #ifndef SRC_TASKPRIORITIES_H_
 #define SRC_TASKPRIORITIES_H_
 
-// Task priorities. These must all be less than configMAX_PRIORITIES defined in FreeRTOSConfig.g.
+// Task priorities. These must all be less than configMAX_PRIORITIES defined in FreeRTOSConfig.g which is usually 8.
 namespace TaskPriority
 {
 	constexpr unsigned int SpinPriority = 1;						// priority for tasks that rarely block
+	constexpr unsigned int Led = 1;
 	constexpr unsigned int HeatPriority = 2;
 	constexpr unsigned int UsbPriority = 2;
 	constexpr unsigned int TmcOpenLoop = 2;							// priority of the TMC task when in open loop modes

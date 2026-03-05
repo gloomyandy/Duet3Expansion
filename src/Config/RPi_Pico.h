@@ -61,8 +61,7 @@ constexpr float DriverSenseResistor = 0.11 + 0.02;							// in ohms
 constexpr float DriverVRef = 180.0;											// in mV
 constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
 constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
-constexpr float MaximumMotorCurrent = 1600.0;
-constexpr float MaximumStandstillCurrent = 1200.0;
+constexpr float MaxMotorCurrent = 1600.0;
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
 constexpr Pin GlobalTmcEnablePin = GpioPin(0);							// this is different from the Fly board because GPIO25 on the Pico is the LED
