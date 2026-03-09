@@ -152,7 +152,7 @@ int32_t InputMonitor::GetAnalogValue() const noexcept
 #else
 			: port.ReadDigital()
 #endif
-			  ? std::numeric_limits<int32_t>::min()
+			  ? std::numeric_limits<int32_t>::max()
 				: 0;
 }
 
