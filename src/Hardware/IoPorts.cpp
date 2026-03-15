@@ -379,7 +379,7 @@ void IoPort::AppendBasicDetails(const StringRef& str) const noexcept
 		str.catf(" pin ");
 		AppendPinName(str);
 #if SUPPORT_INDUCTIVE_HEATER
-		if (pin != InductiveHeaterPin)
+		if (!IsInductiveHeaterPort())
 #endif
 		{
 			if (logicalPinModes[pin] == INPUT_PULLUP)
@@ -609,7 +609,7 @@ void PwmPort::AppendFrequency(const StringRef& str) const noexcept
 {
 	if (IsValid()
 #if SUPPORT_INDUCTIVE_HEATER
-		&& pin != InductiveHeaterPin
+		&& !IsInductiveHeaterPort()
 #endif
 	   )
 	{
@@ -660,7 +660,7 @@ void PwmPort::WriteAnalog(float pwm) const noexcept
 #endif
 
 #if SUPPORT_INDUCTIVE_HEATER
-	if (pin == InductiveHeaterPin)
+	if (IsInductiveHeaterPort())
 	{
 		Platform::SetInductiveHeaterPwm(pwm);
 		return;

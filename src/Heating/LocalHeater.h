@@ -57,6 +57,9 @@ private:
 	float GetExpectedHeatingRate() const noexcept;				// Get the minimum heating rate we expect
 	void RaiseHeaterFault(HeaterFaultType type, const char *format, ...) noexcept;
 	void UpdateHeaterMode(float targetTemperature) noexcept;	// Determine and if necessary change the current heater mode
+#if SUPPORT_LP5817
+	void UpdateStatusLed() noexcept;
+#endif
 
 	PwmPort ports[MaxPortsPerHeater];							// The port(s) that drive the heater
 	float temperature;											// The current temperature

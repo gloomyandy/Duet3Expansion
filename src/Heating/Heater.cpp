@@ -11,10 +11,7 @@
 #include "Heat.h"
 #include "Sensors/TemperatureSensor.h"
 
-Heater::Heater(unsigned int num)
-	: heaterNumber(num), sensorNumber(-1), requestedTemperature(0.0),
-	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime), maxBadTemperatureCount(DefaultMaxBadTemperatureCount),
-	  function(HeaterFunction::tool)
+Heater::Heater(unsigned int num) : heaterNumber(num)
 {
 	Heater::ResetHeater();
 }
@@ -39,7 +36,11 @@ void Heater::SwitchOff() noexcept
 GCodeResult Heater::SetFaultDetectionParameters(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply)
 {
 	maxTempExcursion = msg.maxTempExcursion;
+#if SUPPORT_INDUCTIVE_HEATER
+	maxHeatingFaultTime = (IsCustom()) ? min<float>(msg.maxFaultTime, CustomHeaterMaxFaultTime) : msg.maxFaultTime;
+#else
 	maxHeatingFaultTime = msg.maxFaultTime;
+#endif
 	if (msg.version35)
 	{
 		maxBadTemperatureCount = msg.maxBadTemperatureCount;

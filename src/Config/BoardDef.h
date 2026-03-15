@@ -108,6 +108,10 @@ constexpr size_t NumDrivers = 0;
 # define SUPPORT_BME280					(SUPPORT_SPI_SENSORS)
 #endif
 
+#if !defined(SUPPORT_BME68X)
+# define SUPPORT_BME68X					(SUPPORT_SPI_SENSORS)
+#endif
+
 #if !defined(SUPPORT_LIS3DH)
 # define SUPPORT_LIS3DH					0
 #endif
