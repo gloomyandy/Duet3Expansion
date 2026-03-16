@@ -387,7 +387,7 @@ void Heat::Exit() noexcept
 				if (!CanInterface::SendAnnounce(&buf))
 				{
 					// We didn't need to send an announcement so send a board health message instead
-					CanMessageBoardStatusV0 * const boardStatusMsg = buf.SetupRequestMessageNoRid<CanMessageBoardStatusV0>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+					CanMessageBoardStatusV1 * const boardStatusMsg = buf.SetupRequestMessageNoRid<CanMessageBoardStatusV1>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 					boardStatusMsg->Clear();
 
 					const StepTimer::Ticks movementDelayNeeded = StepTimer::CheckMovementDelayIncreasedNoClear();
@@ -404,7 +404,7 @@ void Heat::Exit() noexcept
 					// We must add fields in the following order: VIN, V12, MCU temperature
 					size_t index = 0;
 #if HAS_VOLTAGE_MONITOR
-					boardStatusMsg->values[index++] = Platform::GetPowerVoltages(false);
+					boardStatusMsg->shortValues[index++] = Platform::GetPowerVoltages(false);
 					boardStatusMsg->hasVin = true;
 #endif
 #if HAS_12V_MONITOR
@@ -412,7 +412,7 @@ void Heat::Exit() noexcept
 					boardStatusMsg->hasV12 = true;
 #endif
 #if HAS_CPU_TEMP_SENSOR
-					boardStatusMsg->values[index++] = Platform::GetMcuTemperatures();
+					boardStatusMsg->shortValues[index++] = Platform::GetMcuTemperatures();
 					boardStatusMsg->hasMcuTemp = true;
 #endif
 #if SUPPORT_LIS3DH
@@ -425,7 +425,7 @@ void Heat::Exit() noexcept
 					boardStatusMsg->hasInductiveSensor = true;
 #endif
 					// Add the analog handle data
-					boardStatusMsg->numAnalogHandles = InputMonitor::AddAnalogHandleDataV0((uint8_t*)boardStatusMsg + boardStatusMsg->GetAnalogHandlesOffset(), boardStatusMsg->GetMaxAnalogHandleSpace());
+					boardStatusMsg->numAnalogHandles = InputMonitor::AddAnalogHandleDataV1((uint8_t*)boardStatusMsg + boardStatusMsg->GetAnalogHandlesOffset(), boardStatusMsg->GetMaxAnalogHandleSpace());
 					buf.dataLength = boardStatusMsg->GetActualDataLength();
 					CanInterface::Send(&buf);
 				}
