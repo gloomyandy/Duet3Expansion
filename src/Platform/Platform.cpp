@@ -94,7 +94,8 @@ enum class DeferredCommand : uint8_t
 	testDivideByZero,
 	testUnalignedMemoryAccess,
 	testBadMemoryAccess,
-	testMemoryLeak
+	testMemoryLeak,
+	testSpinLockup
 };
 
 static volatile DeferredCommand deferredCommand = DeferredCommand::none;
@@ -146,7 +147,8 @@ namespace Platform
 
 	static uint32_t lastPollTime;
 	static uint32_t lastFanCheckTime = 0;
-	static unsigned int heatTaskIdleTicks = 0;
+	static uint32_t heatTaskIdleTicks = 0;
+	static uint32_t syncedIdleTicks = 0;
 
 	static uint32_t whenLastCanMessageProcessed = 0;
 
@@ -859,6 +861,11 @@ void Platform::Spin()
 			deliberateError = false;
 			break;
 
+		case DeferredCommand::testSpinLockup:
+			deliberateError = true;
+			while (true) { }
+			break;
+
 		default:
 			break;
 		}
@@ -924,8 +931,12 @@ void Platform::Spin()
 	}
 
 	// Update the Status LED. Flash it quickly (8Hz) if we are not synced to the master, else flash in sync with the master (about 2Hz).
+	const bool synced = StepTimer::CheckSynced();
+	if (synced) {
+		syncedIdleTicks = 0;
+	}
 	WriteLed(0,
-				(StepTimer::CheckSynced())
+				(synced)
 					? (StepTimer::GetMasterTime() & (1u << 19)) != 0
 						: (StepTimer::GetTimerTicks() & (1u << 17)) != 0
 		    );
@@ -1211,6 +1222,11 @@ uint32_t Platform::GetHeatTaskIdleTicks()
 	return heatTaskIdleTicks;
 }
 
+uint32_t Platform::GetSyncedIdleTicks()
+{
+	return syncedIdleTicks;
+}
+
 #if USE_SERIAL_DEBUG
 
 // Output a character to the debug channel
@@ -1337,6 +1353,7 @@ const UniqueIdBase& Platform::GetUniqueId() noexcept
 void Platform::Tick() noexcept
 {
 	++heatTaskIdleTicks;
+	++syncedIdleTicks;
 }
 
 void Platform::StartFirmwareUpdate()
@@ -1468,6 +1485,10 @@ GCodeResult Platform::DoDiagnosticTest(const CanMessageDiagnosticTest& msg, cons
 
 	case 1001:	// test watchdog
 		deferredCommand = DeferredCommand::testWatchdog;
+		return GCodeResult::ok;
+
+	case 1002: // test that we get a software reset if a Spin() function takes too long
+		deferredCommand = DeferredCommand::testSpinLockup;
 		return GCodeResult::ok;
 
 	case 1004:
