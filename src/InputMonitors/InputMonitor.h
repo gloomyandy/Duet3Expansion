@@ -16,7 +16,7 @@
 
 struct CanMessageCreateInputMonitorV1;
 struct CanMessageChangeInputMonitorV1;
-struct CanMessageInputChangedV1;
+struct CanMessageInputChangedV2;
 class CanMessageBuffer;
 
 class InputMonitor
@@ -42,7 +42,7 @@ public:
 	static GCodeResult Create(const CanMessageCreateInputMonitorV1& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept;
 	static GCodeResult Change(const CanMessageChangeInputMonitorV1& msg, const StringRef& reply, uint8_t& extra) noexcept;
 
-	static uint32_t AddStateChanges(CanMessageInputChangedV1 *msg) noexcept;
+	static uint32_t AddStateChanges(CanMessageInputChangedV2 *msg) noexcept;
 	static void ReadInputs(CanMessageBuffer *buf) noexcept;
 
 	static unsigned int AddAnalogHandleDataV0(uint8_t *buffer, size_t spaceLeft) noexcept;
@@ -70,6 +70,7 @@ private:
 	InputMonitor *next;
 	IoPort port;
 	uint32_t whenLastSent;
+	uint32_t whenStateChanged;
 	int32_t threshold;
 	uint16_t handle;
 	uint16_t minInterval;

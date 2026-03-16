@@ -141,10 +141,10 @@ float TouchMode::SosFilter(float value, const float filter[][6], float state[][2
 // A typical probing speed is 5mm/sec. At this speed, a processing interval of 1ms will give us a probing resolution of 5um.
 void TouchMode::ProcessReading(uint32_t reading) noexcept
 {
-	if ((reading & 0xE0000000) != 0)				// if it's a bad reading (ignoring amplitude errors)
+	if ((reading & 0xE0000000) != 0)								// if it's a bad reading (ignoring amplitude errors)
 	{
 		++numBadReadings;
-		if (numBadReadings == 3)					// if we get 3 bad readings in a row, give up
+		if (numBadReadings == 3)									// if we get 3 bad readings in a row, give up
 		{
 			InputMonitor *const locInputMonitor = inputMonitor;		// capture volatile variable
 			if (locInputMonitor != nullptr)

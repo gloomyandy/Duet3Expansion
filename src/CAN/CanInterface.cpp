@@ -861,7 +861,7 @@ extern "C" [[noreturn]] void CanAsyncSenderLoop(void *) noexcept
 	for (;;)
 	{
 		// Set up a message ready
-		auto msg = buf.SetupRequestMessageNoRid<CanMessageInputChangedV1>(CanInterface::GetCanAddress(), currentMasterAddress);
+		auto msg = buf.SetupRequestMessageNoRid<CanMessageInputChangedV2>(CanInterface::GetCanAddress(), currentMasterAddress);
 		msg->states = 0;
 		msg->numHandles = 0;
 
@@ -871,7 +871,7 @@ extern "C" [[noreturn]] void CanAsyncSenderLoop(void *) noexcept
 		if (stallNotifications != 0)
 		{
 			constexpr RemoteInputHandle h(RemoteInputHandle::typeStallEndstop, 0, 0);
-			(void)msg->AddEntry(h.asU16(), (uint32_t)stallNotifications, true);
+			(void)msg->AddEntry(h.asU16(), StepTimer::GetMasterTime(), (uint32_t)stallNotifications, true);
 		}
 #endif
 		uint32_t timeToWait = InputMonitor::AddStateChanges(msg);

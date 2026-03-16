@@ -190,6 +190,7 @@ GCodeResult InputMonitor::SelectTouchMode(uint32_t param, const StringRef& reply
 void InputMonitor::SetTriggered() noexcept
 {
 	state = true;
+	whenStateChanged = StepTimer::GetTimerTicks();
 	sendDue = true;
 	CanInterface::WakeAsyncSender();
 }
@@ -209,6 +210,7 @@ void InputMonitor::DigitalInterrupt() noexcept
 		state = newState;
 		if (active)
 		{
+			whenStateChanged = StepTimer::GetTimerTicks();
 			sendDue = true;
 			CanInterface::WakeAsyncSenderFromIsr();
 		}
@@ -223,6 +225,7 @@ void InputMonitor::AnalogInterrupt(int32_t reading) noexcept
 		state = newState;
 		if (active)
 		{
+			whenStateChanged = StepTimer::GetTimerTicks();
 			sendDue = true;
 			CanInterface::WakeAsyncSender();
 		}
@@ -434,7 +437,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 
 // Check the input monitors and add any pending ones to the message
 // Return the number of ticks before we should be woken again, or TaskBase::TimeoutUnlimited if we shouldn't be woken until an input changes state
-/*static*/ uint32_t InputMonitor::AddStateChanges(CanMessageInputChangedV1 *msg) noexcept
+/*static*/ uint32_t InputMonitor::AddStateChanges(CanMessageInputChangedV2 *msg) noexcept
 {
 	uint32_t timeToWait = TaskBase::TimeoutUnlimited;
 	ReadLocker lock(listLock);
@@ -454,7 +457,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 					monitorState = p->state;
 				}
 
-				if (msg->AddEntry(p->handle, p->GetAnalogValue(), monitorState))
+				if (msg->AddEntry(p->handle, StepTimer::ConvertToMasterTime(p->whenStateChanged), p->GetAnalogValue(), monitorState))
 				{
 					p->whenLastSent = now;
 				}
