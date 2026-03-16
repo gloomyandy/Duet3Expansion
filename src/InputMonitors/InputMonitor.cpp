@@ -515,21 +515,22 @@ void InputMonitor::UpdateState(bool newState) noexcept
 }
 
 // Append analog handle data to the supplied buffer
-/*static*/ unsigned int InputMonitor::AddAnalogHandleDataV0(uint8_t *buffer, size_t spaceLeft) noexcept
+/*static*/ unsigned int InputMonitor::AddAnalogHandleDataV1(uint8_t *buffer, size_t spaceLeft) noexcept
 {
 	unsigned int count = 0;
 	ReadLocker lock(listLock);
 	InputMonitor *h = monitorsList;
-	while (h != nullptr && spaceLeft >= sizeof(AnalogHandleDataV0))
+	while (h != nullptr && spaceLeft >= sizeof(AnalogHandleDataV1))
 	{
 		if (!h->IsDigital())
 		{
-			AnalogHandleDataV0 data;
-			data.reading = h->GetAnalogValue();
+			AnalogHandleDataV1 data;
 			data.handle.all = h->handle;
-			memcpy(buffer, &data, sizeof(AnalogHandleDataV0));
-			buffer += sizeof(AnalogHandleDataV0);
-			spaceLeft -= sizeof(AnalogHandleDataV0);
+			data.when = (uint16_t)StepTimer::GetMasterTime();
+			data.reading = h->GetAnalogValue();
+			memcpy(buffer, &data, sizeof(AnalogHandleDataV1));
+			buffer += sizeof(AnalogHandleDataV1);
+			spaceLeft -= sizeof(AnalogHandleDataV1);
 			++count;
 		}
 		h = h->next;

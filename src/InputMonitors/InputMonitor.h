@@ -45,7 +45,7 @@ public:
 	static uint32_t AddStateChanges(CanMessageInputChangedV2 *msg) noexcept;
 	static void ReadInputs(CanMessageBuffer *buf) noexcept;
 
-	static unsigned int AddAnalogHandleDataV0(uint8_t *buffer, size_t spaceLeft) noexcept;
+	static unsigned int AddAnalogHandleDataV1(uint8_t *buffer, size_t spaceLeft) noexcept;
 
 	static void CommonDigitalPortInterrupt(CallbackParameter cbp) noexcept;
 	static void CommonAnalogPortInterrupt(CallbackParameter cbp, int32_t reading) noexcept;
