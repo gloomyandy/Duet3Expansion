@@ -80,7 +80,6 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(22) };
 #define SUPPORT_SPI_SENSORS		0
 #define NUM_I2C_CHANNELS		0	//temporary
 #define SUPPORT_LIS3DH			0	//temporary
-#define SUPPORT_DHT_SENSOR		0
 
 #define USE_MPU					0
 #define USE_CACHE				0

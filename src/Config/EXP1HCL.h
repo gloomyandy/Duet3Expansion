@@ -81,7 +81,6 @@ constexpr Pin DiagPins[NumDrivers] = { PortAPin(21) };
 # define SUPPORT_LIS3DH			1
 #endif
 
-#define SUPPORT_DHT_SENSOR		0
 #define NUM_SERIAL_PORTS		0
 
 #define USE_MPU					0

@@ -80,6 +80,10 @@
 constexpr size_t NumDrivers = 0;
 #endif
 
+#ifndef SUPPORT_DHT_SENSOR
+# define SUPPORT_DHT_SENSOR				0			// we don't support DHT sensors on any expansion boards
+#endif
+
 #if !defined(SUPPORT_BME280)
 # define SUPPORT_BME280					(SUPPORT_SPI_SENSORS)
 #endif
