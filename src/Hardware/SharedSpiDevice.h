@@ -23,11 +23,14 @@ class SharedSpiDevice : public SpiDevice
 public:
 #if SAME5x || SAMC21
 	SharedSpiDevice(uint8_t sercomNum, uint32_t dataInPad, uint32_t dataOutPad) noexcept;
-#elif RP2040
-	SharedSpiDevice(uint8_t spiInstanceNum) noexcept;
+#else
+	explicit SharedSpiDevice(uint8_t spiInstanceNum) noexcept;
 #endif
 
-	bool Take(uint32_t timeout) noexcept { return mutex.Take(timeout); }					// get ownership of this SPI, return true if successful
+	// Get ownership of this SPI, return true if successful
+	bool Take(uint32_t timeout) noexcept { return mutex.Take(timeout); }
+
+	// Release ownership of this SPI
 	void Release() noexcept { mutex.Release(); }
 
 private:

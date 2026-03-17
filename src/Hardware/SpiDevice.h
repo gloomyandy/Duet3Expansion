@@ -23,13 +23,16 @@ enum class SpiMode : uint8_t
 	mode0 = 0, mode1, mode2, mode3
 };
 
+
+// This class represents a master SPI interface, but not the associated CS pin(s).
+// It is used as the base class for SharedSpiDevice. It can also be used by itself to control a non-shared SPI master.
 class SpiDevice
 {
 public:
 #if SAME5x || SAMC21
 	SpiDevice(uint8_t sercomNum, uint32_t dataInPad, uint32_t dataOutPad) noexcept;
-#elif RP2040
-	SpiDevice(uint8_t spiInstanceNum) noexcept;
+#else
+	explicit SpiDevice(uint8_t spiInstanceNum) noexcept;
 #endif
 
 	void Disable() const noexcept;
