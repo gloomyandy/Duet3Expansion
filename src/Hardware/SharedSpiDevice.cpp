@@ -7,7 +7,7 @@
 
 #include "SharedSpiDevice.h"
 
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO)
+#if NUM_SHARED_SPI != 0
 
 #if SAME5x || SAMC21
 SharedSpiDevice::SharedSpiDevice(uint8_t sercomNum, uint32_t dataInPad, uint32_t dataOutPad) noexcept : SpiDevice(sercomNum, dataInPad, dataOutPad)

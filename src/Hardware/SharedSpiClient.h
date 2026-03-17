@@ -10,7 +10,7 @@
 
 #include <RepRapFirmware.h>
 
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO)
+#if NUM_SHARED_SPI != 0
 
 #include "SharedSpiDevice.h"
 

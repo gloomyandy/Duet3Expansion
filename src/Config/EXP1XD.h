@@ -71,8 +71,10 @@ constexpr Pin DirectionPins[NumDrivers] = { PortAPin(10) };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		0
-#define NUM_I2C_CHANNELS		0
 #define SUPPORT_SDADC			0
+
+#define NUM_I2C_CHANNELS		0
+#define NUM_SHARED_SPI			0
 
 #define USE_MPU					0
 #define USE_CACHE				0

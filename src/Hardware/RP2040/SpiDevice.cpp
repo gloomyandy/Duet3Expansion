@@ -7,7 +7,7 @@
 
 #include <Hardware/SpiDevice.h>
 
-#if RP2040 && (SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || SUPPORT_ADS131M02 || defined(ATEIO))
+#if RP2040 && NUM_SHARED_SPI != 0
 
 SpiDevice::SpiDevice(uint8_t spiInstanceNum) noexcept
 	: hardware((spiInstanceNum == 0) ? spi0 : spi1)

@@ -115,7 +115,8 @@ namespace Platform
 	static uint8_t boardVariant = 0;
 #endif
 
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO)
+#if NUM_SHARED_SPI != 0
+	// Currently we support just one shared SPI device. This can be expanded if/when we need to.
 	SharedSpiDevice *sharedSpi = nullptr;
 #endif
 
@@ -714,7 +715,7 @@ void Platform::Init()
 	}
 #endif
 
-#if SUPPORT_SPI_SENSORS || SUPPORT_CLOSED_LOOP || defined(ATEIO)
+#if NUM_SHARED_SPI != 0
 	// Set the pin functions
 	SetPinFunction(SSPIMosiPin, SSPIMosiPinPeriphMode);
 	SetPinFunction(SSPISclkPin, SSPISclkPinPeriphMode);
