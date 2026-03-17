@@ -11,6 +11,7 @@
 #include <Hardware/IoPorts.h>
 #include <CAN/CanInterface.h>
 #include <CanMessageBuffer.h>
+#include <Movement/StepTimer.h>
 
 #if SUPPORT_LDC1612
 # include <CommandProcessing/ScanningSensorHandler.h>

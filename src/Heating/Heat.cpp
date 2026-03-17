@@ -34,10 +34,6 @@ Licence: GPL
 #include <AppNotifyIndices.h>
 #include <Movement/StepperDrivers/SmartDrivers.h>
 
-#if SUPPORT_DHT_SENSOR
-# include "Sensors/DhtSensor.h"
-#endif
-
 #if SUPPORT_LIS3DH
 # include <CommandProcessing/AccelerometerHandler.h>
 #endif
@@ -408,7 +404,7 @@ void Heat::Exit() noexcept
 					boardStatusMsg->hasVin = true;
 #endif
 #if HAS_12V_MONITOR
-					boardStatusMsg->values[index++] = Platform::GetV12Voltages(false);
+					boardStatusMsg->shortValues[index++] = Platform::GetV12Voltages(false);
 					boardStatusMsg->hasV12 = true;
 #endif
 #if HAS_CPU_TEMP_SENSOR

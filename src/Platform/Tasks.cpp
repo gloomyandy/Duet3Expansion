@@ -1041,10 +1041,10 @@ static inline void CheckSpinLockAndResetIfStuck() noexcept
 		Heat::SwitchOffAll();
 #if SUPPORT_DRIVERS
 # if SUPPORT_TMC51xx
-		IoPort::WriteDigital(GlobalTmc51xxEnablePin, true);
+		IoPort::WriteDigital(GlobalTmcEnablePin, true);
 # endif
 # if SUPPORT_TMC22xx
-		IoPort::WriteDigital(GlobalTmc22xxEnablePin, true);
+		IoPort::WriteDigital(GlobalTmcEnablePin, true);
 # endif
 		moveInstance->DisableAllDrives();
 #endif
