@@ -13,16 +13,12 @@
 #if NUM_SHARED_SPI != 0
 
 #include <RTOSIface/RTOSIface.h>
+#include <SPI/SpiMode.h>
+#include <SPI/SpiParameters.h>
 
 #if RP2040
 # include "hardware/spi.h"
 #endif
-
-enum class SpiMode : uint8_t
-{
-	mode0 = 0, mode1, mode2, mode3
-};
-
 
 // This class represents a master SPI interface, but not the associated CS pin(s).
 // It is used as the base class for SharedSpiDevice. It can also be used by itself to control a non-shared SPI master.
