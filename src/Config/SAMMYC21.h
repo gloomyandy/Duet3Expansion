@@ -9,6 +9,7 @@
 #define SRC_CONFIG_SAMMYC21_H_
 
 #include <Hardware/PinDescription.h>
+#include <SPI/SpiParameters.h>
 
 #define BOARD_TYPE_NAME		"SAMMYC21"
 #define BOOTLOADER_NAME		"SAMMYC21"
@@ -36,6 +37,23 @@
 #define SUPPORT_TMC22xx			0
 #define SUPPORT_TMC2240_SPI		0
 
+// DMA channel assignments
+constexpr DmaChannel DmacChanTmcTx = 0;
+constexpr DmaChannel DmacChanTmcRx = 1;
+constexpr DmaChannel DmacChanAdc0Rx = 2;				// two channels used
+constexpr DmaChannel DmacChanSspiTx = 4;
+constexpr DmaChannel DmacChanSspiRx = 5;
+
+constexpr unsigned int NumDmaChannelsUsed = 6;			// must be at least the number of channels used, may be larger. Max 12 on the SAMC21.
+
+// DMA priorities, higher is better. 0 to 3 are available.
+constexpr DmaPriority DmacPrioTmcTx = 0;
+constexpr DmaPriority DmacPrioTmcRx = 3;
+constexpr DmaPriority DmacPrioAdcRx = 2;
+constexpr DmaPriority DmacPrioSspiTx = 0;
+constexpr DmaPriority DmacPrioSspiRx = 2;
+
+// Stepper drivers
 constexpr size_t NumDrivers = 1;
 
 #define USE_CCL		0			// USE_CCL also requires DIFFERENTIAL_STEPPER_OUTPUTS
@@ -102,15 +120,20 @@ constexpr bool LedActiveHigh = true;
 #if SUPPORT_SPI_SENSORS
 
 // Shared SPI using pins PA16,17,18. If changing this, also change the available pins in the pin table.
-constexpr uint8_t SspiSercomNumber = 1;
-constexpr uint32_t SspiDataInPad = 2;
-constexpr uint32_t SspiDataOutPad = 0;
-constexpr Pin SSPIMosiPin = PortAPin(16);
-constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::C;
-constexpr Pin SSPISclkPin = PortAPin(17);
-constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::C;
-constexpr Pin SSPIMisoPin = PortAPin(18);
-constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
+constexpr SpiParameters SharedSpiParams =
+{
+	.sercomNumber = 1,
+	.mosiPin = PortAPin(16),
+	.misoPin = PortAPin(18),
+	.sclkPin = PortAPin(17),
+	.pinFunction = GpioPinFunction::C,
+	.dataInPad = 2,
+	.dataOutPad = 0,
+	.dmaChanTx = DmacChanSspiTx,
+	.dmaChanRx = DmacChanSspiRx,
+	.dmaPrioTx = DmacPrioSspiTx,
+	.dmaPrioRx = DmacPrioSspiRx,
+};
 
 #endif
 
@@ -229,18 +252,6 @@ constexpr unsigned int StepTcNumber = 2;
 // Available UART ports
 #define NUM_SERIAL_PORTS		1
 constexpr IRQn Serial0_IRQn = SERCOM5_IRQn;
-
-// DMA channel assignments
-constexpr DmaChannel DmacChanTmcTx = 0;
-constexpr DmaChannel DmacChanTmcRx = 1;
-constexpr DmaChannel DmacChanAdc0Rx = 2;
-
-constexpr unsigned int NumDmaChannelsUsed = 4;			// must be at least the number of channels used, may be larger. Max 12 on the SAMC21.
-
-// DMA priorities, higher is better. 0 to 3 are available.
-constexpr DmaPriority DmacPrioTmcTx = 0;
-constexpr DmaPriority DmacPrioTmcRx = 3;
-constexpr DmaPriority DmacPrioAdcRx = 2;
 
 // Interrupt priorities, lower means higher priority. 0 can't make RTOS calls. Only 0 to 3 are available.
 const NvicPriority NvicPriorityStep = 1;				// step interrupt is next highest, it can preempt most other interrupts

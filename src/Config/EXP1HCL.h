@@ -9,6 +9,7 @@
 #define SRC_CONFIG_EXP1HCLV1_0_H_
 
 #include <Hardware/PinDescription.h>
+#include <SPI/SpiParameters.h>
 
 #define BOARD_TYPE_NAME		"EXP1HCL"
 #define BOOTLOADER_NAME		"SAME5x"
@@ -44,6 +45,22 @@
 #define SUPPORT_QUADRATURE_ENCODER		1
 #define SUPPORT_COMPOSITE_ENCODER		1
 
+// DMA channel assignments
+constexpr DmaChannel DmacChanTmcTx = 0;
+constexpr DmaChannel DmacChanTmcRx = 1;
+constexpr DmaChannel DmacChanLedTx = 2;
+constexpr DmaChannel DmacChanSspiTx = 3;
+constexpr DmaChannel DmacChanSspiRx = 4;
+
+constexpr unsigned int NumDmaChannelsUsed = 5;			// must be at least the number of channels used, may be larger. Max 12 on the SAME5x.
+
+constexpr DmaPriority DmacPrioTmcTx = 0;
+constexpr DmaPriority DmacPrioTmcRx = 3;
+constexpr DmaPriority DmacPrioLed = 1;
+constexpr DmaPriority DmacPrioSspiTx = 0;
+constexpr DmaPriority DmacPrioSspiRx = 3;
+
+// Stepper drivers
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
 constexpr float MaxMotorCurrent = 6300.0;					// the maximum current we allow the TMC5160/5161 drivers to be set to in open loop mode
@@ -153,18 +170,21 @@ constexpr Pin Lis3dhInt1Pin = PortAPin(13);					// same as io1.in
 
 #endif
 
-// Shared SPI (used for interface to encoders, not for temperature sensors)
-constexpr uint8_t SspiSercomNumber = 1;
-constexpr uint32_t SspiDataInPad = 3;
-constexpr uint32_t SspiDataOutPad = 0;
-constexpr Pin SSPIMosiPin = PortAPin(16);
-constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::C;
-
-constexpr Pin SSPISclkPin = PortAPin(17);
-constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::C;
-
-constexpr Pin SSPIMisoPin = PortAPin(19);
-constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
+// Shared SPI definitions
+constexpr SpiParameters SharedSpiParams =
+{
+	.sercomNumber = 1,
+	.mosiPin = PortAPin(16),
+	.misoPin = PortAPin(19),
+	.sclkPin = PortAPin(17),
+	.pinFunction = GpioPinFunction::C,
+	.dataInPad = 3,
+	.dataOutPad = 0,
+	.dmaChanTx = DmacChanSspiTx,
+	.dmaChanRx = DmacChanSspiRx,
+	.dmaPrioTx = DmacPrioSspiTx,
+	.dmaPrioRx = DmacPrioSspiRx,
+};
 
 // Position decoder
 constexpr Pin PositionDecoderPins[] = { PortAPin(24), PortAPin(25), PortBPin(22) };
@@ -259,19 +279,6 @@ constexpr unsigned int StepTcNumber = 0;
 
 // Available UART ports
 #define NUM_SERIAL_PORTS		0
-
-// DMA channel assignments
-constexpr DmaChannel DmacChanTmcTx = 0;
-constexpr DmaChannel DmacChanTmcRx = 1;
-constexpr DmaChannel DmacChanAdc0Rx = 2;
-constexpr DmaChannel DmacChanLedTx = 3;
-
-constexpr unsigned int NumDmaChannelsUsed = 4;			// must be at least the number of channels used, may be larger. Max 12 on the SAME5x.
-
-constexpr DmaPriority DmacPrioTmcTx = 0;
-constexpr DmaPriority DmacPrioTmcRx = 3;
-constexpr DmaPriority DmacPrioAdcRx = 2;
-constexpr DmaPriority DmacPrioLed = 1;
 
 // Interrupt priorities, lower means higher priority. 0-2 can't make RTOS calls.
 const NvicPriority NvicPriorityStep = 3;				// step interrupt is next highest, it can preempt most other interrupts

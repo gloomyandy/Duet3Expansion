@@ -12,7 +12,7 @@
 
 #if SUPPORT_ADS131M02
 
-#include <Hardware/SpiDevice.h>
+#include <SPI/SpiDevice.h>
 #include <InputMonitors/InputMonitor.h>
 
 class ADS131M02 : public SpiDevice

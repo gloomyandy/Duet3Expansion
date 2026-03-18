@@ -19,7 +19,7 @@
 #endif
 
 #if NUM_SHARED_SPI != 0
-# include <Hardware/SharedSpiDevice.h>
+# include <SPI/SharedSpiDevice.h>
 #endif
 
 #if NUM_I2C_CHANNELS != 0

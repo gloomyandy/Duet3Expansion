@@ -716,17 +716,8 @@ void Platform::Init()
 #endif
 
 #if NUM_SHARED_SPI != 0
-	// Set the pin functions
-	SetPinFunction(SSPIMosiPin, SSPIMosiPinPeriphMode);
-	SetPinFunction(SSPISclkPin, SSPISclkPinPeriphMode);
-	SetPinFunction(SSPIMisoPin, SSPIMisoPinPeriphMode);
-# if SAME5x || SAMC21
-	sharedSpi = new SharedSpiDevice(SspiSercomNumber, SspiDataInPad, SspiDataOutPad);
-# elif RP2040
-	sharedSpi = new SharedSpiDevice(SspiSpiInstanceNumber);
-# else
-# error Unsupported processor
-# endif
+	// Currently we support only 0 or 1 shared SPI channels
+	sharedSpi = new SharedSpiDevice(SharedSpiParams);
 #endif
 
 #if NUM_I2C_CHANNELS != 0

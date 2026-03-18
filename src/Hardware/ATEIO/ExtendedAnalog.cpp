@@ -11,7 +11,7 @@
 #ifdef ATEIO
 
 #include <Platform/Platform.h>
-#include <Hardware/SharedSpiClient.h>
+#include <SPI/SharedSpiClient.h>
 
 // AD7327 latches the data in the falling edge of SCLK. Max clock frequency 10MHz, minimum 50kHz. It expects SCLK to be high when /CS changes state. This is SPI mode 2.
 constexpr uint32_t AdcClockFrequency = 4000000;

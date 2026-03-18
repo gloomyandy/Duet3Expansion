@@ -9,6 +9,7 @@
 #define SRC_CONFIG_ATEIO_H_
 
 #include <Hardware/PinDescription.h>
+#include <SPI/SpiParameters.h>
 
 #define BOARD_TYPE_NAME		"ATEIO"
 #define BOOTLOADER_NAME		"SAMC21"
@@ -37,6 +38,17 @@ constexpr size_t MaxPortsPerHeater = 1;
 constexpr unsigned int CANInstanceNumber = 0;
 constexpr bool UseLaterCanPins = true;
 
+// DMA channel assignments
+constexpr DmaChannel DmacChanAdc0Rx = 0;				// two channels used
+constexpr DmaChannel DmacChanSspiTx = 2;
+constexpr DmaChannel DmacChanSspiRx = 3;
+
+constexpr unsigned int NumDmaChannelsUsed = 4;			// must be at least the number of channels used, may be larger. Max 12 on the SAMC21.
+
+constexpr DmaPriority DmacPrioAdcRx = 2;
+constexpr DmaPriority DmacPrioSspiTx = 0;
+constexpr DmaPriority DmacPrioSspiRx = 2;
+
 constexpr Pin BoardTypePins[] = { PortAPin(5), PortAPin(4) };
 constexpr Pin ButtonPins[] = { PortAPin(18) };
 
@@ -44,16 +56,21 @@ constexpr Pin ButtonPins[] = { PortAPin(18) };
 constexpr Pin LedPins[] = { PortAPin(30), PortAPin(31) };
 constexpr bool LedActiveHigh = false;
 
-// Shared SPI
-constexpr uint8_t SspiSercomNumber = 1;
-constexpr uint32_t SspiDataInPad = 3;
-constexpr uint32_t SspiDataOutPad = 0;
-constexpr Pin SSPIMosiPin = PortAPin(16);
-constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::C;
-constexpr Pin SSPISclkPin = PortAPin(17);
-constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::C;
-constexpr Pin SSPIMisoPin = PortAPin(19);
-constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
+// Shared SPI definitions
+constexpr SpiParameters SharedSpiParams =
+{
+	.sercomNumber = 1,
+	.mosiPin = PortAPin(16),
+	.misoPin = PortAPin(19),
+	.sclkPin = PortAPin(17),
+	.pinFunction = GpioPinFunction::C,
+	.dataInPad = 3,
+	.dataOutPad = 0,
+	.dmaChanTx = DmacChanSspiTx,
+	.dmaChanRx = DmacChanSspiRx,
+	.dmaPrioTx = DmacPrioSspiTx,
+	.dmaPrioRx = DmacPrioSspiRx,
+};
 
 constexpr Pin ExtendedAdcCsPin = PortAPin(18);
 
@@ -150,14 +167,6 @@ constexpr unsigned int StepTcNumber = 2;
 
 // Available UART ports
 #define NUM_SERIAL_PORTS		0
-
-// DMA channel assignments
-constexpr DmaChannel DmacChanAdc0Rx = 0;
-constexpr DmaChannel DmacChanSdadcRx = 1;
-
-constexpr unsigned int NumDmaChannelsUsed = 2;			// must be at least the number of channels used, may be larger. Max 12 on the SAMC21.
-
-constexpr DmaPriority DmacPrioAdcRx = 2;
 
 // Interrupt priorities, lower means higher priority. 0 can't make RTOS calls.
 const NvicPriority NvicPriorityStep = 1;				// step interrupt is next highest, it can preempt most other interrupts
