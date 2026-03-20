@@ -10,6 +10,7 @@
 
 #include <Hardware/PinDescription.h>
 #include <SPI/SpiParameters.h>
+#include <I2C/I2cParameters.h>
 
 #define BOARD_TYPE_NAME		"EXP1HCL"
 #define BOOTLOADER_NAME		"SAME5x"
@@ -59,6 +60,15 @@ constexpr DmaPriority DmacPrioTmcRx = 3;
 constexpr DmaPriority DmacPrioLed = 1;
 constexpr DmaPriority DmacPrioSspiTx = 0;
 constexpr DmaPriority DmacPrioSspiRx = 3;
+
+// Interrupt priorities, lower means higher priority. 0-2 can't make RTOS calls.
+const NvicPriority NvicPriorityStep = 3;				// step interrupt is next highest, it can preempt most other interrupts
+const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interrupts
+const NvicPriority NvicPriorityUart = 3;				// serial driver makes RTOS calls
+const NvicPriority NvicPriorityI2C = 3;
+const NvicPriority NvicPriorityPins = 3;				// priority for GPIO pin interrupts
+const NvicPriority NvicPriorityCan = 4;
+const NvicPriority NvicPriorityAdc = 5;
 
 // Stepper drivers
 constexpr size_t NumDrivers = 1;
@@ -140,11 +150,15 @@ constexpr Pin MT6835CalPin = PortAPin(0);					// Pin spi.cs1 drives CAL on the M
 #if NUM_I2C_CHANNELS != 0
 
 // I2C using pins PA12,13
-constexpr uint8_t I2C0SercomNumber = 2;
-constexpr Pin I2C0SDAPin = PortAPin(12);
-constexpr GpioPinFunction I2C0SDAPinPeriphMode = GpioPinFunction::C;
-constexpr Pin I2C0SCLPin = PortAPin(13);
-constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::C;
+constexpr I2cParameters I2C0Params =
+{
+	.sercomNumber = 2,
+	.sclPin = PortAPin(13),
+	.sdaPin = PortAPin(12),
+	.pinFunction = GpioPinFunction::C,
+	.irqPriority = NvicPriorityI2C
+};
+
 # define I2C0_HANDLER0		SERCOM2_0_Handler
 # define I2C0_HANDLER1		SERCOM2_1_Handler
 # define I2C0_HANDLER2		SERCOM2_2_Handler
@@ -279,14 +293,5 @@ constexpr unsigned int StepTcNumber = 0;
 
 // Available UART ports
 #define NUM_SERIAL_PORTS		0
-
-// Interrupt priorities, lower means higher priority. 0-2 can't make RTOS calls.
-const NvicPriority NvicPriorityStep = 3;				// step interrupt is next highest, it can preempt most other interrupts
-const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interrupts
-const NvicPriority NvicPriorityUart = 3;				// serial driver makes RTOS calls
-const NvicPriority NvicPriorityI2C = 3;
-const NvicPriority NvicPriorityPins = 3;				// priority for GPIO pin interrupts
-const NvicPriority NvicPriorityCan = 4;
-const NvicPriority NvicPriorityAdc = 5;
 
 #endif /* SRC_CONFIG_EXP1HCLV1_0_H_ */

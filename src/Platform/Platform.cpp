@@ -27,7 +27,7 @@
 #include <Version.h>
 
 #if NUM_I2C_CHANNELS != 0
-# include <Hardware/SharedI2CMaster.h>
+# include <I2C/SharedI2CMaster.h>
 #endif
 
 #if SUPPORT_LIS3DH
@@ -725,16 +725,12 @@ void Platform::Init()
 	if (boardVariant != 0)
 # endif
 	{
-		SetPinFunction(I2C0SDAPin, I2C0SDAPinPeriphMode);
-		SetPinFunction(I2C0SCLPin, I2C0SCLPinPeriphMode);
-		sharedI2C[0] = new SharedI2CMaster(I2C0SercomNumber);
+		sharedI2C[0] = new SharedI2CMaster(I2C0Params);
 	}
 #endif
 
 #if NUM_I2C_CHANNELS >= 2
-	SetPinFunction(I2C1SDAPin, I2C1SDAPinPeriphMode);
-	SetPinFunction(I2C1SCLPin, I2C1SCLPinPeriphMode);
-	sharedI2C[1] = new SharedI2CMaster(I2C1SercomNumber);
+	sharedI2C[1] = new SharedI2CMaster(I2C1Params);
 #endif
 
 #if SUPPORT_ADS131M02

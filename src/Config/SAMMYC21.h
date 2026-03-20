@@ -10,6 +10,7 @@
 
 #include <Hardware/PinDescription.h>
 #include <SPI/SpiParameters.h>
+#include <I2C/I2cParameters.h>
 
 #define BOARD_TYPE_NAME		"SAMMYC21"
 #define BOOTLOADER_NAME		"SAMMYC21"
@@ -52,6 +53,14 @@ constexpr DmaPriority DmacPrioTmcRx = 3;
 constexpr DmaPriority DmacPrioAdcRx = 2;
 constexpr DmaPriority DmacPrioSspiTx = 0;
 constexpr DmaPriority DmacPrioSspiRx = 2;
+
+// Interrupt priorities, lower means higher priority. 0 can't make RTOS calls. Only 0 to 3 are available.
+const NvicPriority NvicPriorityStep = 1;				// step interrupt is next highest, it can preempt most other interrupts
+const NvicPriority NvicPriorityUart = 2;				// serial driver makes RTOS calls
+const NvicPriority NvicPriorityPins = 2;				// priority for GPIO pin interrupts
+const NvicPriority NvicPriorityI2C = 2;
+const NvicPriority NvicPriorityCan = 3;
+const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interrupts
 
 // Stepper drivers
 constexpr size_t NumDrivers = 1;
@@ -140,11 +149,15 @@ constexpr SpiParameters SharedSpiParams =
 #if NUM_I2C_CHANNELS != 0
 
 // I2C using pins PA22,23. If changing this, also change the available pins in the pin table.
-constexpr uint8_t I2C0SercomNumber = 3;
-constexpr Pin I2C0SDAPin = PortAPin(22);
-constexpr GpioPinFunction I2C0SDAPinPeriphMode = GpioPinFunction::C;
-constexpr Pin I2C0SCLPin = PortAPin(23);
-constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::C;
+constexpr I2cParameters I2C0Params =
+{
+	.sercomNumber = 3,
+	.sclPin = PortAPin(23),
+	.sdaPin = PortAPin(22),
+	.pinFunction = GpioPinFunction::C,
+	.irqPriority = NvicPriorityI2C
+};
+
 #define I2C0_HANDLER		SERCOM3_Handler
 
 #endif
@@ -252,13 +265,5 @@ constexpr unsigned int StepTcNumber = 2;
 // Available UART ports
 #define NUM_SERIAL_PORTS		1
 constexpr IRQn Serial0_IRQn = SERCOM5_IRQn;
-
-// Interrupt priorities, lower means higher priority. 0 can't make RTOS calls. Only 0 to 3 are available.
-const NvicPriority NvicPriorityStep = 1;				// step interrupt is next highest, it can preempt most other interrupts
-const NvicPriority NvicPriorityUart = 2;				// serial driver makes RTOS calls
-const NvicPriority NvicPriorityPins = 2;				// priority for GPIO pin interrupts
-const NvicPriority NvicPriorityI2C = 2;
-const NvicPriority NvicPriorityCan = 3;
-const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interrupts
 
 #endif /* SRC_CONFIG_SAMMYC21_H_ */

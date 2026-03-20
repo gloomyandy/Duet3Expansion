@@ -13,7 +13,7 @@
 #if NUM_I2C_CHANNELS != 0
 
 #include "TemperatureSensor.h"
-#include <Hardware/SharedI2CClient.h>
+#include <I2C/SharedI2CClient.h>
 
 class I2CTemperatureSensor : public TemperatureSensor
 {

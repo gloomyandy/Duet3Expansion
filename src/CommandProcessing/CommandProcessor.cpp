@@ -577,7 +577,9 @@ static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& rep
 #if NUM_I2C_CHANNELS != 0
 		for (unsigned int i = 0; i < NUM_I2C_CHANNELS; ++i)
 		{
-			Platform::GetSharedI2C(i).Diagnostics(reply, i);
+			I2cErrors errs;
+			Platform::GetSharedI2C(i).GetAndClearErrors(errs);
+			reply.lcatf("I2C %u bus errors %u, naks %u, contentions %u, other errors %u", i, errs.busErrors, errs.naks, errs.contentions, errs.otherErrors);
 		}
 #endif
 #if SUPPORT_DRIVERS
