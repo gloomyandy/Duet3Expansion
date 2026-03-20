@@ -56,6 +56,12 @@ GCodeResult NeoPixelLedStrip::HandleM150(CanMessageGenericParser& parser, const 
 
 	LedParams params;
 	params.GetM150Params(parser);
+	return NeoPixelSendData(params);
+}
+
+GCodeResult NeoPixelLedStrip::NeoPixelSendData(LedParams& params) noexcept
+{
+	params.SwapColours(colorOrder);
 	params.ApplyBrightness();
 
 #if SUPPORT_DMA_NEOPIXEL
@@ -121,11 +127,11 @@ GCodeResult NeoPixelLedStrip::SpiSendData(const LedParams& params) noexcept
 	uint8_t *p = chunkBuffer + (bytesPerLed * numAlreadyInBuffer);
 	while (numLeds != 0 && p + bytesPerLed <= chunkBuffer + chunkBufferSize)
 	{
-		EncodeNeoPixelByte(p, (uint8_t)params.green);
+		EncodeNeoPixelByte(p, (uint8_t)params.firstColour);
 		p += 4;
-		EncodeNeoPixelByte(p, (uint8_t)params.red);
+		EncodeNeoPixelByte(p, (uint8_t)params.secondColour);
 		p += 4;
-		EncodeNeoPixelByte(p, (uint8_t)params.blue);
+		EncodeNeoPixelByte(p, (uint8_t)params.thirdColour);
 		p += 4;
 		if (isRGBW)
 		{
@@ -156,9 +162,9 @@ GCodeResult NeoPixelLedStrip::PioSendData(const LedParams& params) noexcept
 	while (numLeds != 0 && p + bytesPerLed <= chunkBuffer + chunkBufferSize)
 	{
 		*p++ = isRGBW ? (uint8_t)params.white : 0;
-		*p++ = (uint8_t)params.blue;
-		*p++ = (uint8_t)params.red;
-		*p++ = (uint8_t)params.green;
+		*p++ = (uint8_t)params.thirdColour;
+		*p++ = (uint8_t)params.secondColour;
+		*p++ = (uint8_t)params.firstColour;
 		--numLeds;
 		++numAlreadyInBuffer;
 	}
@@ -192,9 +198,9 @@ GCodeResult NeoPixelLedStrip::BitBangData(const LedParams& params) noexcept
 	uint8_t *p = chunkBuffer + (bytesPerLed * numAlreadyInBuffer);
 	while (numLeds != 0 && p + bytesPerLed <= chunkBuffer + chunkBufferSize)
 	{
-		*p++ = (uint8_t)params.green;
-		*p++ = (uint8_t)params.red;
-		*p++ = (uint8_t)params.blue;
+		*p++ = (uint8_t)params.firstColour;
+		*p++ = (uint8_t)params.secondColour;
+		*p++ = (uint8_t)params.thirdColour;
 		if (isRGBW)
 		{
 			*p++ = (uint8_t)params.white;

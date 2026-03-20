@@ -32,6 +32,8 @@ private:
 	static constexpr uint32_t DefaultNeoPixelSpiClockFrequency = 2500000;				// must be between about 2MHz and about 4MHz
 	static constexpr uint32_t MinNeoPixelResetTicks = (250 * StepTimer::StepClockRate)/1000000;	// 250us minimum Neopixel reset time on later chips
 
+	GCodeResult NeoPixelSendData(LedParams& params) noexcept;
+
 	GCodeResult BitBangData(const LedParams& params) noexcept;
 	void BitBangDataNormal(const uint8_t *start, const uint8_t *end, Pin pin) noexcept pre(start < end);
 	void BitBangDataInverted(const uint8_t *start, const uint8_t *end, Pin pin) noexcept pre(start < end);

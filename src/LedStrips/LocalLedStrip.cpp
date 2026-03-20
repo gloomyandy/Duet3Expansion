@@ -93,6 +93,18 @@ GCodeResult LocalLedStrip::CommonConfigure(CanMessageGenericParser& parser, cons
 	}
 #endif
 
+	uint32_t order;
+	if (parser.GetUintParam('K', order))
+	{
+		if (order >= (uint32_t)ColorOrder::count)
+		{
+			reply.printf("Invalid color order K=%lu", order);
+			return GCodeResult::warning;
+		}
+		colorOrder = (ColorOrder)order;
+		seen = true;
+	}
+
 	extra = (useDma) ? 0x01 : 0;
 	return rslt;
 }
@@ -198,14 +210,14 @@ GCodeResult LocalLedStrip::CommonReportDetails(const StringRef &reply) noexcept
 
 void LocalLedStrip::LedParams::GetM150Params(CanMessageGenericParser& parser) noexcept
 {
-	red = green = blue = white = 0;
+	firstColour = secondColour = thirdColour = white = 0;
 	brightness = 128;
 	numLeds = 1;
 	following = false;
 
-	(void)parser.GetUintParam('R', red);
-	(void)parser.GetUintParam('U', green);
-	(void)parser.GetUintParam('B', blue);
+	(void)parser.GetUintParam('R', firstColour);
+	(void)parser.GetUintParam('U', secondColour);
+	(void)parser.GetUintParam('B', thirdColour);
 	(void)parser.GetUintParam('W', white);									// W value is used by RGBW NeoPixels only
 
 	if (!parser.GetUintParam('P', brightness))								// P takes precedence over Y
@@ -220,12 +232,53 @@ void LocalLedStrip::LedParams::GetM150Params(CanMessageGenericParser& parser) no
 	(void)parser.GetBoolParam('F', following);
 }
 
+// Put the colours in the right order. On entry, firstColour is the red amount, secondColour is the green amount, thirdColor is the blue amount.
+void LocalLedStrip::LedParams::SwapColours(ColorOrder order) noexcept
+{
+	switch (order)
+	{
+	case ColorOrder::BGR:
+		std::swap(firstColour, thirdColour);
+		break;
+
+	case ColorOrder::BRG:
+		{
+			const uint32_t red = firstColour;
+			firstColour = thirdColour;
+			thirdColour = secondColour;
+			secondColour = red;
+		}
+		break;
+
+	case ColorOrder::RGB:
+	default:
+		break;																// already in the right order
+
+	case ColorOrder::RBG:
+		std::swap(secondColour, thirdColour);
+		break;
+
+	case ColorOrder::GBR:
+		{
+			const uint32_t red = firstColour;
+			firstColour = secondColour;
+			secondColour = thirdColour;
+			thirdColour = red;
+		}
+		break;
+
+	case ColorOrder::GRB:
+		std::swap(firstColour, secondColour);
+		break;
+	}
+}
+
 // Apply the brightness value to the red/green/blue/white values. This is needed for Neopixel strips, which don't have a 'brightness' value sent to them.
 void LocalLedStrip::LedParams::ApplyBrightness() noexcept
 {
-	red = ((red * brightness) + 255) >> 8;
-	green = ((green * brightness) + 255) >> 8;
-	blue = ((blue * brightness) + 255) >> 8;
+	firstColour = ((firstColour * brightness) + 255) >> 8;
+	secondColour = ((secondColour * brightness) + 255) >> 8;
+	thirdColour = ((thirdColour * brightness) + 255) >> 8;
 	white = ((white * brightness) + 255) >> 8;
 	brightness = 255;														// in case we call this again
 }
