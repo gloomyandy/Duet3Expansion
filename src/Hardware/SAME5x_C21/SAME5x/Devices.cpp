@@ -38,26 +38,6 @@ void SerialPortDeinit(AsyncSerial*) noexcept
 
 AsyncSerial uart0(3, 3, 512, 512, SerialPortInit, SerialPortDeinit);
 
-extern "C" void SERCOM3_0_Handler()
-{
-	uart0.Interrupt0();
-}
-
-extern "C" void SERCOM3_1_Handler()
-{
-	uart0.Interrupt1();
-}
-
-extern "C" void SERCOM3_2_Handler()
-{
-	uart0.Interrupt2();
-}
-
-extern "C" void SERCOM3_3_Handler()
-{
-	uart0.Interrupt3();
-}
-
 #elif defined(EXP1HCL) || defined(M23CL)
 
 // Set up an optional serial port on the IO1 port via SERCOM2
@@ -81,26 +61,6 @@ void SerialPortDeinit(AsyncSerial*) noexcept
 
 // Sercom2 on port io1 can be used as a UART if it is not being used for I2C
 AsyncSerial uart0(2, 1, 512, 512, SerialPortInit, SerialPortDeinit);
-
-extern "C" void SERCOM2_0_Handler()
-{
-	uart0.Interrupt0();
-}
-
-extern "C" void SERCOM2_1_Handler()
-{
-	uart0.Interrupt1();
-}
-
-extern "C" void SERCOM2_2_Handler()
-{
-	uart0.Interrupt2();
-}
-
-extern "C" void SERCOM2_3_Handler()
-{
-	uart0.Interrupt3();
-}
 
 # endif
 

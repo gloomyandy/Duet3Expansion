@@ -34,11 +34,6 @@ void SerialPortDeinit(AsyncSerial*) noexcept
 
 AsyncSerial uart0(5, 1, 32, 128, SerialPortInit, SerialPortDeinit);
 
-extern "C" void SERCOM5_Handler()
-{
-	uart0.Interrupt();
-}
-
 # elif USE_SERIAL_DEBUG
 
 void SerialPortInit(AsyncSerial*) noexcept
@@ -52,11 +47,6 @@ void SerialPortDeinit(AsyncSerial*) noexcept
 }
 
 AsyncSerial uart0(4, 3, 32, 128, SerialPortInit, SerialPortDeinit);
-
-extern "C" void SERCOM4_Handler()
-{
-	uart0.Interrupt();
-}
 
 # endif
 
