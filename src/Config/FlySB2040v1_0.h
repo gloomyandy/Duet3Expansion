@@ -9,6 +9,7 @@
 #define SRC_CONFIG_FLYSB2040V1_0_H_
 
 #include <Hardware/PinDescription.h>
+#include <SPI/SpiParameters.h>
 
 #define BOARD_TYPE_NAME		"FLYSB2040V1_0"
 #define BOOTLOADER_NAME		"FLYSB2040V1_0"
@@ -88,7 +89,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { NoPin };
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		0
 #define NUM_I2C_CHANNELS		0
-#define NUM_SPI_CHANNELS		2
+#define NUM_SHARED_SPI			2
 #define SUPPORT_LIS3DH			0
 #define SUPPORT_DHT_SENSOR		0
 
@@ -122,11 +123,21 @@ constexpr Pin ButtonPins[] = { PIN_TODO };
 constexpr Pin LedPins[] = { GpioPin(24) };
 constexpr bool LedActiveHigh = false;
 
-#if NUM_SPI_CHANNELS > 0
-// Shared SPI pin connections
-// 													Clock, Miso, Mosi
-constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{NoPin, NoPin, NoPin},
-													{GpioPin(0), GpioPin(2), GpioPin(3)} };
+#if NUM_SHARED_SPI > 0
+constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
+{
+	.instanceNumber = 0,
+	.mosiPin = NoPin,
+	.misoPin = NoPin,
+	.sclkPin = NoPin,
+},
+{
+	.instanceNumber = 1,
+	.mosiPin = 3,
+	.misoPin = 2,
+	.sclkPin = 0,
+}
+};
 #endif
 
 #if SUPPORT_LIS3DH

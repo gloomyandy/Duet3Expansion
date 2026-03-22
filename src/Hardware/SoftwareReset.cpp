@@ -164,7 +164,10 @@ void SoftwareResetData::PrintPart1(unsigned int slot, const StringRef& reply) co
 # endif
 #endif
 
-	reply.catf(", available RAM %" PRIi32 ", slot %u", neverUsedRam, slot);
+	reply.catf(", %s spinning, available RAM %" PRIi32 ", slot %u",
+			Module(resetReason & 0x1F).ToString(),
+			neverUsedRam,
+			slot);
 
 	// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
 	// The task name may include nulls at the end, so print it as a string

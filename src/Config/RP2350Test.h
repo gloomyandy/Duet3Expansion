@@ -15,6 +15,8 @@
 # include <hardware/timer.h>
 
 #include <Hardware/PinDescription.h>
+#include <SPI/SpiParameters.h>
+
 #define BOARD_TYPE_NAME		"RP2350TEST"
 #define BOOTLOADER_NAME		"RP2350TEST"
 
@@ -32,7 +34,7 @@
 #define SUPPORT_LED_STRIPS		1
 #define SUPPORT_PIO_NEOPIXEL	1
 #define SUPPORT_INPUT_SHAPING	1
-#define NUM_SPI_CHANNELS		3
+#define NUM_SHARED_SPI			3
 
 // Drivers configuration
 #define SUPPORT_DRIVERS			1
@@ -225,16 +227,44 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico u
 constexpr Pin LedPins[] = { GpioPin(5) };
 constexpr bool LedActiveHigh = false;
 
-#if NUM_SPI_CHANNELS > 0
+#if NUM_SHARED_SPI > 0
 // Shared SPI pin connections
-// 													Clock, Miso, Mosi
 #if 0
-constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(2), GpioPin(4), GpioPin(3)},
-													{GpioPin(10), GpioPin(8), GpioPin(11)} };
+constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
+{
+	.instanceNumber = 0,
+	.mosiPin = 3,
+	.misoPin = 4,
+	.sclkPin = 2,
+},
+{
+	.instanceNumber = 1,
+	.mosiPin = 11,
+	.misoPin = 8,
+	.sclkPin = 10,
+}
+};
 #endif
-constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{NoPin, NoPin, NoPin},
-													{GpioPin(10), GpioPin(8), GpioPin(11)},
-													{GpioPin(2), GpioPin(4), GpioPin(3)}};
+constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
+{
+	.instanceNumber = 0,
+	.mosiPin = NoPin,
+	.misoPin = NoPin,
+	.sclkPin = NoPin,
+},
+{
+	.instanceNumber = 1,
+	.mosiPin = 11,
+	.misoPin = 8,
+	.sclkPin = 10,
+},
+{
+	.instanceNumber = 0,
+	.mosiPin = 3,
+	.misoPin = 4,
+	.sclkPin = 2,
+}
+};
 
 #if SUPPORT_CAN && USE_SPICAN
 

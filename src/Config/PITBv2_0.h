@@ -9,6 +9,7 @@
 #define SRC_CONFIG_PITB_V2_0_H_
 
 #include <Hardware/PinDescription.h>
+#include <SPI/SpiParameters.h>
 
 #define BOARD_TYPE_NAME		"PITBV2_0"
 #define BOOTLOADER_NAME		"PITBV2_0"
@@ -37,7 +38,7 @@
 #define TMC_USES_SHARED_SPI	1
 #define SUPPORT_SLOW_DRIVERS	0
 #define SUPPORT_DELTA_MOVEMENT	0
-#define NUM_SPI_CHANNELS		2
+#define NUM_SHARED_SPI			2
 
 #define SUPPORT_TMC51xx			1
 #define SUPPORT_TMC2660			0
@@ -112,11 +113,25 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico u
 constexpr Pin LedPins[] = { GpioPin(15) };
 constexpr bool LedActiveHigh = false;
 
-#if NUM_SPI_CHANNELS > 0
+#if NUM_SHARED_SPI > 0
 // Shared SPI pin connections
 // 													Clock, Miso, Mosi
-constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(2), GpioPin(4), GpioPin(3)},
+constexpr Pin SSPIPins[NUM_SHARED_SPI][3] = { 	{GpioPin(2), GpioPin(4), GpioPin(3)},
 													{GpioPin(10), GpioPin(8), GpioPin(11)} };
+constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
+{
+	.instanceNumber = 0,
+	.mosiPin = 3,
+	.misoPin = 4,
+	.sclkPin = 2,
+},
+{
+	.instanceNumber = 1,
+	.mosiPin = 11,
+	.misoPin = 8,
+	.sclkPin = 10,
+}
+};
 #endif
 
 #if TMC_USES_SHARED_SPI

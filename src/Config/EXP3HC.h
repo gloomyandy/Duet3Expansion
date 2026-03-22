@@ -9,6 +9,7 @@
 #define SRC_CONFIG_EXP3HC_H_
 
 #include <Hardware/PinDescription.h>
+#include <SPI/SpiParameters.h>
 
 #define BOARD_TYPE_NAME		"EXP3HC"
 #define BOOTLOADER_NAME		"SAME5x"
@@ -41,10 +42,10 @@
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
-#define NUM_I2C_CHANNELS		0
-#define NUM_SPI_CHANNELS		1
-#define SUPPORT_DHT_SENSOR		0
 #define SUPPORT_DMA_NEOPIXEL	0
+
+#define NUM_I2C_CHANNELS		0
+#define NUM_SHARED_SPI			1
 
 #define USE_MPU					0
 #define USE_CACHE				1
@@ -70,6 +71,22 @@ constexpr float DefaultThermistorSeriesR = 2200.0;
 constexpr float VrefTopResistor = 15.0;
 constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / NumThermistorInputs) * 4700.0/((DefaultThermistorSeriesR / NumThermistorInputs) + 4700.0);
 																			// there are 3 temperature sensing channels and a 4K7 load resistor
+// DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
+constexpr DmaChannel DmacChanTmcTx = 0;
+constexpr DmaChannel DmacChanTmcRx = 1;
+constexpr DmaChannel DmacChanLedTx = 2;
+constexpr DmaChannel DmacChanSspiTx = 3;
+constexpr DmaChannel DmacChanSspiRx = 4;
+
+constexpr unsigned int NumDmaChannelsUsed = 5;			// must be at least the number of channels used, may be larger. Max 32 on the SAME51.
+
+constexpr DmaPriority DmacPrioTmcTx = 0;
+constexpr DmaPriority DmacPrioTmcRx = 3;
+constexpr DmaPriority DmacPrioLed = 1;
+constexpr DmaPriority DmacPrioSspiTx = 0;
+constexpr DmaPriority DmacPrioSspiRx = 3;
+
+// Stepper drivers
 constexpr Pin GlobalTmcEnablePin = PortBPin(23);
 constexpr Pin GlobalTmcCSPin = PortBPin(22);
 
@@ -114,17 +131,21 @@ constexpr Pin VssaPin = PortBPin(6);
 constexpr Pin BoardAddressPins[4] = { PortCPin(11), PortCPin(12), PortCPin(14), PortCPin(15) };
 constexpr Pin TempSensePins[NumThermistorInputs] = { PortCPin(3), PortBPin(8), PortBPin(7) };
 
-// Shared SPI
-constexpr uint8_t SspiSercomNumber = 6;
-constexpr uint32_t SspiDataInPad = 3;
-constexpr uint32_t SspiDataOutPad = 0;
-constexpr Pin SSPIMosiPin = PortCPin(16);
-constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::C;
-constexpr Pin SSPISclkPin = PortCPin(17);
-constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::C;
-constexpr Pin SSPIMisoPin = PortCPin(19);
-constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::C;
-constexpr unsigned int Temperature_SpiChannel = 0;
+// Shared SPI definitions
+constexpr SpiParameters SharedSpiParams =
+{
+	.sercomNumber = 6,
+	.mosiPin = PortCPin(16),
+	.misoPin = PortCPin(19),
+	.sclkPin = PortCPin(17),
+	.pinFunction = GpioPinFunction::C,
+	.dataInPad = 3,
+	.dataOutPad = 0,
+	.dmaChanTx = DmacChanSspiTx,
+	.dmaChanRx = DmacChanSspiRx,
+	.dmaPrioTx = DmacPrioSspiTx,
+	.dmaPrioRx = DmacPrioSspiRx,
+};
 
 #if SUPPORT_INDUCTIVE_HEATER	// temporary inductive heater code test
 
@@ -286,17 +307,6 @@ constexpr unsigned int StepTcNumber = 6;
 #define NUM_SERIAL_PORTS		2
 constexpr IRQn Serial0_IRQn = SERCOM3_0_IRQn;
 constexpr IRQn Serial1_IRQn = SERCOM5_0_IRQn;
-
-// DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
-constexpr DmaChannel DmacChanTmcTx = 0;
-constexpr DmaChannel DmacChanTmcRx = 1;
-constexpr DmaChannel DmacChanLedTx = 2;
-
-constexpr unsigned int NumDmaChannelsUsed = 3;			// must be at least the number of channels used, may be larger. Max 32 on the SAME51.
-
-constexpr DmaPriority DmacPrioTmcTx = 0;
-constexpr DmaPriority DmacPrioTmcRx = 3;
-constexpr DmaPriority DmacPrioLed = 1;
 
 // Interrupt priorities, lower means higher priority. 0-2 can't make RTOS calls.
 const NvicPriority NvicPriorityStep = 3;				// step interrupt is next highest, it can preempt most other interrupts

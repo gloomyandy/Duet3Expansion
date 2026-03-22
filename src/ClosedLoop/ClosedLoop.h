@@ -16,7 +16,7 @@
 # include <General/NamedEnum.h>
 # include <Movement/StepTimer.h>
 # include <ClosedLoop/Trigonometry.h>
-# include <Hardware/SharedSpiDevice.h>
+# include <SPI/SharedSpiDevice.h>
 # include "DerivativeAveragingFilter.h"
 # include "TuningErrors.h"
 # include "SampleBuffer.h"

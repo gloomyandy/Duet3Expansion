@@ -12,7 +12,7 @@
 #define SRC_CONFIG_FLY36_RRF_H_
 
 #include <Hardware/PinDescription.h>
-
+#include <SPI/SpiParameters.h>
 #define BOARD_TYPE_NAME		"FLY36RRF"
 #define BOOTLOADER_NAME		"FLY36RRF"
 #define BOARD_USES_UF2_BINARY	1
@@ -97,7 +97,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(22) };
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
 #define NUM_I2C_CHANNELS		0
-#define NUM_SPI_CHANNELS		2
+#define NUM_SHARED_SPI			2
 #define SUPPORT_LIS3DH			1
 #define SUPPORT_DHT_SENSOR		0
 
@@ -146,17 +146,39 @@ constexpr Pin LedPins[] = { GpioPin(20) };
 #endif
 constexpr bool LedActiveHigh = false;
 
-#if NUM_SPI_CHANNELS > 0
+#if NUM_SHARED_SPI > 0
 # if BOARD_REV == 1
 // Shared SPI pin connections
-// 													Clock, Miso, Mosi
-constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(2), GpioPin(4), GpioPin(3)},
-													{GpioPin(10), GpioPin(8), GpioPin(11)} };
+constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
+{
+	.instanceNumber = 0,
+	.mosiPin = 3,
+	.misoPin = 4,
+	.sclkPin = 2,
+},
+{
+	.instanceNumber = 1,
+	.mosiPin = 11,
+	.misoPin = 8,
+	.sclkPin = 10,
+}
+};
 # else
 // Shared SPI pin connections
-// 													Clock, Miso, Mosi
-constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(18), GpioPin(16), GpioPin(19)},
-													{GpioPin(10), GpioPin(12), GpioPin(11)} };
+constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
+{
+	.instanceNumber = 0,
+	.mosiPin = 19,
+	.misoPin = 16,
+	.sclkPin = 18,
+},
+{
+	.instanceNumber = 1,
+	.mosiPin = 11,
+	.misoPin = 12,
+	.sclkPin = 10,
+}
+};
 # endif
 #endif
 

@@ -9,6 +9,7 @@
 #define SRC_CONFIG_RPI_PICO_H_
 
 #include <Hardware/PinDescription.h>
+#include <SPI/SpiParameters.h>
 
 #define BOARD_TYPE_NAME		"RPi_Pico"
 #define BOOTLOADER_NAME		"RPi_Pico"
@@ -79,11 +80,11 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(22) };
 #endif
 
 #define SUPPORT_THERMISTORS		1
-#define SUPPORT_SPI_SENSORS		0
-#define NUM_I2C_CHANNELS		0	//temporary
-#define NUM_SPI_CHANNELS		0
-#define SUPPORT_LIS3DH			0	//temporary
-#define SUPPORT_DHT_SENSOR		0
+#define SUPPORT_SPI_SENSORS		1
+#define SUPPORT_LIS3DH			0
+
+#define NUM_I2C_CHANNELS		0
+#define NUM_SHARED_SPI			(SUPPORT_SPI_SENSORS)
 
 #define USE_MPU					0
 #define USE_CACHE				0
@@ -114,17 +115,18 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico u
 constexpr Pin LedPins[] = { GpioPin(25) };
 constexpr bool LedActiveHigh = true;
 
-#if NUM_SPI_CHANNELS > 0
+#if NUM_SHARED_SPI > 0
 
-// Shared SPI using pins PA16,17,18. If changing this, also change the available pins in the pin table.
-constexpr uint8_t SspiSercomNumber = 1;
-constexpr uint32_t SspiDataInPad = 2;
-constexpr Pin SSPIMosiPin = PortAPin(16);
-constexpr GpioPinFunction SSPIMosiPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPISclkPin = PortAPin(17);
-constexpr GpioPinFunction SSPISclkPinPeriphMode = GpioPinFunction::Spi;
-constexpr Pin SSPIMisoPin = PortAPin(18);
-constexpr GpioPinFunction SSPIMisoPinPeriphMode = GpioPinFunction::Spi;
+// Shared SPI using pins 12,13,14,15. If changing this, also change the available pins in the pin table.
+// Shared SPI definitions
+constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
+{
+	.instanceNumber = 1,
+	.mosiPin = 15,
+	.misoPin = 12,
+	.sclkPin = 14,
+}
+};
 
 #endif
 
@@ -172,10 +174,17 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm5a,	AdcInput::none,		"gpio10"	},	// GPIO10
 #endif
 	{ PwmOutput::pwm5b,	AdcInput::none,		"gpio11"	},	// GPIO11
+#if SUPPORT_SPI_SENSORS
+	{ PwmOutput::none,	AdcInput::none,		nullptr 	},	// GPIO12 SPI1 Rx
+	{ PwmOutput::none,	AdcInput::none,		nullptr		},	// GPIO13 SPI1 CS
+	{ PwmOutput::none,	AdcInput::none,		nullptr		},	// GPIO14 SPI1 Sclk
+	{ PwmOutput::none,	AdcInput::none,		nullptr		},	// GPIO15 SPI1 Tx
+#else
 	{ PwmOutput::pwm6a,	AdcInput::none,		"gpio12" 	},	// GPIO12
 	{ PwmOutput::pwm6b,	AdcInput::none,		"gpio13"	},	// GPIO13
 	{ PwmOutput::pwm7a,	AdcInput::none,		"gpio14"	},	// GPIO14
 	{ PwmOutput::pwm7b,	AdcInput::none,		"gpio15"	},	// GPIO15
+#endif
 	{ PwmOutput::pwm0a,	AdcInput::none,		"gpio16"	},	// GPIO16
 	{ PwmOutput::pwm0b,	AdcInput::none,		"gpio17"	},	// GPIO17
 	{ PwmOutput::pwm1a,	AdcInput::none,		"gpio18" 	},	// GPIO18

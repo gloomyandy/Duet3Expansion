@@ -94,7 +94,6 @@ constexpr Pin DriverDiagPins[NumDrivers] = { PortAPin(21) };
 
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		0
-#define NUM_SPI_CHANNELS		0
 #define SUPPORT_LDC1612			1
 #define SUPPORT_AS5601			1											// support direct-connected magnetic filament monitor encoder chip
 #define SUPPORT_TCA6408A		1											// support button and LEDs on filament monitor via TCA6408A chip
@@ -108,7 +107,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { PortAPin(21) };
 # define SUPPORT_LIS3DH			1
 #endif
 
-#define SUPPORT_DHT_SENSOR		0
+#define NUM_SHARED_SPI			0
 #define NUM_SERIAL_PORTS		0
 
 #define USE_MPU					0

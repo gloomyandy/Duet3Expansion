@@ -17,6 +17,8 @@
 #endif
 
 #include <Hardware/PinDescription.h>
+#include <SPI/SpiParameters.h>
+
 #if BOARD_REV == 300
 #define BOARD_TYPE_NAME		"SB2040MAX3"
 #define BOOTLOADER_NAME		"SB2040MAX3"
@@ -115,7 +117,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { NoPin };
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
 #define NUM_I2C_CHANNELS		1
-#define NUM_SPI_CHANNELS		2
+#define NUM_SHARED_SPI			2
 #define SUPPORT_LIS3DH			1
 #define SUPPORT_DHT_SENSOR		0
 #define SUPPORT_LDC1612			1
@@ -150,11 +152,22 @@ constexpr Pin ButtonPins[] = { PIN_TODO };
 constexpr Pin LedPins[] = { GpioPin(5) };
 constexpr bool LedActiveHigh = false;
 
-#if NUM_SPI_CHANNELS > 0
+#if NUM_SHARED_SPI > 0
 // Shared SPI pin connections
-// 													Clock, Miso, Mosi
-constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(2), GpioPin(4), GpioPin(3)},
-													{GpioPin(10), GpioPin(8), GpioPin(11)} };
+constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
+{
+	.instanceNumber = 0,
+	.mosiPin = 3,
+	.misoPin = 4,
+	.sclkPin = 2,
+},
+{
+	.instanceNumber = 1,
+	.mosiPin = 11,
+	.misoPin = 8,
+	.sclkPin = 10,
+}
+};
 #endif
 
 #if SUPPORT_SPI_SENSORS

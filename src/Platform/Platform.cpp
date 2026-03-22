@@ -65,7 +65,7 @@
 #if RPXXXX
 # include <hardware/structs/watchdog.h>
 # include <hardware/structs/sysinfo.h>
-# if NUM_SPI_CHANNELS > 0
+# if NUM_SHARED_SPI > 0
 #  include<SPI.h>
 # endif
 #endif
@@ -98,7 +98,8 @@ enum class DeferredCommand : uint8_t
 	testDivideByZero,
 	testUnalignedMemoryAccess,
 	testBadMemoryAccess,
-	testMemoryLeak
+	testMemoryLeak,
+	testSpinLockup
 };
 
 static volatile DeferredCommand deferredCommand = DeferredCommand::none;
@@ -118,8 +119,13 @@ namespace Platform
 	static uint8_t boardVariant = 0;
 #endif
 
-#if NUM_SPI_CHANNELS > 0
-	SharedSpiDevice *sharedSpi[NUM_SPI_CHANNELS];
+#if NUM_SHARED_SPI != 0
+#if RPXXXX
+	SharedSpiDevice *sharedSpi[NUM_SHARED_SPI];
+#else
+	// Currently we support just one shared SPI device. This can be expanded if/when we need to.
+	SharedSpiDevice *sharedSpi = nullptr;
+#endif
 #endif
 
 #if NUM_I2C_CHANNELS != 0
@@ -150,7 +156,8 @@ namespace Platform
 
 	static uint32_t lastPollTime;
 	static uint32_t lastFanCheckTime = 0;
-	static unsigned int heatTaskIdleTicks = 0;
+	static uint32_t heatTaskIdleTicks = 0;
+	static uint32_t syncedIdleTicks = 0;
 
 	static uint32_t whenLastCanMessageProcessed = 0;
 
@@ -724,21 +731,15 @@ void Platform::Init()
 	}
 #endif
 
-#if NUM_SPI_CHANNELS > 0
-# if SAME5x || SAMC21
-	// Set the pin functions
-	SetPinFunction(SSPIMosiPin, SSPIMosiPinPeriphMode);
-	SetPinFunction(SSPISclkPin, SSPISclkPinPeriphMode);
-	SetPinFunction(SSPIMisoPin, SSPIMisoPinPeriphMode);
-	sharedSpi[0] = new SharedSpiDevice(SspiSercomNumber, SspiDataInPad);
-# elif RPXXXX
-	for(size_t spichan = 0; spichan < NUM_SPI_CHANNELS; spichan++)
+#if NUM_SHARED_SPI != 0
+# if RPXXXX
+	for(size_t spichan = 0; spichan < NUM_SHARED_SPI; spichan++)
 	{
-		SPI::getSPIDevice((SPIChannel)spichan)->initPins(SSPIPins[spichan][0], SSPIPins[spichan][1], SSPIPins[spichan][2]);
-		sharedSpi[spichan] = new SharedSpiDevice((SPIChannel)spichan);
+		sharedSpi[spichan] = new SharedSpiDevice(SharedSpiParams[spichan]);
 	}
 # else
-# error Unsupported processor
+	// Currently we support only 0 or 1 shared SPI channels
+	sharedSpi = new SharedSpiDevice(SharedSpiParams);
 # endif
 #endif
 
@@ -821,11 +822,10 @@ void Platform::InitMinimal()
 	InitVinMonitor();
 	InitialiseInterrupts();
 #if RPXXXX
-# if NUM_SPI_CHANNELS > 0
-	for(size_t spichan = 0; spichan < NUM_SPI_CHANNELS; spichan++)
+# if NUM_SHARED_SPI > 0
+	for(size_t spichan = 0; spichan < NUM_SHARED_SPI; spichan++)
 	{
-		SPI::getSPIDevice((SPIChannel)spichan)->initPins(SSPIPins[spichan][0], SSPIPins[spichan][1], SSPIPins[spichan][2]);
-		sharedSpi[spichan] = new SharedSpiDevice((SPIChannel)spichan);
+		sharedSpi[spichan] = new SharedSpiDevice(SharedSpiParams[spichan]);
 	}
 # endif
 	serialUSB.Start(NoPin);
@@ -894,6 +894,11 @@ void Platform::Spin()
 			deliberateError = false;
 			break;
 
+		case DeferredCommand::testSpinLockup:
+			deliberateError = true;
+			while (true) { }
+			break;
+
 		default:
 			break;
 		}
@@ -959,8 +964,12 @@ void Platform::Spin()
 	}
 
 	// Update the Status LED. Flash it quickly (8Hz) if we are not synced to the master, else flash in sync with the master (about 2Hz).
+	const bool synced = StepTimer::CheckSynced();
+	if (synced) {
+		syncedIdleTicks = 0;
+	}
 	WriteLed(0,
-				(StepTimer::CheckSynced())
+				(synced)
 					? (StepTimer::GetMasterTime() & (1u << 19)) != 0
 						: (StepTimer::GetTimerTicks() & (1u << 17)) != 0
 		    );
@@ -1246,6 +1255,11 @@ uint32_t Platform::GetHeatTaskIdleTicks()
 	return heatTaskIdleTicks;
 }
 
+uint32_t Platform::GetSyncedIdleTicks()
+{
+	return syncedIdleTicks;
+}
+
 #if USE_SERIAL_DEBUG
 
 // Output a character to the debug channel
@@ -1372,6 +1386,7 @@ const UniqueIdBase& Platform::GetUniqueId() noexcept
 void Platform::Tick() noexcept
 {
 	++heatTaskIdleTicks;
+	++syncedIdleTicks;
 }
 
 void Platform::StartFirmwareUpdate()
@@ -1511,6 +1526,10 @@ GCodeResult Platform::DoDiagnosticTest(const CanMessageDiagnosticTest& msg, cons
 
 	case 1001:	// test watchdog
 		deferredCommand = DeferredCommand::testWatchdog;
+		return GCodeResult::ok;
+
+	case 1002: // test that we get a software reset if a Spin() function takes too long
+		deferredCommand = DeferredCommand::testSpinLockup;
 		return GCodeResult::ok;
 
 	case 1004:

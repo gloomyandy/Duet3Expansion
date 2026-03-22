@@ -9,6 +9,7 @@
 #define SRC_CONFIG_MNBN17R1_5_H_
 
 #include <Hardware/PinDescription.h>
+#include <SPI/SpiParameters.h>
 
 #define BOARD_TYPE_NAME			"MNBN17R1_5"
 #define BOOTLOADER_NAME			"MNBN17R1_5"
@@ -26,7 +27,7 @@
 #define USE_SERIAL_DEBUG		1
 #define SUPPORT_LED_STRIPS		0
 #define SUPPORT_PIO_NEOPIXEL	0
-#define NUM_SPI_CHANNELS		2
+#define NUM_SHARED_SPI			2
 #define SUPPORT_INPUT_SHAPING	1
 
 // Drivers configuration
@@ -96,11 +97,22 @@ constexpr Pin ConfigureDriverIOPin = GpioPin(29);	// GPIO29 DRV_UART_ENA - pull 
 
 #define PIN_TODO				GpioPin(NoPin)	//TEMPORARY! Used when we haven't assigned a pin yet.
 
-#if NUM_SPI_CHANNELS > 0
+#if NUM_SHARED_SPI > 0
 // Shared SPI pin connections
-// 													Clock, Miso, Mosi
-constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(6), GpioPin(4), GpioPin(7)},
-													{GpioPin(10), GpioPin(8), GpioPin(11)} };
+constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
+{
+	.instanceNumber = 0,
+	.mosiPin = 7,
+	.misoPin = 4,
+	.sclkPin = 6,
+},
+{
+	.instanceNumber = 1,
+	.mosiPin = 11,
+	.misoPin = 8,
+	.sclkPin = 10,
+}
+};
 #endif
 
 #if SUPPORT_SPI_SENSORS

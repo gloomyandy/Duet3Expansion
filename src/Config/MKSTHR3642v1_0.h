@@ -82,7 +82,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(7) };
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		0
 #define NUM_I2C_CHANNELS		0
-#define NUM_SPI_CHANNELS		0
+#define NUM_SHARED_SPI			0
 #define SUPPORT_LIS3DH			0
 #define SUPPORT_DHT_SENSOR		0
 
@@ -120,7 +120,7 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico u
 constexpr Pin LedPins[] = { PIN_TODO };
 constexpr bool LedActiveHigh = false;
 
-#if NUM_SPI_CHANNELS > 0
+#if NUM_SHARED_SPI > 0
 
 #endif
 

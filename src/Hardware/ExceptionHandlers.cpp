@@ -20,6 +20,7 @@ void SoftwareReset(SoftwareResetReason initialReason, const uint32_t *_ecv_array
 
 	Cache::Disable();
 
+	fullReason |= Tasks::GetSpinningModule().ToBaseType();
 	if (Platform::WasDeliberateError())
 	{
 		fullReason |= (uint16_t)SoftwareResetReason::deliberate;

@@ -12,7 +12,7 @@
 
 #if SUPPORT_CLOSED_LOOP
 
-#include <Hardware/SharedSpiClient.h>
+#include <SPI/SharedSpiClient.h>
 
 class SpiEncoder
 {

@@ -18,8 +18,8 @@
 # include "ClosedLoop/ClosedLoop.h"
 #endif
 
-#if NUM_SPI_CHANNELS > 0
-# include <Hardware/SharedSpiDevice.h>
+#if NUM_SHARED_SPI != 0
+# include <SPI/SharedSpiDevice.h>
 #endif
 
 #if NUM_I2C_CHANNELS != 0
@@ -104,9 +104,14 @@ class IoPort;
 namespace Platform
 {
 	// Public functions
-# if NUM_SPI_CHANNELS > 0
-	extern SharedSpiDevice *sharedSpi[NUM_SPI_CHANNELS];
+#if NUM_SHARED_SPI != 0
+# if RPXXXX
+	extern SharedSpiDevice *sharedSpi[NUM_SHARED_SPI];
 	inline SharedSpiDevice& GetSharedSpi(unsigned int n) noexcept { return *sharedSpi[n]; }
+# else
+	extern SharedSpiDevice *sharedSpi;
+	inline SharedSpiDevice& GetSharedSpi() noexcept { return *sharedSpi; }
+# endif
 #endif
 
 #if NUM_I2C_CHANNELS != 0
@@ -171,6 +176,7 @@ namespace Platform
 
 	void KickHeatTaskWatchdog() noexcept;
 	uint32_t GetHeatTaskIdleTicks() noexcept;
+	uint32_t GetSyncedIdleTicks() noexcept;
 
 #if HAS_ADDRESS_SWITCHES
 	uint8_t ReadBoardAddress() noexcept;

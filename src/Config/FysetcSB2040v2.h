@@ -9,6 +9,7 @@
 #define SRC_CONFIG_FYSETCSB2040V2_0_H_
 
 #include <Hardware/PinDescription.h>
+#include <SPI/SpiParameters.h>
 
 #define BOARD_TYPE_NAME		"FSSB2040V2"
 #define BOOTLOADER_NAME		"FSSB2040V2"
@@ -87,7 +88,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(5) };
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
 #define NUM_I2C_CHANNELS		1
-#define NUM_SPI_CHANNELS		2
+#define NUM_SHARED_SPI			2
 #define SUPPORT_LIS3DH			1
 #define SUPPORT_DHT_SENSOR		0
 #define SUPPORT_LDC1612			1
@@ -124,11 +125,25 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico u
 constexpr Pin LedPins[] = { GpioPin(1) };
 constexpr bool LedActiveHigh = false;
 
-#if NUM_SPI_CHANNELS > 0
+#if NUM_SHARED_SPI > 0
 // Shared SPI pin connections
 // 													Clock, Miso, Mosi
-constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(22), GpioPin(23), GpioPin(20)},
+constexpr Pin SSPIPins[NUM_SHARED_SPI][3] = { 	{GpioPin(22), GpioPin(23), GpioPin(20)},
 													{GpioPin(10), GpioPin(12), GpioPin(11)} };
+constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
+{
+	.instanceNumber = 0,
+	.mosiPin = 20,
+	.misoPin = 23,
+	.sclkPin = 22,
+},
+{
+	.instanceNumber = 1,
+	.mosiPin = 11,
+	.misoPin = 12,
+	.sclkPin = 10,
+}
+};
 #endif
 
 #if SUPPORT_SPI_SENSORS

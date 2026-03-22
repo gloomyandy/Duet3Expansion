@@ -9,6 +9,8 @@
 #define SRC_CONFIG_FLYM2_H_
 
 #include <Hardware/PinDescription.h>
+#include <SPI/SpiParameters.h>
+
 #define BOARD_TYPE_NAME		"FLYM2"
 #define BOOTLOADER_NAME		"FLYM2"
 
@@ -88,7 +90,7 @@ constexpr Pin DriverDiagPins[NumDrivers] = { GpioPin(19), NoPin };
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
 #define NUM_I2C_CHANNELS		1
-#define NUM_SPI_CHANNELS		2
+#define NUM_SHARED_SPI			2
 #define SUPPORT_LIS3DH			1
 #define SUPPORT_DHT_SENSOR		0
 #define SUPPORT_LDC1612			0
@@ -125,12 +127,22 @@ constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;				// the Pico u
 constexpr Pin LedPins[] = { NoPin };
 constexpr bool LedActiveHigh = false;
 
-#if NUM_SPI_CHANNELS > 0
+#if NUM_SHARED_SPI > 0
 // Shared SPI pin connections
-// 													Clock, Miso, Mosi
-constexpr Pin SSPIPins[NUM_SPI_CHANNELS][3] = { 	{GpioPin(2), GpioPin(4), GpioPin(3)},
-													{GpioPin(10), GpioPin(8), GpioPin(11)} };
-
+constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
+{
+	.instanceNumber = 0,
+	.mosiPin = 3,
+	.misoPin = 4,
+	.sclkPin = 2,
+},
+{
+	.instanceNumber = 1,
+	.mosiPin = 11,
+	.misoPin = 8,
+	.sclkPin = 10,
+}
+};
 #endif
 
 #if NUM_I2C_CHANNELS != 0
