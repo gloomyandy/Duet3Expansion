@@ -18,38 +18,6 @@
 constexpr size_t AnalogInTaskStackWords = 170;				// was 120 but we got a stack overflow
 static Task<AnalogInTaskStackWords> analogInTask;
 
-# ifdef SAMMYC21
-// SERCOM5 is connected to the USB port through the serial-to-USB converter
-
-void SerialPortInit(AsyncSerial*) noexcept
-{
-	SetPinFunction(PortBPin(2), GpioPinFunction::D);		// TxD on Pad0
-	SetPinFunction(PortBPin(3), GpioPinFunction::D);		// RxD on Pad1
-}
-
-void SerialPortDeinit(AsyncSerial*) noexcept
-{
-	SetPinMode(PortBPin(2), INPUT_PULLUP);
-}
-
-AsyncSerial uart0(5, 1, 32, 128, SerialPortInit, SerialPortDeinit);
-
-# elif USE_SERIAL_DEBUG
-
-void SerialPortInit(AsyncSerial*) noexcept
-{
-	SetPinFunction(PortAPin(12), GpioPinFunction::D);		// TxD
-}
-
-void SerialPortDeinit(AsyncSerial*) noexcept
-{
-	SetPinMode(PortAPin(12), INPUT_PULLUP);
-}
-
-AsyncSerial uart0(4, 3, 32, 128, SerialPortInit, SerialPortDeinit);
-
-# endif
-
 void DeviceInit() noexcept
 {
 	AnalogIn::Init(DmacChanAdc0Rx, DmacPrioAdcRx,

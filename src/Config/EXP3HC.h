@@ -10,6 +10,7 @@
 
 #include <Hardware/PinDescription.h>
 #include <SPI/SpiParameters.h>
+#include <UART/UartParameters.h>
 
 #define BOARD_TYPE_NAME		"EXP3HC"
 #define BOOTLOADER_NAME		"SAME5x"
@@ -49,8 +50,6 @@
 
 #define USE_MPU					0
 #define USE_CACHE				1
-
-#define SUPPORT_INDUCTIVE_HEATER		(0)		// enables temporary support for testing inductive heater code
 
 constexpr unsigned int CANInstanceNumber = 1;
 constexpr bool UseLaterCanPins = false;
@@ -147,22 +146,6 @@ constexpr SpiParameters SharedSpiParams =
 	.dmaPrioRx = DmacPrioSspiRx,
 };
 
-#if SUPPORT_INDUCTIVE_HEATER	// temporary inductive heater code test
-
-// Definitions for inductive heater support
-constexpr unsigned int InductiveHeaterOscTccDeviceNumber = 3;	// number of the TCC we can use to generate the ~120kHz signal to excite the resonant circuit. May be a 16-bit TCC.
-constexpr unsigned int InductiveHeaterOscTccOutputNumber = 0;	// which output from the TCC we are using
-
-constexpr unsigned int InductiveHeaterPwmTccDeviceNumber = 0;	// number of the TCC we use to generate the PWM signal that is gated with the osc signal. Must be a 24-bit TCC.
-constexpr unsigned int InductiveHeaterPwmTccOutputNumber = 0;	// which output from the TCC we are using
-constexpr unsigned int InductiveHeaterCCLNumber = 3;			// number of the CCL that we use to gate the TC and TCC output together
-constexpr unsigned int InductiveHeaterCCLOutPin = PortBPin(17);	// the CCL output pin that drive the inductive heater mosfet
-constexpr unsigned int InductiveHeaterAuxCCLNumber = 0;			// number of the second CCL that we need to use to gate two TCCs together
-
-constexpr GpioPinFunction InductiveHeaterCCLOutPinPeriphMode = GpioPinFunction::N;
-
-#endif
-
 constexpr auto sercom1cPad0 = SercomIo::sercom1c + SercomIo::pad0;
 constexpr auto sercom1cPad1 = SercomIo::sercom1c + SercomIo::pad1;
 constexpr auto sercom3cPad0 = SercomIo::sercom3c + SercomIo::pad0;
@@ -183,11 +166,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::tc0_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out4"			},	// PA05
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_6,	SercomIo::none,		SercomIo::none,		6,	"io0.in"		},	// PA06
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_7,	SercomIo::none,		SercomIo::none,		7,	"spi.cs2"		},	// PA07
-#if SUPPORT_INDUCTIVE_HEATER
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out5"			},	// PA08
-#else
 	{ TcOutput::none,	TccOutput::tcc0_0F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out5"			},	// PA08
-#endif
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		9,	"ate.d0.diag0"	},	// PA09 driver0 diag0
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_10,	SercomIo::none,		SercomIo::none,		Nx,	"ate.vin"		},	// PA10 VINmon
 	{ TcOutput::tc1_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out6"			},	// PA11
@@ -229,11 +208,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB13 CANrx
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"spi.cs3"		},	// PB14 don't allow DHT11 on this pin, no EXINT
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		15,	"spi.cs1"		},	// PB15
-#if SUPPORT_INDUCTIVE_HEATER
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		sercom5cPad0,		Nx,	"io1.out,uart1.tx"	},	// PB16
-#else
 	{ TcOutput::none,	TccOutput::tcc3_0F,	AdcInput::none,		SercomIo::none,		sercom5cPad0,		Nx,	"io1.out,uart1.tx"	},	// PB16
-#endif
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		sercom5cPad1,		SercomIo::none,		Nx,	"uart1.rx"		},	// PB17
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB18 board type 0
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		3,	"out4.tach"		},	// PB19
@@ -283,19 +258,12 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PC29 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PC30 not on 100-pin chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PC31 not on 100-pin chip
-#if SUPPORT_INDUCTIVE_HEATER
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx, "nozzleheat"	},	// inductive heater
-#endif
 };
 
 constexpr size_t NumPins = ARRAY_SIZE(PinTable);
 constexpr size_t NumRealPins = 3 * 32;								// 32 pins on each of ports A, B, C
-constexpr size_t NumVirtualPins = SUPPORT_INDUCTIVE_HEATER;
+constexpr size_t NumVirtualPins = 0;
 static_assert(NumPins == NumRealPins + NumVirtualPins);
-
-#if SUPPORT_INDUCTIVE_HEATER
-constexpr Pin InductiveHeaterPin = NumRealPins;						// pin number when the user selects the inductive nozzle heater
-#endif
 
 // Timer/counter used to generate step pulses and other sub-millisecond timings
 TcCount32 * const StepTc = &(TC6->COUNT32);
@@ -304,9 +272,33 @@ constexpr unsigned int StepTcNumber = 6;
 #define STEP_TC_HANDLER		TC6_Handler
 
 // Available UART ports
-#define NUM_SERIAL_PORTS		2
-constexpr IRQn Serial0_IRQn = SERCOM3_0_IRQn;
-constexpr IRQn Serial1_IRQn = SERCOM5_0_IRQn;
+#define NUM_ASYNC_PORTS		2
+
+// Serial on IO2
+constexpr UartParameters Serial0Params =
+{
+	.sercomNumber = 3,
+	.rxPin = PortBPin(21),
+	.txPin = PortBPin(20),
+	.pinFunction = GpioPinFunction::C,
+	.dataInPad = 1,
+	.dataOutPad = 0,
+	.numRxSlots = 32,
+	.numTxSlots = 512
+};
+
+// Serial on IO1
+constexpr UartParameters Serial1Params =
+{
+	.sercomNumber = 5,
+	.rxPin = PortBPin(17),
+	.txPin = PortBPin(16),
+	.pinFunction = GpioPinFunction::C,
+	.dataInPad = 1,
+	.dataOutPad = 0,
+	.numRxSlots = 32,
+	.numTxSlots = 512
+};
 
 // Interrupt priorities, lower means higher priority. 0-2 can't make RTOS calls.
 const NvicPriority NvicPriorityStep = 3;				// step interrupt is next highest, it can preempt most other interrupts

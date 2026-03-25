@@ -11,6 +11,7 @@
 #include <Hardware/PinDescription.h>
 #include <SPI/SpiParameters.h>
 #include <I2C/I2cParameters.h>
+#include <UART/UartParameters.h>
 
 #define BOARD_TYPE_NAME		"SAMMYC21"
 #define BOOTLOADER_NAME		"SAMMYC21"
@@ -158,8 +159,6 @@ constexpr I2cParameters I2C0Params =
 	.irqPriority = NvicPriorityI2C
 };
 
-#define I2C0_HANDLER		SERCOM3_Handler
-
 #endif
 
 #if SUPPORT_LIS3DH
@@ -263,7 +262,19 @@ constexpr unsigned int StepTcNumber = 2;
 #define STEP_TC_HANDLER		TC2_Handler
 
 // Available UART ports
-#define NUM_SERIAL_PORTS		1
-constexpr IRQn Serial0_IRQn = SERCOM5_IRQn;
+#define NUM_ASYNC_PORTS		1
+
+// SERCOM5 is connected to the USB port through the serial-to-USB converter
+constexpr UartParameters Serial0Params =
+{
+	.sercomNumber = 5,
+	.rxPin = PortBPin(3),
+	.txPin = PortBPin(2),
+	.pinFunction = GpioPinFunction::D,
+	.dataInPad = 1,
+	.dataOutPad = 0,
+	.numRxSlots = 32,
+	.numTxSlots = 128
+};
 
 #endif /* SRC_CONFIG_SAMMYC21_H_ */

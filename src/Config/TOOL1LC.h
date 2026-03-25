@@ -10,6 +10,7 @@
 
 #include <Hardware/PinDescription.h>
 #include <I2C/I2cParameters.h>
+#include <UART/UartParameters.h>
 
 #define BOARD_TYPE_NAME		"TOOL1LC"
 #define BOOTLOADER_NAME		"SAMC21"
@@ -84,6 +85,7 @@ constexpr Pin TMCSercomTxPin = PortAPin(22);
 constexpr GpioPinFunction TMCSercomTxPinPeriphMode = GpioPinFunction::C;
 constexpr Pin TMCSercomRxPin = PortAPin(20);
 constexpr GpioPinFunction TMCSercomRxPinPeriphMode = GpioPinFunction::D;
+constexpr uint8_t TMCSercomTxPad = 0;
 constexpr uint8_t TMCSercomRxPad = 2;
 
 // Define the baud rate used to send/receive data to/from the drivers.
@@ -273,7 +275,19 @@ constexpr unsigned int StepTcNumber = 2;
 #define STEP_TC_HANDLER		TC2_Handler
 
 // Available UART ports
-#define NUM_SERIAL_PORTS		1
-constexpr IRQn Serial0_IRQn = SERCOM4_IRQn;
+#define NUM_ASYNC_PORTS		1
+
+// Serial on IO0
+constexpr UartParameters Serial0Params =
+{
+	.sercomNumber = 4,
+	.rxPin = PortAPin(13),
+	.txPin = PortAPin(12),
+	.pinFunction = GpioPinFunction::D,
+	.dataInPad = 1,
+	.dataOutPad = 0,
+	.numRxSlots = 32,
+	.numTxSlots = 128
+};
 
 #endif /* SRC_CONFIG_TOOL1_V01_H_ */

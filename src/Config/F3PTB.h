@@ -84,6 +84,7 @@ constexpr Pin TMCSercomTxPin = PortAPin(8);
 constexpr GpioPinFunction TMCSercomTxPinPeriphMode = GpioPinFunction::C;
 constexpr Pin TMCSercomRxPin = PortAPin(9);
 constexpr GpioPinFunction TMCSercomRxPinPeriphMode = GpioPinFunction::C;
+constexpr uint8_t TMCSercomTxPad = 0;
 constexpr uint8_t TMCSercomRxPad = 1;
 
 // Define the baud rate used to send/receive data to/from the drivers.
@@ -174,11 +175,6 @@ constexpr I2cParameters I2C0Params =
 	.pinFunction = GpioPinFunction::C,
 	.irqPriority = NvicPriorityI2C
 };
-
-# define I2C0_HANDLER0		SERCOM2_0_Handler
-# define I2C0_HANDLER1		SERCOM2_1_Handler
-# define I2C0_HANDLER2		SERCOM2_2_Handler
-# define I2C0_HANDLER3		SERCOM2_3_Handler
 
 #endif
 
@@ -299,6 +295,6 @@ constexpr unsigned int StepTcNumber = 0;
 #define STEP_TC_HANDLER			TC0_Handler
 
 // Available UART ports
-#define NUM_SERIAL_PORTS		0
+#define NUM_ASYNC_PORTS		0
 
 #endif /* SRC_CONFIG_TOOL1RR_H_ */

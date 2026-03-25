@@ -17,12 +17,6 @@
 
 extern SerialCDC serialUSB;
 
-#else
-
-#include <AsyncSerial.h>
-
-extern AsyncSerial uart0;
-
 #endif
 
 void DeviceInit() noexcept;

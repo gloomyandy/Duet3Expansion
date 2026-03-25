@@ -26,6 +26,10 @@
 #include <Math/Isqrt.h>
 #include <Version.h>
 
+#if NUM_ASYNC_PORTS != 0
+# include <AsyncSerial.h>
+#endif
+
 #if NUM_I2C_CHANNELS != 0
 # include <I2C/SharedI2CMaster.h>
 #endif
@@ -177,6 +181,10 @@ namespace Platform
 	void CurrentSensorAinCallback(CallbackParameter cp, int32_t val) noexcept;
 #endif
 
+#if NUM_ASYNC_PORTS != 0
+	AsyncSerial *_ecv_null asyncPorts[NUM_ASYNC_PORTS] = { 0 };
+#endif
+
 #if SAME5x
 	static AveragingFilter<McuTempReadingsAveraged> tpFilter;
 	static AveragingFilter<McuTempReadingsAveraged> tcFilter;
@@ -284,20 +292,10 @@ namespace Platform
 
 #if SAME5x
 		NVIC_SetPriority(StepTcIRQn, NvicPriorityStep);
-		// Set UART interrupt priority. Each SERCOM has up to 4 interrupts, numbered sequentially.
-# if NUM_SERIAL_PORTS >= 1
-		SetInterruptPriority(Serial0_IRQn, 4, NvicPriorityUart);
-# endif
-# if NUM_SERIAL_PORTS >= 2
-		SetInterruptPriority(Serial1_IRQn, 4, NvicPriorityUart);
-# endif
 		SetInterruptPriority(DMAC_0_IRQn, 5, NvicPriorityDmac);
 		SetInterruptPriority(EIC_0_IRQn, 16, NvicPriorityPins);
 #elif SAMC21
 		NVIC_SetPriority(StepTcIRQn, NvicPriorityStep);
-# if NUM_SERIAL_PORTS >= 1
-		NVIC_SetPriority(Serial0_IRQn, NvicPriorityUart);
-# endif
 		NVIC_SetPriority(DMAC_IRQn, NvicPriorityDmac);
 		NVIC_SetPriority(EIC_IRQn, NvicPriorityPins);
 #elif RP2040
@@ -554,6 +552,15 @@ void Platform::Init()
 {
 	IoPort::Init();
 
+#if NUM_ASYNC_PORTS != 0
+	asyncPorts[0] = new AsyncSerial(Serial0Params);
+	asyncPorts[0]->setInterruptPriority(NvicPriorityUart, NvicPriorityUart);
+# if NUM_ASYNC_PORTS > 1
+	asyncPorts[1] = new AsyncSerial(Serial1Params);
+	asyncPorts[1]->setInterruptPriority(NvicPriorityUart, NvicPriorityUart);
+# endif
+#endif
+
 #if defined(TOOL1LC)
 	// On the board detect pin:
 	// Tool board V1.0 and earlier has 1K lower resistor, 10K upper, so will read as low
@@ -635,13 +642,13 @@ void Platform::Init()
 	InitialiseInterrupts();											// set interrupt priorities before we enable any interrupts
 
 #if defined(SAMMYC21) && USE_SERIAL_DEBUG
-	uart0.begin(115200);											// set up the UART with the same baud rate as the bootloader
+	asyncPorts[0]->begin(115200);											// set up the UART with the same baud rate as the bootloader
 #elif defined(RPI_PICO) || defined(FLY36RRF)
 	serialUSB.Start(NoPin);
 #elif USE_SERIAL_DEBUG
 	// Set up the UART to send to PanelDue for debugging
 	// CAUTION! This sends data to pin io0.out on a tool board, which interferes with a BLTouch connected to that pin. So don't do it in normal use.
-	uart0.begin(57600);
+	asyncPorts[0]->begin(57600);
 #endif
 
 	// Initialise the rest of the IO subsystem
@@ -1041,11 +1048,11 @@ void Platform::Spin()
 # if defined(RPI_PICO) || defined(FLY36RRF)
 	while (serialUSB.available() != 0)
 # elif defined(SAMMYC21)
-	while (uart0.available() != 0)
+	while (asyncPorts[0]->available() != 0)
 # endif
 	{
 # if defined(SAMMYC21)
-		const char c = uart0.read();
+		const char c = asyncPorts[0]->read();
 # elif defined(RPI_PICO) || defined(FLY36RRF)
 		const char c = serialUSB.read();
 # endif
@@ -1225,7 +1232,7 @@ bool Platform::DebugPutc(char c) noexcept
 #if defined(RPI_PICO) || defined(FLY36RRF)
 		serialUSB.write(c);
 #else
-		uart0.write(c);
+		asyncPorts[0]->write(c);
 #endif
 	}
 	return true;

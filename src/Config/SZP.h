@@ -10,6 +10,7 @@
 
 #include <Hardware/PinDescription.h>
 #include <I2C/I2cParameters.h>
+#include <UART/UartParameters.h>
 
 #define BOARD_TYPE_NAME		"SZP"
 #define BOOTLOADER_NAME		"SAMC21"
@@ -188,7 +189,21 @@ constexpr unsigned int StepTcNumber = 2;
 #define STEP_TC_HANDLER		TC2_Handler
 
 // Available UART ports
-#define NUM_SERIAL_PORTS		1
+#define NUM_ASYNC_PORTS		1
+
+// Serial on IO0
+constexpr UartParameters Serial0Params =
+{
+	.sercomNumber = 2,
+	.rxPin = PortAPin(9),
+	.txPin = PortAPin(8),
+	.pinFunction = GpioPinFunction::D,
+	.dataInPad = 1,
+	.dataOutPad = 0,
+	.numRxSlots = 32,
+	.numTxSlots = 128
+};
+
 constexpr IRQn Serial0_IRQn = SERCOM4_IRQn;
 
 #endif /* SRC_CONFIG_SZP_H_ */

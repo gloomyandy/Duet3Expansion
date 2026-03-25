@@ -9,6 +9,7 @@
 #define SRC_CONFIG_EXP1XD_H_
 
 #include <Hardware/PinDescription.h>
+#include <UART/UartParameters.h>
 
 #define BOARD_TYPE_NAME		"EXP1XD"
 #define BOOTLOADER_NAME		"SAMC21"
@@ -187,8 +188,7 @@ constexpr unsigned int StepGenTcNumber = 1;
 #endif
 
 // Available UART ports
-#define NUM_SERIAL_PORTS		1
-constexpr IRQn Serial0_IRQn = SERCOM4_IRQn;
+#define NUM_ASYNC_PORTS		0
 
 // DMA channel assignments
 constexpr DmaChannel DmacChanTmcTx = 0;

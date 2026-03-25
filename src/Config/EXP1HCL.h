@@ -109,7 +109,7 @@ constexpr Pin DiagPins[NumDrivers] = { PortAPin(21) };
 #endif
 
 #define NUM_SHARED_SPI			1
-#define NUM_SERIAL_PORTS		0
+#define NUM_ASYNC_PORTS			0
 
 #define USE_MPU					0
 #define USE_CACHE				1
@@ -158,11 +158,6 @@ constexpr I2cParameters I2C0Params =
 	.pinFunction = GpioPinFunction::C,
 	.irqPriority = NvicPriorityI2C
 };
-
-# define I2C0_HANDLER0		SERCOM2_0_Handler
-# define I2C0_HANDLER1		SERCOM2_1_Handler
-# define I2C0_HANDLER2		SERCOM2_2_Handler
-# define I2C0_HANDLER3		SERCOM2_3_Handler
 
 #endif
 

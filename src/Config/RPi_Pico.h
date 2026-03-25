@@ -235,6 +235,6 @@ constexpr unsigned int StepTimerAlarmNumber = 0;
 constexpr unsigned int StepTcIRQn = TIMER_IRQ_0;
 
 // Available UART ports
-#define NUM_SERIAL_PORTS		1
+#define NUM_ASYNC_PORTS		0
 
 #endif /* SRC_CONFIG_RPI_PICO_H_ */
