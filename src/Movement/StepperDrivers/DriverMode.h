@@ -14,7 +14,7 @@ enum class DriverMode : unsigned int
 	randomOffTime,
 	spreadCycle,
 	stealthChop,			// includes stealthChop2
-#if SUPPORT_CLOSED_LOOP
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	direct,					// field-oriented control
 #endif
 	unknown					// must be last!
@@ -22,7 +22,7 @@ enum class DriverMode : unsigned int
 
 const char *_ecv_array TranslateDriverMode(unsigned int mode) noexcept;
 
-inline const char* TranslateDriverMode(DriverMode mode) noexcept
+inline const char *_ecv_array TranslateDriverMode(DriverMode mode) noexcept
 {
 	return TranslateDriverMode((unsigned int)mode);
 }

@@ -1596,7 +1596,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			for (size_t i = 0; i < numTmcDrivers; ++i)
 			{
 				writeBufPtr -= 5;
-				writeBufPtr[0] = REGNUM_5160_X_DIRECT | 0x80;
+				writeBufPtr[0] = REGNUM_X_DIRECT | 0x80;
 				StoreBEU32(const_cast<uint8_t*>(writeBufPtr + 1), driverStates[i].GetPhaseToSet());
 			}
 			setCoilCurrents = true;
