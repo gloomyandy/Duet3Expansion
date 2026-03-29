@@ -15,7 +15,7 @@
 #if ACCELEROMETER_USES_SPI
 # include <SPI/SharedSpiDevice.h>
 #else
-# include <Hardware/SharedI2CMaster.h>
+# include <I2C/SharedI2CClient.h>
 #endif
 
 class CanMessageGeneric;

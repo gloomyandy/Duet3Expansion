@@ -22,7 +22,7 @@ public:
 	LISAccelerometer(SharedSpiDevice& dev, Pin p_csPin, Pin p_int1Pin) noexcept;
 # else
 
-#include "SharedI2CClient.h"
+#include <I2C/SharedI2CClient.h>
 
 class LISAccelerometer : public SharedI2CClient
 {

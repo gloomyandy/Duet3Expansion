@@ -13,7 +13,7 @@
 #if SUPPORT_LDC1612
 
 #include <InputMonitors/InputMonitor.h>
-#include <Hardware/SharedI2CMaster.h>
+#include <I2C/SharedI2CMaster.h>
 #include <Hardware/Drivers/LDC1612.h>
 #include <CanMessageFormats.h>
 #include <AnalogIn.h>

@@ -12,7 +12,7 @@
 
 #if SUPPORT_LP5817
 
-#include <Hardware/SharedI2CClient.h>
+#include <I2C/SharedI2CClient.h>
 
 // Temperature derating curve for LTST-E143EGBW LEDs
 // Due to C++ rules on calling constexpr functions these have to be declared before the class that calls them

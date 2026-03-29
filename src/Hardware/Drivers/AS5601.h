@@ -12,7 +12,7 @@
 
 #if SUPPORT_AS5601
 
-#include <Hardware/SharedI2CClient.h>
+#include <I2C/SharedI2CClient.h>
 
 // AS5601 magnetic rotary encoder class
 class AS5601 : public SharedI2CClient

@@ -10,7 +10,7 @@
 
 #include <Hardware/PinDescription.h>
 #include <SPI/SpiParameters.h>
-
+#include <I2C/I2cParameters.h>
 #define BOARD_TYPE_NAME		"FSSB2040V2"
 #define BOOTLOADER_NAME		"FSSB2040V2"
 #define BOARD_USES_UF2_BINARY	1
@@ -153,11 +153,12 @@ constexpr unsigned int Temperature_SpiChannel = 0;
 #if NUM_I2C_CHANNELS != 0
 
 // I2C using pins 18,19
-constexpr uint8_t I2CInstanceNumber = 1;
-constexpr Pin I2C0SDAPin = GpioPin(8);
-constexpr GpioPinFunction I2C0SDAPinPeriphMode = GpioPinFunction::I2c;
-constexpr Pin I2C0SCLPin = GpioPin(9);
-constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::I2c;
+constexpr I2cParameters I2C0Params =
+{
+	.instanceNumber = 1,
+	.sclPin = 19,
+	.sdaPin = 18,
+};
 #endif
 
 #if SUPPORT_LIS3DH

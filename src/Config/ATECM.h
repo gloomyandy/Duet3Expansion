@@ -126,7 +126,7 @@ constexpr unsigned int StepTcNumber = 2;
 #define STEP_TC_HANDLER		TC2_Handler
 
 // Available UART ports
-#define NUM_SERIAL_PORTS		0
+#define NUM_ASYNC_PORTS		0
 
 // DMA channel assignments
 constexpr DmaChannel DmacChanTmcTx = 0;

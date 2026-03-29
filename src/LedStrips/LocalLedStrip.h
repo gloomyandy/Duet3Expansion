@@ -19,15 +19,26 @@ constexpr size_t DmaBufferSize = 240 * 16;						// DotStar LEDs use 4 bytes/LED,
 class LocalLedStrip : public LedStripBase
 {
 public:
+	enum class ColorOrder : uint8_t
+	{
+		BGR = 0,			// default for DotStar LEDs
+		BRG,
+		RGB,
+		RBG,
+		GBR,
+		GRB,				// default for WS2812 LEDs
+		count
+	};
+
 	LocalLedStrip(LedStripType p_type, uint32_t p_freq) noexcept;
 	~LocalLedStrip() override;
 
 protected:
 	struct LedParams
 	{
-		uint32_t red;
-		uint32_t green;
-		uint32_t blue;
+		uint32_t firstColour;			// the colour that is transmitted first
+		uint32_t secondColour;			// the colour that is transmitted second
+		uint32_t thirdColour;			// the colour that is transmitted last (but before white, if white is supported)
 		uint32_t white;
 		uint32_t brightness;
 		uint32_t numLeds;
@@ -35,6 +46,7 @@ protected:
 
 		void ApplyBrightness() noexcept;
 		void GetM150Params(CanMessageGenericParser& parser) noexcept;
+		void SwapColours(ColorOrder order) noexcept;
 	};
 
 	GCodeResult CommonConfigure(CanMessageGenericParser& parser, const StringRef& reply, bool& seen, uint8_t& extra) noexcept;
@@ -55,6 +67,7 @@ protected:
 	IoPort port;
 	uint32_t frequency;													// the SPI frequency we are using
 	uint32_t whenTransferFinished = 0;									// the time in step clocks when we determined that the data transfer had finished
+	ColorOrder colorOrder;												// which order we need to send the data in
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_PIO_NEOPIXEL
 # if SAME5x | SAMC21

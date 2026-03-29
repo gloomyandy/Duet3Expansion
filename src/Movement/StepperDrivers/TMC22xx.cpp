@@ -2367,8 +2367,7 @@ void SmartDrivers::Init() noexcept
 # elif TMC22xx_USES_SERCOM
 	SetPinFunction(TMCSercomTxPin, TMCSercomTxPinPeriphMode);
 	SetPinFunction(TMCSercomRxPin, TMCSercomRxPinPeriphMode);
-
-	Serial::InitUart(TMCSercomNumber, DriversBaudRate, TMCSercomRxPad
+	Serial::InitUart(TMCSercomNumber, DriversBaudRate, TMCSercomRxPad, TMCSercomTxPad
 #  if SAME5x
 			, true		// use 32-bit mode
 #  endif

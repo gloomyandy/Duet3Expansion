@@ -9,6 +9,8 @@
 #define SRC_CONFIG_SZP_H_
 
 #include <Hardware/PinDescription.h>
+#include <I2C/I2cParameters.h>
+#include <UART/UartParameters.h>
 
 #define BOARD_TYPE_NAME		"SZP"
 #define BOOTLOADER_NAME		"SAMC21"
@@ -49,6 +51,24 @@ constexpr bool UseLaterCanPins = false;
 
 constexpr size_t MaxPortsPerHeater = 1;
 
+// DMA channel assignments
+constexpr DmaChannel DmacChanAdc0Rx = 2;
+constexpr DmaChannel DmacChanSdadcRx = 3;
+
+constexpr unsigned int NumDmaChannelsUsed = 4;			// must be at least the number of channels used, may be larger. Max 12 on the SAMC21.
+
+// DMA priorities, higher is better. 0 to 3 are available.
+constexpr DmaPriority DmacPrioAdcRx = 2;
+
+// Interrupt priorities, lower means higher priority. 0 can't make RTOS calls. Only 0 to 3 are available.
+const NvicPriority NvicPriorityStep = 1;				// step interrupt is next highest, it can preempt most other interrupts
+const NvicPriority NvicPriorityUart = 2;				// serial driver makes RTOS calls
+const NvicPriority NvicPriorityPins = 2;				// priority for GPIO pin interrupts
+const NvicPriority NvicPriorityI2C = 2;
+const NvicPriority NvicPriorityCan = 3;
+const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interrupts
+
+// Thermistor inputs
 constexpr size_t NumThermistorInputs = 1;
 constexpr float DefaultThermistorSeriesR = 2200.0;
 // Thermistor is a 10K Murata NCU15XH103J6SRC. B25/50 = 3380, B25/80 = 3428, B25/85 = 3434, B25/100 = 3455
@@ -77,11 +97,15 @@ constexpr bool LedActiveHigh = false;
 #if NUM_I2C_CHANNELS != 0
 
 // I2C using pins PA16,17
-constexpr uint8_t I2C0SercomNumber = 1;
-constexpr Pin I2C0SDAPin = PortAPin(16);
-constexpr GpioPinFunction I2C0SDAPinPeriphMode = GpioPinFunction::C;
-constexpr Pin I2C0SCLPin = PortAPin(17);
-constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::C;
+constexpr I2cParameters I2C0Params =
+{
+	.sercomNumber = 1,
+	.sclPin = PortAPin(17),
+	.sdaPin = PortAPin(16),
+	.pinFunction = GpioPinFunction::C,
+	.irqPriority = NvicPriorityI2C
+};
+
 #define I2C0_HANDLER		SERCOM1_Handler
 
 #endif
@@ -165,24 +189,21 @@ constexpr unsigned int StepTcNumber = 2;
 #define STEP_TC_HANDLER		TC2_Handler
 
 // Available UART ports
-#define NUM_SERIAL_PORTS		1
+#define NUM_ASYNC_PORTS		1
+
+// Serial on IO0
+constexpr UartParameters Serial0Params =
+{
+	.sercomNumber = 2,
+	.rxPin = PortAPin(9),
+	.txPin = PortAPin(8),
+	.pinFunction = GpioPinFunction::D,
+	.dataInPad = 1,
+	.dataOutPad = 0,
+	.numRxSlots = 32,
+	.numTxSlots = 128
+};
+
 constexpr IRQn Serial0_IRQn = SERCOM4_IRQn;
-
-// DMA channel assignments
-constexpr DmaChannel DmacChanAdc0Rx = 2;
-constexpr DmaChannel DmacChanSdadcRx = 3;
-
-constexpr unsigned int NumDmaChannelsUsed = 4;			// must be at least the number of channels used, may be larger. Max 12 on the SAMC21.
-
-// DMA priorities, higher is better. 0 to 3 are available.
-constexpr DmaPriority DmacPrioAdcRx = 2;
-
-// Interrupt priorities, lower means higher priority. 0 can't make RTOS calls. Only 0 to 3 are available.
-const NvicPriority NvicPriorityStep = 1;				// step interrupt is next highest, it can preempt most other interrupts
-const NvicPriority NvicPriorityUart = 2;				// serial driver makes RTOS calls
-const NvicPriority NvicPriorityPins = 2;				// priority for GPIO pin interrupts
-const NvicPriority NvicPriorityI2C = 2;
-const NvicPriority NvicPriorityCan = 3;
-const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interrupts
 
 #endif /* SRC_CONFIG_SZP_H_ */

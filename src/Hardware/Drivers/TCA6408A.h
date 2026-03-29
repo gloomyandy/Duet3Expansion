@@ -12,7 +12,7 @@
 
 #if SUPPORT_TCA6408A
 
-#include <Hardware/SharedI2CClient.h>
+#include <I2C/SharedI2CClient.h>
 
 // TCA6408A I2C expander class
 class TCA6408A : public SharedI2CClient

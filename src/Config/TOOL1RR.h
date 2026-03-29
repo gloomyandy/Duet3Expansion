@@ -9,6 +9,7 @@
 #define SRC_CONFIG_TOOL1RR_H_
 
 #include <Hardware/PinDescription.h>
+#include <I2C/I2cParameters.h>
 
 #define BOARD_TYPE_NAME		"TOOL1RR"
 #define BOOTLOADER_NAME		"SAME5x"
@@ -51,6 +52,29 @@ constexpr size_t MaxSmartDrivers = 1;
 #define TMC22xx_VARIABLE_NUM_DRIVERS	0
 #define TMC22xx_USE_SLAVEADDR			0
 
+// DMA channel assignments
+constexpr DmaChannel DmacChanTmcTx = 0;
+constexpr DmaChannel DmacChanTmcRx = 1;
+constexpr DmaChannel DmacChanAdc0Rx = 2;
+constexpr DmaChannel DmacChanLedTx = 3;
+
+constexpr unsigned int NumDmaChannelsUsed = 4;			// must be at least the number of channels used, may be larger. Max 12 on the SAME5x.
+
+constexpr DmaPriority DmacPrioTmcTx = 0;
+constexpr DmaPriority DmacPrioTmcRx = 3;
+constexpr DmaPriority DmacPrioAdcRx = 2;
+constexpr DmaPriority DmacPrioLed = 1;
+
+// Interrupt priorities, lower means higher priority. 0-2 can't make RTOS calls.
+const NvicPriority NvicPriorityStep = 3;				// step interrupt is next highest, it can preempt most other interrupts
+const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interrupts
+const NvicPriority NvicPriorityUart = 3;				// serial driver makes RTOS calls
+const NvicPriority NvicPriorityI2C = 3;
+const NvicPriority NvicPriorityPins = 3;				// priority for GPIO pin interrupts
+const NvicPriority NvicPriorityCan = 4;
+const NvicPriority NvicPriorityAdc = 5;
+
+// Stepper driver configuration
 constexpr Pin GlobalTmcEnablePin = PortAPin(0);
 
 constexpr uint8_t TMCSercomNumber = 0;
@@ -60,6 +84,7 @@ constexpr Pin TMCSercomTxPin = PortAPin(8);
 constexpr GpioPinFunction TMCSercomTxPinPeriphMode = GpioPinFunction::C;
 constexpr Pin TMCSercomRxPin = PortAPin(9);
 constexpr GpioPinFunction TMCSercomRxPinPeriphMode = GpioPinFunction::C;
+constexpr uint8_t TMCSercomTxPad = 0;
 constexpr uint8_t TMCSercomRxPad = 1;
 
 // Define the baud rate used to send/receive data to/from the drivers.
@@ -145,11 +170,15 @@ constexpr Pin TempSensePins[NumThermistorInputs] = { PortBPin(8), PortAPin(7), P
 #if NUM_I2C_CHANNELS != 0
 
 // I2C using pins PA12,13
-constexpr uint8_t I2C0SercomNumber = 2;
-constexpr Pin I2C0SDAPin = PortAPin(12);
-constexpr GpioPinFunction I2C0SDAPinPeriphMode = GpioPinFunction::C;
-constexpr Pin I2C0SCLPin = PortAPin(13);
-constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::C;
+constexpr I2cParameters I2C0Params =
+{
+	.sercomNumber = 2,
+	.sclPin = PortAPin(13),
+	.sdaPin = PortAPin(12),
+	.pinFunction = GpioPinFunction::C,
+	.irqPriority = NvicPriorityI2C
+};
+
 # define I2C0_HANDLER0		SERCOM2_0_Handler
 # define I2C0_HANDLER1		SERCOM2_1_Handler
 # define I2C0_HANDLER2		SERCOM2_2_Handler
@@ -283,28 +312,6 @@ constexpr unsigned int StepTcNumber = 0;
 #define STEP_TC_HANDLER			TC0_Handler
 
 // Available UART ports
-#define NUM_SERIAL_PORTS		0
-
-// DMA channel assignments
-constexpr DmaChannel DmacChanTmcTx = 0;
-constexpr DmaChannel DmacChanTmcRx = 1;
-constexpr DmaChannel DmacChanAdc0Rx = 2;
-constexpr DmaChannel DmacChanLedTx = 3;
-
-constexpr unsigned int NumDmaChannelsUsed = 4;			// must be at least the number of channels used, may be larger. Max 12 on the SAME5x.
-
-constexpr DmaPriority DmacPrioTmcTx = 0;
-constexpr DmaPriority DmacPrioTmcRx = 3;
-constexpr DmaPriority DmacPrioAdcRx = 2;
-constexpr DmaPriority DmacPrioLed = 1;
-
-// Interrupt priorities, lower means higher priority. 0-2 can't make RTOS calls.
-const NvicPriority NvicPriorityStep = 3;				// step interrupt is next highest, it can preempt most other interrupts
-const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interrupts
-const NvicPriority NvicPriorityUart = 3;				// serial driver makes RTOS calls
-const NvicPriority NvicPriorityI2C = 3;
-const NvicPriority NvicPriorityPins = 3;				// priority for GPIO pin interrupts
-const NvicPriority NvicPriorityCan = 4;
-const NvicPriority NvicPriorityAdc = 5;
+#define NUM_ASYNC_PORTS		0
 
 #endif /* SRC_CONFIG_TOOL1RR_H_ */

@@ -167,7 +167,7 @@ constexpr unsigned int StepTcNumber = 2;
 #define STEP_TC_HANDLER		TC2_Handler
 
 // Available UART ports
-#define NUM_SERIAL_PORTS		0
+#define NUM_ASYNC_PORTS		0
 
 // Interrupt priorities, lower means higher priority. 0 can't make RTOS calls.
 const NvicPriority NvicPriorityStep = 1;				// step interrupt is next highest, it can preempt most other interrupts

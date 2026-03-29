@@ -12,7 +12,7 @@
 
 #if SUPPORT_AS5601
 
-#include <Hardware/SharedI2CMaster.h>
+#include <I2C/SharedI2CMaster.h>
 
 class InputMonitor;
 class FilamentMonitor;

@@ -42,6 +42,32 @@
 #define SUPPORT_TMC2240			0
 #define SUPPORT_TMC2240_SPI		0
 
+// DMA channel assignments
+constexpr DmaChannel DmacChanCAN = 0;					// this must match the value used in the RP2040 CAN driver in CoreN2G!
+constexpr DmaChannel DmacChanAdcRx = 1;
+constexpr DmaChannel DmacChanTmcTx = 2;
+constexpr DmaChannel DmacChanTmcRx = 3;					// this must be one higher than DmacChanTmcTx for RP2040 build configurations
+constexpr DmaChannel DmacChanCRC = 4;
+constexpr DmaChannel DmaChanWS2812 = 5;
+
+constexpr unsigned int NumDmaChannelsUsed = 6;			// must be at least the number of channels used, may be larger. Max 12 on the RP2040.
+
+// DMA priorities, higher is better. RP2040 has only 0 and 1.
+constexpr DmaPriority DmacPrioTmcTx = 0;
+constexpr DmaPriority DmacPrioTmcRx = 1;
+constexpr DmaPriority DmacPrioAdcRx = 1;
+
+// Interrupt priorities, lower means higher priority. Only 0 to 3 are available.
+const NvicPriority NvicPriorityStep = 1;				// step interrupt is next highest, it can preempt most other interrupts
+const NvicPriority NvicPriorityUart = 2;				// serial driver makes RTOS calls
+const NvicPriority NvicPriorityPins = 2;				// priority for GPIO pin interrupts
+const NvicPriority NvicPriorityI2C = 2;
+const NvicPriority NvicPriorityCan = 3;
+const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interrupts
+const NvicPriority NvicPriorityAdc = 3;
+const NvicPriority NvicPriorityUSB = 3;
+
+// Stepper driver configuration
 constexpr size_t NumDrivers = 1;
 constexpr size_t MaxSmartDrivers = 1;
 
@@ -132,13 +158,15 @@ constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
 
 #if NUM_I2C_CHANNELS != 0
 
+//****** This code cannot be used because we haven't implemented I2C on the RP2040 yet ******
 // I2C using pins GPIO8,9. If changing this, also change the available pins in the pin table.
-constexpr uint8_t I2CSercomNumber = 0;			// the I2C unit number we use
-constexpr Pin I2C0SDAPin = GpioPin(8);
-constexpr GpioPinFunction I2C0SDAPinPeriphMode = GpioPinFunction::I2c;
-constexpr Pin I2C0SCLPin = GpioPin(9);
-constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::I2c;
-//#define I2C_HANDLER		SERCOM3_Handler
+constexpr I2cParameters I2C0Params =
+{
+	.instanceNumber = 0;
+	.sclPin = 9,
+	.sdaPin = 8,
+	.irqPriority = NvicPriorityI2C
+};
 
 #endif
 
@@ -210,33 +238,7 @@ constexpr unsigned int StepTimerAlarmNumber = 0;
 constexpr unsigned int StepTcIRQn = TIMER_IRQ_0;
 
 // Available UART ports
-#define NUM_SERIAL_PORTS		1
-//constexpr IRQn Serial0_IRQn = SERCOM5_IRQn;
-
-// DMA channel assignments
-constexpr DmaChannel DmacChanCAN = 0;					// this must match the value used in the RP2040 CAN driver in CoreN2G!
-constexpr DmaChannel DmacChanAdcRx = 1;
-constexpr DmaChannel DmacChanTmcTx = 2;
-constexpr DmaChannel DmacChanTmcRx = 3;					// this must be one higher than DmacChanTmcTx for RP2040 build configurations
-constexpr DmaChannel DmacChanCRC = 4;
-constexpr DmaChannel DmaChanWS2812 = 5;
-
-constexpr unsigned int NumDmaChannelsUsed = 6;			// must be at least the number of channels used, may be larger. Max 12 on the RP2040.
-
-// DMA priorities, higher is better. RP2040 has only 0 and 1.
-constexpr DmaPriority DmacPrioTmcTx = 0;
-constexpr DmaPriority DmacPrioTmcRx = 1;
-constexpr DmaPriority DmacPrioAdcRx = 1;
-
-// Interrupt priorities, lower means higher priority. Only 0 to 3 are available.
-const NvicPriority NvicPriorityStep = 1;				// step interrupt is next highest, it can preempt most other interrupts
-const NvicPriority NvicPriorityUart = 2;				// serial driver makes RTOS calls
-const NvicPriority NvicPriorityPins = 2;				// priority for GPIO pin interrupts
-const NvicPriority NvicPriorityI2C = 2;
-const NvicPriority NvicPriorityCan = 3;
-const NvicPriority NvicPriorityDmac = 3;				// priority for DMA complete interrupts
-const NvicPriority NvicPriorityAdc = 3;
-const NvicPriority NvicPriorityUSB = 3;
+#define NUM_ASYNC_PORTS		0
 
 #if SUPPORT_CAN && USE_SPICAN
 constexpr uint8_t spiCan_SpiChannel = 0;

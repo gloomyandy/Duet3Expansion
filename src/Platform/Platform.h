@@ -23,7 +23,7 @@
 #endif
 
 #if NUM_I2C_CHANNELS != 0
-# include <Hardware/SharedI2CMaster.h>
+# include <I2C/SharedI2CMaster.h>
 # include <Hardware/LISAccelerometer.h>
 #endif
 

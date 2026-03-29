@@ -8,6 +8,8 @@
 #ifndef SRC_TASKPRIORITIES_H_
 #define SRC_TASKPRIORITIES_H_
 
+#include <FreeRTOSconfig.h>
+
 // Task priorities. These must all be less than configMAX_PRIORITIES defined in FreeRTOSConfig.g which is usually 8.
 namespace TaskPriority
 {
