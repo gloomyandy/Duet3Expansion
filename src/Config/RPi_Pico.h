@@ -165,7 +165,6 @@ constexpr I2cParameters I2C0Params =
 	.instanceNumber = 0;
 	.sclPin = 9,
 	.sdaPin = 8,
-	.irqPriority = NvicPriorityI2C
 };
 
 #endif

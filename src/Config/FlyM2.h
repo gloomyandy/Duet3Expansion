@@ -147,12 +147,12 @@ constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
 
 #if NUM_I2C_CHANNELS != 0
 
-// I2C using pins 18,19
+// I2C using pins 6,7
 constexpr I2cParameters I2C0Params =
 {
 	.instanceNumber = 1,
-	.sclPin = 19,
-	.sdaPin = 18,
+	.sclPin = 7,
+	.sdaPin = 6,
 };
 #endif
 

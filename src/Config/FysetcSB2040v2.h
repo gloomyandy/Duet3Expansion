@@ -152,12 +152,12 @@ constexpr unsigned int Temperature_SpiChannel = 0;
 
 #if NUM_I2C_CHANNELS != 0
 
-// I2C using pins 18,19
+// I2C using pins 8,9
 constexpr I2cParameters I2C0Params =
 {
 	.instanceNumber = 1,
-	.sclPin = 19,
-	.sdaPin = 18,
+	.sclPin = 9,
+	.sdaPin = 8,
 };
 #endif
 

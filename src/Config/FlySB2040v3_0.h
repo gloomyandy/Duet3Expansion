@@ -175,12 +175,13 @@ constexpr unsigned int Temperature_SpiChannel = 0;
 #endif
 
 #if NUM_I2C_CHANNELS > 0
-// I2C using pins 18,19
-constexpr uint8_t I2CInstanceNumber = 1;
-constexpr Pin I2C0SDAPin = GpioPin(6);
-constexpr GpioPinFunction I2C0SDAPinPeriphMode = GpioPinFunction::I2c;
-constexpr Pin I2C0SCLPin = GpioPin(7);
-constexpr GpioPinFunction I2C0SCLPinPeriphMode = GpioPinFunction::I2c;
+// I2C using pins 6,7
+constexpr I2cParameters I2C0Params =
+{
+	.instanceNumber = 1,
+	.sclPin = 7,
+	.sdaPin = 6,
+};
 #endif
 
 #if SUPPORT_LIS3DH
