@@ -18,7 +18,7 @@
 
 #include <Hardware/PinDescription.h>
 #include <SPI/SpiParameters.h>
-
+#include <I2C/I2cParameters.h>
 #if BOARD_REV == 300
 #define BOARD_TYPE_NAME		"SB2040MAX3"
 #define BOOTLOADER_NAME		"SB2040MAX3"
