@@ -183,7 +183,33 @@ static GCodeResult HandlePressureAdvance(const CanMessageMultipleDrivesRequest<f
 							}
 							else
 							{
-								moveInstance->GetExtruderShaper(driver).SetKseconds(msg.values[count]);
+								moveInstance->GetExtruderShaper(driver).SetParametersSimple(msg.values[count]);
+							}
+						}
+				   );
+	return rslt;
+}
+
+static GCodeResult HandlePressureAdvance(const CanMessageMultipleDrivesRequest<ShortPressureAdvanceParameters>& msg, size_t dataLength, const StringRef& reply)
+{
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	{
+		reply.copy("bad data length");
+		return GCodeResult::error;
+	}
+
+	GCodeResult rslt = GCodeResult::ok;
+	drivers.Iterate([&msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
+						{
+							if (driver >= NumDrivers)
+							{
+								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
+								rslt = GCodeResult::error;
+							}
+							else
+							{
+								moveInstance->GetExtruderShaper(driver).SetParameters(msg.values[count]);
 							}
 						}
 				   );
@@ -747,9 +773,14 @@ void CommandProcessor::Spin()
 			rslt = ProcessM915(buf->msg.generic, replyRef);
 			break;
 
-		case CanMessageType::setPressureAdvance:
+		case CanMessageType::setPressureAdvanceV1:
 			requestId = buf->msg.multipleDrivesRequestFloat.requestId;
 			rslt = HandlePressureAdvance(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
+			break;
+
+		case CanMessageType::setPressureAdvanceV2:
+			requestId = buf->msg.multipleDrivesRequestFloat.requestId;
+			rslt = HandlePressureAdvance(buf->msg.multipleDrivesRequestPressureAdvance, buf->dataLength, replyRef);
 			break;
 
 		case CanMessageType::setInputShapingV1:

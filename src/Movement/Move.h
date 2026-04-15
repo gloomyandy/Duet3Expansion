@@ -27,7 +27,7 @@
 #endif
 
 #if SUPPORT_CLOSED_LOOP
-# include "StepperDrivers/TMC51xx.h"				// for SmartDrivers::GetMicrostepShift
+# include "StepperDrivers/TMC51xx.h"						// for SmartDrivers::GetMicrostepShift
 #endif
 
 struct CanMessageStopMovement;
@@ -38,11 +38,12 @@ struct CanMessageMovementLinearShaped;
 struct PrepParams
 {
 	// Parameters used for all types of motion
-	static constexpr float totalDistance = 1.0;
-	float accelDistance;
-	float decelStartDistance;
+	static constexpr motioncalc_t totalDistance = 1.0;
+	motioncalc_t accelDistance;
+	motioncalc_t decelStartDistance;
 	uint32_t accelClocks, steadyClocks, decelClocks;
-	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
+	motioncalc_t acceleration, deceleration;				// the acceleration and deceleration to use, both positive
+	motioncalc_t startSpeed, topSpeed, endSpeed;
 };
 
 /**
