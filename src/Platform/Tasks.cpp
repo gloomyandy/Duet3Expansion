@@ -209,7 +209,7 @@ static bool watchdogCausedReboot = false;
 #  if SAME5x
 	uint64_t& nvmUserRow0 = nvmUserRow.b64[0];
 	constexpr uint64_t mask =     ((uint64_t)0x0F << 32) | ((uint64_t)0x07 << 36) | (0x0F << 26);	// we just want NVM_BOOT (bits 26-29), SEE.SBLK (bits 32-35) and SEE.PSZ (bits 36:38)
-	constexpr uint64_t reqValue = ((uint64_t)0x01 << 32) | ((uint64_t)0x03 << 36) | (0x07 << 26);	// 4K SMART EEPROM and 64K bootloader (SBLK=1 PSZ=3 NVM_BOOT=0x07)
+	constexpr uint64_t reqValue = ((uint64_t)0x01 << 32) | ((uint64_t)0x03 << 36) | (0x0D << 26);	// 4K SMART EEPROM and 16K bootloader (SBLK=1 PSZ=3 NVM_BOOT=0x0D)
 	constexpr uint64_t bootprotMask = (0x0F << 26);													// mask for bootloader protection only
 	constexpr uint64_t reqValueNoBootprot = (0x0F << 26);											// value for no bootloader protection
 #  elif SAMC21

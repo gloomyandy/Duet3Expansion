@@ -526,8 +526,8 @@ bool Move::AddMove(const CanMessageMovementLinearShaped& msg) noexcept
 	PrepParams params;
 
 	// Normalise the move to unit distance
-	params.acceleration = msg.acceleration;
-	params.deceleration = msg.deceleration;
+	params.acceleration = (motioncalc_t)msg.acceleration;
+	params.deceleration = (motioncalc_t)msg.deceleration;
 	params.accelClocks = msg.accelerationClocks;
 	params.steadyClocks = msg.steadyClocks;
 	params.decelClocks = msg.decelClocks;
@@ -539,13 +539,17 @@ bool Move::AddMove(const CanMessageMovementLinearShaped& msg) noexcept
 		params.steadyClocks = clocksNeeded = 1;
 	}
 
-	const float accelDistanceExTopSpeed = -0.5 * params.acceleration * fsquare((float)params.accelClocks);
-	const float decelDistanceExTopSpeed = -0.5 * params.deceleration * fsquare((float)params.decelClocks);
-	const float topSpeed = (params.totalDistance - accelDistanceExTopSpeed - decelDistanceExTopSpeed)/clocksNeeded;
+	const motioncalc_t aTimesT = msg.acceleration * (motioncalc_t)msg.accelerationClocks;
+	const motioncalc_t accelDistanceExTopSpeed = -(motioncalc_t)0.5 * aTimesT * (motioncalc_t)msg.accelerationClocks;
+	const motioncalc_t dTimesT = msg.deceleration * (motioncalc_t)msg.decelClocks;
+	const motioncalc_t decelDistanceExTopSpeed = -(motioncalc_t)0.5 * dTimesT * (motioncalc_t)msg.decelClocks;
+	params.topSpeed = (params.totalDistance - (accelDistanceExTopSpeed + decelDistanceExTopSpeed))/clocksNeeded;
+	params.startSpeed = params.topSpeed - aTimesT;
+	params.endSpeed = params.topSpeed - dTimesT;
 
-	params.accelDistance =      accelDistanceExTopSpeed + topSpeed * params.accelClocks;
-	const float decelDistance = decelDistanceExTopSpeed + topSpeed * params.decelClocks;
-	params.decelStartDistance =  1.0 - decelDistance;
+	params.accelDistance =      accelDistanceExTopSpeed + params.topSpeed * (motioncalc_t)msg.accelerationClocks;
+	const motioncalc_t decelDistance = decelDistanceExTopSpeed + params.topSpeed * (motioncalc_t)msg.decelClocks;
+	params.decelStartDistance =  (motioncalc_t)1.0 - decelDistance;
 
 	MovementFlags segFlags;
 	segFlags.nonPrintingMove = !msg.usePressureAdvance;
@@ -1128,7 +1132,9 @@ void Move::AddLinearSegments(size_t drive, uint32_t startTime, const PrepParams&
 	else
 	{
 		accelDistance = (params.decelClocks + params.steadyClocks == 0) ? totalDistance : (motioncalc_t)params.accelDistance;
-		accelPressureAdvance = (usePressureAdvance) ? (motioncalc_t)(params.accelClocks * dm.extruderShaper.GetKclocks()) : (motioncalc_t)0.0;
+		accelPressureAdvance = (usePressureAdvance)
+								? (motioncalc_t)params.accelClocks * dm.extruderShaper.GetAverageAdvanceClocks(params.startSpeed, params.topSpeed, steps)
+								: (motioncalc_t)0.0;
 	}
 
 	motioncalc_t decelDistance, decelPressureAdvance;
@@ -1140,7 +1146,9 @@ void Move::AddLinearSegments(size_t drive, uint32_t startTime, const PrepParams&
 	else
 	{
 		decelDistance = totalDistance - ((params.steadyClocks == 0) ? accelDistance : (motioncalc_t)params.decelStartDistance);
-		decelPressureAdvance = (usePressureAdvance) ? (motioncalc_t)(params.decelClocks * dm.extruderShaper.GetKclocks()) : (motioncalc_t)0.0;
+		decelPressureAdvance = (usePressureAdvance)
+								? (motioncalc_t)params.decelClocks * dm.extruderShaper.GetAverageAdvanceClocks(params.endSpeed, params.topSpeed, steps)
+								: (motioncalc_t)0.0;
 	}
 
 	const motioncalc_t steadyDistance = (params.steadyClocks == 0) ? (motioncalc_t)0.0 : totalDistance - accelDistance - decelDistance;

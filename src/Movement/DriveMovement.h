@@ -86,7 +86,7 @@ private:
 #endif
 
 	MoveSegment *volatile segments;						// pointer to the segment list for this driver
-	ExtruderShaper extruderShaper;						// pressure advance control
+	ExtruderShaper extruderShaper;						// pressure advance control if the drive is for an extruder
 
 	DMState state;										// whether this is active or not
 	uint8_t drive;										// the drive that this DM controls
