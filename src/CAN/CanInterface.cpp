@@ -58,6 +58,9 @@ static CanAddress currentMasterAddress =
 										CanId::MasterAddress;
 #endif
 
+static uint8_t fastDataRate = 0;											// the fast data phase bit rate multiplier minus one. 0 means don't use BRS.
+static uint8_t dTseg1MinusOne = 0;											// the fast data rate sample point minus one
+
 static unsigned int txTimeouts = 0;
 static unsigned int messagesIgnored = 0;
 static uint32_t lastCancelledId = 0;
@@ -327,6 +330,43 @@ CanAddress CanInterface::GetCanAddress() noexcept
 CanAddress CanInterface::GetCurrentMasterAddress() noexcept
 {
 	return currentMasterAddress;
+}
+
+void CanInterface::ReportCanTiming(const StringRef& reply) noexcept
+{
+	CanTiming timing;
+	can0dev->GetLocalCanTiming(timing);
+	reply.printf("CAN arbitration speed %.1fkbps, sample point %.2f, jump width %.2f, ",
+					(double)((float)CanTiming::ClockFrequency/(float)(1000 * timing.period)),
+					(double)((float)(timing.nTseg1 + 1)/(float)timing.period),
+					(double)((float)timing.nJumpWidth/(float)timing.period));
+	if (fastDataRate == 0)
+	{
+		reply.cat("bit rate switching disabled");
+	}
+	else
+	{
+		const uint32_t dataPeriod = timing.period/(fastDataRate + 1);
+		reply.catf("data speed %.1fkbps, sample point %.2f, jump width %.2f",
+					(double)((float)CanTiming::ClockFrequency/(float)(1000 * dataPeriod)),
+					(double)((float)(timing.dTseg1 + 1)/(float)dataPeriod),
+					(double)((float)timing.dJumpWidth/(float)dataPeriod));
+	}
+}
+
+// Check that the BRS setting we are using matches the one n the time sync message and change it if necessary
+void CanInterface::CheckBrs(const CanMessageTimeSync& msg) noexcept
+{
+	if (msg.fastDataRate != fastDataRate || msg.tseg1Minus1 != dTseg1MinusOne)
+	{
+		CanTiming timing;
+		can0dev->GetLocalCanTiming(timing);
+		timing.EnableBrs(msg.fastDataRate + 1);
+		timing.SetDataSamplePointDirect(msg.tseg1Minus1);
+		can0dev->ChangeLocalCanTiming(timing);
+		fastDataRate = msg.fastDataRate;
+		dTseg1MinusOne = msg.tseg1Minus1;
+	}
 }
 
 // Send a message. On return the buffer is available to the caller to re-use or free.
@@ -721,12 +761,7 @@ GCodeResult CanInterface::ChangeAddressAndDataRate(const CanMessageSetAddressAnd
 		}
 		else
 		{
-			CanTiming timing;
-			can0dev->GetLocalCanTiming(timing);
-			reply.printf("CAN bus speed %.1fkbps, sample point %.2f, jump width %.2f",
-							(double)((float)CanTiming::ClockFrequency/(1000 * timing.period)),
-							(double)((float)(timing.tseg1 + 1)/(float)timing.period),
-							(double)((float)timing.jumpWidth/(float)timing.period));
+			ReportCanTiming(reply);
 		}
 		return GCodeResult::ok;
 	}
@@ -790,6 +825,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		{
 			currentMasterAddress = buf.id.Src();
 			StepTimer::ProcessTimeSyncMessage(buf.msg.sync, buf.dataLength, buf.timeStamp);
+			CanInterface::CheckBrs(buf.msg.sync);
 		}
 	}
 }
