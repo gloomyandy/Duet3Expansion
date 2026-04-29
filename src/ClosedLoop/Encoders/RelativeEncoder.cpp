@@ -23,7 +23,7 @@ bool RelativeEncoder::TakeReading() noexcept
 		currentCount = pos * reversePolarityMultiplier;
 		int32_t currentAngle = currentCount % (int32_t)countsPerRev;
 		if (currentAngle < 0) { currentAngle += countsPerRev; }
-		currentPhasePosition = (uint32_t)lrintf((currentAngle * phasesPerCount) + zeroCountPhasePosition) % 4095u;
+		currentPhasePosition = (uint32_t)lrintf((currentAngle * phasesPerCount) + zeroCountPhasePosition) & 4095u;
 	}
 	return !err;
 }
@@ -47,7 +47,7 @@ void RelativeEncoder::SetTuningBackwards(bool backwards) noexcept
 		currentCount = -currentCount;
 		int32_t currentAngle = currentCount % (int32_t)countsPerRev;
 		if (currentAngle < 0) { currentAngle += countsPerRev; }
-		currentPhasePosition = (uint32_t)lrintf((currentAngle * phasesPerCount) + zeroCountPhasePosition) % 4095u;
+		currentPhasePosition = (uint32_t)lrintf((currentAngle * phasesPerCount) + zeroCountPhasePosition) & 4095u;
 	}
 }
 
@@ -90,7 +90,7 @@ TuningErrors RelativeEncoder::ProcessTuningData(bool isLinearEncoder) noexcept
 		debugPrintf("count %" PRIi32 " ppc %.3f\n", currentCount, (double)phasesPerCount);
 #endif
 		SetTuningBackwards(averageSlope < 0.0);
-		const int32_t zcp = lrintf((forwardZeroPhase + reverseZeroPhase) * 0.5) % 4095;
+		const int32_t zcp = lrintf((forwardZeroPhase + reverseZeroPhase) * 0.5) % 4096;
 		zeroCountPhasePosition = (uint32_t)((zcp < 0) ? zcp + 4096 : zcp);
 #ifdef DEBUG
 		debugPrintf("origins %.3f %.3f zph %.1f %.1f diff %.1f zcp %" PRIi32 " zcpp %" PRIu32 "\n",
