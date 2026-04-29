@@ -54,7 +54,8 @@ public:
 	float EstimateRequiredPwm(float temperatureRise, float fanPwm) const noexcept;
 	float GetNetHeatingRate(float temperatureRise, float fanPwm, float heaterPwm) const noexcept;
 	float CorrectPwmForVoltage(float requiredPwm, float actualVoltage) const noexcept;
-	float GetPwmCorrectionForFan(float temperatureRise, float fanPwmChange) const noexcept;
+	float GetFanCoolingRate(float temperatureRise, float fanPwm) const noexcept;
+	float GetPwmCorrectionForFan(float temperatureRise, float oldFanPwm, float newFanPwm) const noexcept;
 	void CalcPidConstants(float targetTemperature) noexcept;
 
 	// Derived parameters

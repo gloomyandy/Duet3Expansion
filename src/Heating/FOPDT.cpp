@@ -8,6 +8,8 @@
 #include "FOPDT.h"
 #include "CanMessageFormats.h"
 
+#define SQRT_FAN_SCALING		1		// 1 = fan cooling rate assumed to scale with square root of fan PWM, 0 = assumed to scale linearly
+
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
 FopDt::FopDt() noexcept
 {
@@ -148,9 +150,24 @@ float FopDt::CorrectPwmForVoltage(float requiredPwm, float actualVoltage) const 
 	return min<float>(requiredPwm, maxPwm);
 }
 
-float FopDt::GetPwmCorrectionForFan(float temperatureRise, float fanPwmChange) const noexcept
+// Calculate the fan cooling rate. We assume that the cooling rate exponent does not apply to fan cooling.
+float FopDt::GetFanCoolingRate(float temperatureRise, float fanPwm) const noexcept
 {
-	return temperatureRise * 0.01 * basicModel.fanCoolingRate * fanPwmChange / basicModel.heatingRate;
+#if SQRT_FAN_SCALING
+	return temperatureRise * 0.01 * basicModel.fanCoolingRate * fastSqrtf(fanPwm);
+#else
+	return temperatureRise * 0.01 * basicModel.fanCoolingRate * fanPwm;
+#endif
+}
+
+// Calculate the change in required heater PWM due to a change in fan PWM
+float FopDt::GetPwmCorrectionForFan(float temperatureRise, float oldFanPwm, float newFanPwm) const noexcept
+{
+#if SQRT_FAN_SCALING
+	return temperatureRise * 0.01 * basicModel.fanCoolingRate * (fastSqrtf(newFanPwm) - fastSqrtf(oldFanPwm)) / basicModel.heatingRate;
+#else
+	return temperatureRise * 0.01 * basicModel.fanCoolingRate * (newFanPwm - oldFanPwm) / basicModel.heatingRate;
+#endif
 }
 
 // Calculate the expected cooling rate for a given temperature rise above ambient
@@ -159,7 +176,7 @@ float FopDt::GetCoolingRate(float temperatureRise, float fanPwm) const noexcept
 	temperatureRise *= 0.01;
 	// If the temperature rise is negative then we must not try to raise it to a non-integral power!
 	const float adjustedTemperatureRise = (temperatureRise < 0.0) ? -powf(-temperatureRise, basicModel.coolingRateExponent) : powf(temperatureRise, basicModel.coolingRateExponent);
-	return basicModel.basicCoolingRate * adjustedTemperatureRise + temperatureRise * basicModel.fanCoolingRate * fanPwm;
+	return basicModel.basicCoolingRate * adjustedTemperatureRise + GetFanCoolingRate(temperatureRise, fanPwm);
 }
 
 // Get an estimate of the expected heating rate at the specified temperature rise and PWM. The result may be negative.
