@@ -175,7 +175,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA14 crystal
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA15 crystal
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		sercom1cPad0,		Nx,	"io0.out,uart0.tx" },	// PA16
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		sercom1cPad1,		SercomIo::none,		Nx,	"uart0.rx"		},	// PA17
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		sercom1cPad1,		SercomIo::none,		Nx,	"uart0.rx"		},	// PA17 also connected to io0_in
 	{ TcOutput::none,	TccOutput::tcc1_2F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out0" 			},	// PA18
 	{ TcOutput::tc3_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out1"			},	// PA19
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"io5.out"		},	// PA20
@@ -209,11 +209,11 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"spi.cs3"		},	// PB14 don't allow DHT11 on this pin, no EXINT
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		15,	"spi.cs1"		},	// PB15
 	{ TcOutput::none,	TccOutput::tcc3_0F,	AdcInput::none,		SercomIo::none,		sercom5cPad0,		Nx,	"io1.out,uart1.tx"	},	// PB16
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		sercom5cPad1,		SercomIo::none,		Nx,	"uart1.rx"		},	// PB17
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		sercom5cPad1,		SercomIo::none,		Nx,	"uart1.rx"		},	// PB17 also connected to io1_in
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB18 board type 0
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		3,	"out4.tach"		},	// PB19
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		sercom3cPad0,		Nx,	"io2.out,uart2.tx" },	// PB20
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		sercom3cPad1,		SercomIo::none,		Nx,	"uart2.rx"		},	// PB21
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		sercom3cPad1,		SercomIo::none,		Nx,	"uart2.rx"		},	// PB21 also connected to io2_in
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB22 drivers CS
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB23 drivers ENN
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB24 spi0 mosi
