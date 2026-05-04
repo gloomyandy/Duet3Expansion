@@ -144,7 +144,7 @@ void LocalHeater::ResetHeater() noexcept
 	iAccumulator = 0.0;
 	badTemperatureCount = 0;
 	averagePWM = lastPwm = 0.0;
-	heatingFaultCount = 0;
+	heaterExcursionFaultCount = heaterPwmFaultCount = 0;
 	temperature = BadErrorTemperature;
 #if SUPPORT_LP5817
 	UpdateStatusLed();
@@ -284,7 +284,7 @@ void LocalHeater::UpdateHeaterMode(float targetTemperature) noexcept
 			lastTemperatureValue = temperature;
 			lastTemperatureMillis = timeSetHeating = millis();
 		}
-		heatingFaultCount = 0;
+		heaterExcursionFaultCount = heaterPwmFaultCount = 0;
 		mode = newMode;
 #if SUPPORT_LP5817
 		UpdateStatusLed();
@@ -365,7 +365,11 @@ void LocalHeater::Spin() noexcept
 			}
 
 			const float error = targetTemperature - temperature;
-
+#if HAS_VOLTAGE_MONITOR
+			const float currentVoltage = (GetFunction() == HeaterFunction::tool) ? Platform::GetCurrentVinVoltage() : 0.0;		// correct PWM for voltage if it is a tool heater
+#else
+			constexpr float currentVoltage = 0.0;
+#endif
 			// Do the heating checks
 			switch (mode)
 			{
@@ -373,7 +377,7 @@ void LocalHeater::Spin() noexcept
 				if (error <= TemperatureCloseEnough)
 				{
 					mode = HeaterMode::stable;
-					heatingFaultCount = 0;
+					heaterExcursionFaultCount = heaterPwmFaultCount = 0;
 				}
 				else
 				{
@@ -386,7 +390,7 @@ void LocalHeater::Spin() noexcept
 					}
 					else if (gotDerivative)												// this is a check in case we just had a temperature spike
 					{
-						const float expectedRate = GetExpectedHeatingRate();
+						const float expectedRate = GetExpectedHeatingRate(currentVoltage);
 						const float minSamplingInterval = 3.0/expectedRate;				// check the temperature if we expect a 3C rise since last time
 						const float actualInterval = (float)(now - lastTemperatureMillis) * MillisToSeconds;
 						if (actualInterval >= minSamplingInterval)
@@ -397,8 +401,8 @@ void LocalHeater::Spin() noexcept
 							// Bed heaters sometimes have much slower long term heating rates than their short term heating rates, so allow them a lower measured heating rate
 							if (actualTemperatureRise < expectedTemperatureRise * MinTemperatureRiseFactors[(unsigned int)GetFunction()])
 							{
-								++heatingFaultCount;
-								if (heatingFaultCount * Heat::NormalHeaterPollInterval > GetMaxHeatingFaultTime() * SecondsToMillis)
+								++heaterExcursionFaultCount;
+								if ((float)(heaterExcursionFaultCount * Heat::NormalHeaterPollInterval) > GetMaxHeatingFaultTime() * SecondsToMillis)
 								{
 									RaiseHeaterFault(HeaterFaultType::temperatureRisingTooSlowly,
 														"expected %.2f" DEGREE_SYMBOL "C/sec measured %.2f" DEGREE_SYMBOL "C/sec",
@@ -409,9 +413,9 @@ void LocalHeater::Spin() noexcept
 							{
 								lastTemperatureValue = temperature;
 								lastTemperatureMillis = now;
-								if (heatingFaultCount != 0)
+								if (heaterExcursionFaultCount != 0)
 								{
-									--heatingFaultCount;
+									--heaterExcursionFaultCount;
 								}
 							}
 						}
@@ -430,17 +434,17 @@ void LocalHeater::Spin() noexcept
 					   )
 				   )
 				{
-					++heatingFaultCount;
-					if (heatingFaultCount * Heat::NormalHeaterPollInterval > GetMaxHeatingFaultTime() * SecondsToMillis)
+					++heaterExcursionFaultCount;
+					if ((float)(heaterExcursionFaultCount * Heat::NormalHeaterPollInterval) > GetMaxHeatingFaultTime() * SecondsToMillis)
 					{
 						RaiseHeaterFault(HeaterFaultType::exceededAllowedExcursion,
 											"target %.1f" DEGREE_SYMBOL "C actual %.1f" DEGREE_SYMBOL "C",
 												(double)targetTemperature, (double)temperature);
 					}
 				}
-				else if (heatingFaultCount != 0)
+				else if (heaterExcursionFaultCount != 0)
 				{
-					--heatingFaultCount;
+					--heaterExcursionFaultCount;
 				}
 				break;
 
@@ -449,7 +453,7 @@ void LocalHeater::Spin() noexcept
 				{
 					// We have cooled to close to the target temperature, so we should now maintain that temperature
 					mode = HeaterMode::stable;
-					heatingFaultCount = 0;
+					heaterExcursionFaultCount = heaterPwmFaultCount = 0;
 #if SUPPORT_LP5817
 					UpdateStatusLed();
 #endif
@@ -482,7 +486,7 @@ void LocalHeater::Spin() noexcept
 					// If the P and D terms together demand that the heater is full on or full off, disregard the I term to reduce integral windup
 					const float errorMinusDterm = error - (params.tD * derivative);
 					const float pPlusD = params.kP * errorMinusDterm;
-					const float expectedPwm = GetModel().EstimateRequiredPwm(temperature - NormalAmbientTemperature, 0.0);
+					const float expectedPwm = GetModel().EstimateRequiredPwm(temperature - NormalAmbientTemperature, lastFanPwm, currentVoltage, 0.0);		//TODO pass filamentPwm
 					if (pPlusD + expectedPwm > GetModel().GetMaxPwm())
 					{
 						lastPwm = GetModel().GetMaxPwm();
@@ -505,13 +509,23 @@ void LocalHeater::Spin() noexcept
 						lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, GetModel().GetMaxPwm());
 					}
 
-#if HAS_VOLTAGE_MONITOR
-					// Scale the PID based on the current voltage vs. the calibration voltage
-					if (!Heat::IsBedOrChamberHeater(GetHeaterNumber()))
+					if (mode == HeaterMode::stable)
 					{
-						lastPwm = GetModel().CorrectPwmForVoltage(lastPwm, Platform::GetCurrentVinVoltage());
+						if (lastPwm > expectedPwm * 1.2)
+						{
+							++heaterPwmFaultCount;
+							if (heaterPwmFaultCount * Heat::NormalHeaterPollInterval > GetMaxHeatingFaultTime() * SecondsToMillis)
+							{
+								RaiseHeaterFault(HeaterFaultType::pwmTooHigh,
+													"expected %.1f actual %.1f",
+														(double)expectedPwm, (double)lastPwm);
+							}
+						}
+						else if (heaterPwmFaultCount != 0)
+						{
+							--heaterPwmFaultCount;
+						}
 					}
-#endif
 				}
 				else
 				{
@@ -594,12 +608,12 @@ float LocalHeater::GetAveragePWM() const noexcept
 	return averagePWM;
 }
 
-// Get a conservative estimate of the expected heating rate at the current temperature and average PWM. The result may be negative.
-float LocalHeater::GetExpectedHeatingRate() const noexcept
+// Get a conservative estimate of the expected heating rate at the current temperature and specified PWM when trhere is no filament cooling. The result may be negative.
+float LocalHeater::GetExpectedHeatingRate(float voltage) const noexcept
 {
 	const float temperatureRise = max<float>(temperature - LowAmbientTemperature, 0.0);
 	const float pwm = min<float>(GetAveragePWM(), lastPwm);
-	return GetModel().GetNetHeatingRate(temperatureRise, 1.0, pwm);
+	return GetModel().GetExpectedHeatingRate(temperatureRise, 1.0, pwm, voltage, 0.0);
 }
 
 // Start or stop running heater tuning cycles

@@ -6,7 +6,7 @@
  */
 
 #include "FOPDT.h"
-#include "CanMessageFormats.h"
+#include <CanMessageFormats.h>
 
 #define SQRT_FAN_SCALING		1		// 1 = fan cooling rate assumed to scale with square root of fan PWM, 0 = assumed to scale linearly
 
@@ -20,7 +20,7 @@ FopDt::FopDt() noexcept
 bool FopDt::SetParameters(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept
 {
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
-	const char *const err =
+	const char *_ecv_array const err =
 		  (msg.basicModel.heatingRate/msg.basicModel.basicCoolingRate < 0.1) ? "estimated temperature rise too small"					// minimum 10C temperature rise (same as with earlier heater model)
 		: (msg.basicModel.fanCoolingRate < 0.0) ? "fan reduces cooling rate"
 		: (msg.basicModel.coolingRateExponent < 1.0 || msg.basicModel.coolingRateExponent > 1.6) ? "cooling rate exponent out of range"
@@ -68,7 +68,7 @@ void FopDt::SetDefaultModel(const HeaterModel& model) noexcept
 }
 
 // Get the PID parameters as reported by M301
-M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const
+M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const noexcept
 {
 	M301PidParameters rslt;
 	const PidParameters& pp = GetPidParameters(forLoadChange);
@@ -140,26 +140,6 @@ void FopDt::CalcPidConstants(float targetTemperature) noexcept
 	}
 }
 
-// Adjust the actual heater PWM for supply voltage
-float FopDt::CorrectPwmForVoltage(float requiredPwm, float actualVoltage) const noexcept
-{
-	if (requiredPwm < maxPwm && basicModel.standardVoltage >= 10.0 && actualVoltage >= 10.0)
-	{
-		requiredPwm *= fsquare(basicModel.standardVoltage/actualVoltage);
-	}
-	return min<float>(requiredPwm, maxPwm);
-}
-
-// Calculate the fan cooling rate. We assume that the cooling rate exponent does not apply to fan cooling.
-float FopDt::GetFanCoolingRate(float temperatureRise, float fanPwm) const noexcept
-{
-#if SQRT_FAN_SCALING
-	return temperatureRise * 0.01 * basicModel.fanCoolingRate * fastSqrtf(fanPwm);
-#else
-	return temperatureRise * 0.01 * basicModel.fanCoolingRate * fanPwm;
-#endif
-}
-
 // Calculate the change in required heater PWM due to a change in fan PWM
 float FopDt::GetPwmCorrectionForFan(float temperatureRise, float oldFanPwm, float newFanPwm) const noexcept
 {
@@ -176,19 +156,7 @@ float FopDt::GetCoolingRate(float temperatureRise, float fanPwm) const noexcept
 	temperatureRise *= 0.01;
 	// If the temperature rise is negative then we must not try to raise it to a non-integral power!
 	const float adjustedTemperatureRise = (temperatureRise < 0.0) ? -powf(-temperatureRise, basicModel.coolingRateExponent) : powf(temperatureRise, basicModel.coolingRateExponent);
-	return basicModel.basicCoolingRate * adjustedTemperatureRise + GetFanCoolingRate(temperatureRise, fanPwm);
-}
-
-// Get an estimate of the expected heating rate at the specified temperature rise and PWM. The result may be negative.
-float FopDt::GetNetHeatingRate(float temperatureRise, float fanPwm, float heaterPwm) const noexcept
-{
-	return basicModel.heatingRate * heaterPwm - GetCoolingRate(temperatureRise, fanPwm);
-}
-
-// Get an estimate of the heater PWM required to maintain a specified temperature
-float FopDt::EstimateRequiredPwm(float temperatureRise, float fanPwm) const noexcept
-{
-	return GetCoolingRate(temperatureRise, fanPwm)/basicModel.heatingRate;
+	return basicModel.basicCoolingRate * adjustedTemperatureRise + basicModel.GetFanCoolingRate(temperatureRise, fanPwm);
 }
 
 /*static*/ float FopDt::EstimateMaxTemperatureRise(float hr, float cr, float cre) noexcept

@@ -54,7 +54,7 @@ private:
 	void SetHeater(float power) const noexcept;					// Power is a fraction in [0,1]
 	TemperatureError ReadTemperature() noexcept;				// Read and store the temperature of this heater
 	void DoTuningStep() noexcept;								// Called on each temperature sample when auto tuning
-	float GetExpectedHeatingRate() const noexcept;				// Get the minimum heating rate we expect
+	float GetExpectedHeatingRate(float voltage) const noexcept;	 // Get the minimum heating rate we expect
 	void RaiseHeaterFault(HeaterFaultType type, const char *format, ...) noexcept;
 	void UpdateHeaterMode(float targetTemperature) noexcept;	// Determine and if necessary change the current heater mode
 #if SUPPORT_LP5817
@@ -74,7 +74,8 @@ private:
 	uint32_t timeSetHeating;									// When we turned on the heater
 	uint32_t lastSampleTime;									// Time when the temperature was last sampled by Spin()
 
-	uint16_t heatingFaultCount;									// Count of questionable heating behaviours
+	uint16_t heaterExcursionFaultCount;							// Count of questionable heater temperature excursions
+	uint16_t heaterPwmFaultCount;								// Count of questionable PWM values
 
 	uint8_t previousTemperaturesGood;							// Bitmap indicating which previous temperature were good readings
 	HeaterMode mode;											// Current state of the heater
