@@ -511,7 +511,7 @@ void LocalHeater::Spin() noexcept
 
 					if (mode == HeaterMode::stable)
 					{
-						if (lastPwm > expectedPwm * 1.2)
+						if (lastPwm > expectedPwm * PwmFaultLevel)
 						{
 							++heaterPwmFaultCount;
 							if (heaterPwmFaultCount * Heat::NormalHeaterPollInterval > GetMaxHeatingFaultTime() * SecondsToMillis)
