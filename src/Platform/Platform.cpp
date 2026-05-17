@@ -455,6 +455,7 @@ namespace Platform
 #endif
 	}
 
+	static void EstablishBoardVariant();
 	static void InitLeds();
 }	// end namespace Platform
 
@@ -462,7 +463,7 @@ namespace Platform
 static void Platform::InitLeds()
 {
 	// Set up the LED pins
-#ifdef TOOL1LC
+#if defined(TOOL1LC)
 	if (boardVariant == 1)
 	{
 		// The LEDs are connected to the SWDIO and SWCLK pins, so don't activate them in a debug build or if a debugger is attached
@@ -483,6 +484,27 @@ static void Platform::InitLeds()
 			IoPort::SetPinMode(pin, (LedActiveHighV10) ? OUTPUT_LOW : OUTPUT_HIGH);
 		}
 	}
+#elif defined(EXP3HC)
+	if (boardVariant >= 2)
+	{
+		// The LEDs are connected to the SWDIO and SWCLK pins, so don't activate them in a debug build or if a debugger is attached
+# ifndef DEBUG
+		if (!DSU->STATUSB.bit.DBGPRES)
+		{
+			for (Pin pin : LedPins_v103)
+			{
+				IoPort::SetPinMode(pin, (LedActiveHigh_v103) ? OUTPUT_LOW : OUTPUT_HIGH);
+			}
+		}
+# endif
+	}
+	else
+	{
+		for (Pin pin : LedPins_v102)
+		{
+			IoPort::SetPinMode(pin, (LedActiveHigh_v102) ? OUTPUT_LOW : OUTPUT_HIGH);
+		}
+	}
 #elif !((defined(EXP1HCL) || defined(M23CL) || defined(SZP) || defined(TOOL1RR) || defined(F3PTB)) && defined(DEBUG))		// EXP1HCL has the LEDs connected to the SWD pins
 	for (Pin pin : LedPins)
 	{
@@ -494,7 +516,7 @@ static void Platform::InitLeds()
 
 void Platform::WriteLed(uint8_t ledNumber, bool turnOn)
 {
-#ifdef TOOL1LC
+#if defined(TOOL1LC)
 	if (boardVariant == 1)
 	{
 		if (ledNumber < ARRAY_SIZE(LedPinsV11))
@@ -509,6 +531,21 @@ void Platform::WriteLed(uint8_t ledNumber, bool turnOn)
 			digitalWrite(LedPinsV10[ledNumber], (LedActiveHighV10) ? turnOn : !turnOn);
 		}
 	}
+#elif defined(EXP3HC)
+	if (boardVariant >= 2)
+	{
+		if (ledNumber < ARRAY_SIZE(LedPins_v103))
+		{
+			digitalWrite(LedPins_v103[ledNumber], (LedActiveHigh_v103) ? turnOn : !turnOn);
+		}
+	}
+	else
+	{
+		if (ledNumber < ARRAY_SIZE(LedPins_v102))
+		{
+			digitalWrite(LedPins_v102[ledNumber], (LedActiveHigh_v102) ? turnOn : !turnOn);
+		}
+	}
 #else
 	if (ledNumber < ARRAY_SIZE(LedPins))
 	{
@@ -517,11 +554,8 @@ void Platform::WriteLed(uint8_t ledNumber, bool turnOn)
 #endif
 }
 
-// Initialisation
-void Platform::Init()
+void Platform::EstablishBoardVariant()
 {
-	IoPort::Init();
-
 #if defined(TOOL1LC)
 	// On the board detect pin:
 	// Tool board V1.0 and earlier has 1K lower resistor, 10K upper, so will read as low
@@ -547,12 +581,24 @@ void Platform::Init()
 	boardVariant = (res > threshold) ? 0 : 1;
 	AnalogIn::DisableChannel(chan);									// this does nothing currently, but might in future
 #elif defined(EXP3HC)
-	// Version 1.02 board has a pulldown resistor on BoardTypePins[1], earlier versions do not
+	// Version 0.9 board has pulldown resistors on BoardTypePins 0, 1 and 2 but we don't support it
+	// Version 1.01 or earlier board has a pulldown resistor on BoardTypePins[0] only
+	// Version 1.02 board has pulldown resistors on BoardTypePins[0]  and BoardTypePins[1]
+	// Version 1.03 board has a pulldown resistor on BoardTypePins[1] only
+	SetPinMode(BoardTypePins[0], INPUT_PULLUP, false);
 	SetPinMode(BoardTypePins[1], INPUT_PULLUP, false);
+	SetPinMode(BoardTypePins[2], INPUT_PULLUP, false);
 	delayMicroseconds(10);
-	boardVariant = (digitalRead(BoardTypePins[1])) ? 0 : 1;
+	boardVariant = (digitalRead(BoardTypePins[1])) ? 0
+					: (digitalRead(BoardTypePins[0])) ? 2 : 1;
 #endif
+}
 
+// Initialisation
+void Platform::Init()
+{
+	IoPort::Init();
+	EstablishBoardVariant();
 	InitLeds();
 
 	// Turn all outputs off
@@ -734,6 +780,7 @@ void Platform::Init()
 // Perform minimal initialisation prior to updating the bootloader
 void Platform::InitMinimal()
 {
+	EstablishBoardVariant();
 	InitLeds();
 	InitVinMonitor();
 	InitialiseInterrupts();
@@ -1527,7 +1574,9 @@ void Platform::AppendBoardAndFirmwareDetails(const StringRef& reply) noexcept
 				DateText, TimeSuffix);
 #elif defined(EXP3HC)
 	reply.lcatf("Duet " BOARD_TYPE_NAME " rev %s firmware version " VERSION " (%s%s)",
-				(boardVariant == 1) ? "1.02 or later" : "1.01 or earlier",
+				(boardVariant == 2) ? "1.03 or later"
+				: (boardVariant == 1) ? "1.02"
+					: "1.01 or earlier",
 				DateText, TimeSuffix);
 #else
 	reply.lcatf("Duet " BOARD_TYPE_NAME " firmware version " VERSION " (%s%s)",
