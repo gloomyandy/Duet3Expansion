@@ -102,15 +102,20 @@ constexpr GpioPinFunction TMCMisoPinPeriphMode = GpioPinFunction::C;
 
 PortGroup * const StepPio = &(PORT->Group[0]);		// the PIO that all the step pins are on
 constexpr Pin StepPins[NumDrivers] = { PortAPin(25), PortAPin(27), PortAPin(1) };
-constexpr Pin DirectionPins[NumDrivers] = { PortAPin(23), PortCPin(28), PortAPin(0) };
+constexpr Pin DirectionPins_v102[NumDrivers] = { PortAPin(23), PortCPin(28), PortAPin(0) };		// DIR pins for version 1.02 and earlier boards
+constexpr Pin DirectionPins_v103[NumDrivers] = { PortCPin(6), PortCPin(28), PortAPin(0) };		// DIR pins for version 1.03 and later boards
 constexpr Pin Diag0Pins[NumDrivers] = { PortAPin(9), PortCPin(27), PortBPin(30) };
-constexpr Pin Diag1Pins[NumDrivers] = { PortAPin(22), PortCPin(26), PortBPin(0) };
+
+constexpr Pin Diag1Pins_v102[NumDrivers] = { PortAPin(22), PortCPin(26), PortBPin(0) };			// DIAG1 pins for version 1.02 and earlier boards
+constexpr Pin Diag1Pins_v103[NumDrivers] = { PortCPin(4), PortCPin(26), PortBPin(0) };			// DIAG1 pins for version 1.03 and later boards
 
 constexpr Pin BoardTypePins[NumBoardTypeBits] = { PortBPin(18), PortCPin(18), PortCPin(13) };
 
 // Diagnostic LEDs
-constexpr Pin LedPins[] = { PortCPin(10), PortCPin(7) };
-constexpr bool LedActiveHigh = true;
+constexpr Pin LedPins_v102[] = { PortCPin(10), PortCPin(7) };
+constexpr bool LedActiveHigh_v102 = true;
+constexpr Pin LedPins_v103[] = { PortAPin(30), PortAPin(31) };
+constexpr bool LedActiveHigh_v103 = false;
 
 constexpr Pin VinMonitorPin = PortAPin(10);
 
@@ -175,7 +180,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA14 crystal
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA15 crystal
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		sercom1cPad0,		Nx,	"io0.out,uart0.tx" },	// PA16
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		sercom1cPad1,		SercomIo::none,		Nx,	"uart0.rx"		},	// PA17 also connected to io0_in
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA17 (was sercom1cPad1 UART Rx on IO0_in on v1.02 and earlier boards)
 	{ TcOutput::none,	TccOutput::tcc1_2F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out0" 			},	// PA18
 	{ TcOutput::tc3_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"out1"			},	// PA19
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"io5.out"		},	// PA20

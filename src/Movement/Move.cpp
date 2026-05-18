@@ -97,6 +97,10 @@ void Move::Init() noexcept
 	temperatureWarningDrivers.Clear();
 #endif
 
+#ifdef EXP3HC
+	DirectionPins = (Platform::GetBoardVariant() >= 2) ? DirectionPins_v103 : DirectionPins_v102;
+#endif
+
 	// Initialise stepper driver structs
 	for (size_t i = 0; i < NumDrivers; ++i)
 	{
