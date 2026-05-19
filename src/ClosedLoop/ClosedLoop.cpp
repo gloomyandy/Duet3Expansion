@@ -1214,7 +1214,7 @@ StandardDriverStatus ClosedLoop::ModifyDriverStatus(StandardDriverStatus origina
 }
 
 // Get the current fraction and position error statistics
-void ClosedLoop::GetStatistics(CanMessageDriversStatus::ClosedLoopStatus& stat) noexcept
+void ClosedLoop::GetStatistics(ClosedLoopStatus& stat) noexcept
 {
 	TaskCriticalSectionLocker lock;
 

@@ -83,7 +83,7 @@ public:
 	void ResetError() noexcept;
 	bool OkayToSetDriverIdle() const noexcept;
 	StandardDriverStatus ModifyDriverStatus(StandardDriverStatus originalStatus) const noexcept;
-	void GetStatistics(CanMessageDriversStatus::ClosedLoopStatus& stat) noexcept;
+	void GetStatistics(ClosedLoopStatus& stat) noexcept;
 
 	// Methods called by the encoders
 	static void EnableEncodersSpi() noexcept;
