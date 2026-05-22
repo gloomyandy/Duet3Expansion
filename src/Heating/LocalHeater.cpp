@@ -514,7 +514,7 @@ void LocalHeater::Spin() noexcept
 						if (lastPwm > expectedPwm * PwmFaultLevel)
 						{
 							++heaterPwmFaultCount;
-							if (heaterPwmFaultCount * Heat::NormalHeaterPollInterval > GetMaxHeatingFaultTime() * SecondsToMillis)
+							if (heaterPwmFaultCount * Heat::NormalHeaterPollInterval > GetMaxPwmFaultTime() * SecondsToMillis)
 							{
 								RaiseHeaterFault(HeaterFaultType::pwmTooHigh,
 													"expected %.3f actual %.3f",
