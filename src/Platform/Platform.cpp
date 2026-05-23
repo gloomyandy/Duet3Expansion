@@ -475,9 +475,13 @@ namespace Platform
 	static void InitVinMonitor()
 	{
 #if HAS_VOLTAGE_MONITOR
-		currentVin = highestVin = 0;
+		currentVin = 0;
+		highestVin = 0;
 		lowestVin = 65535;
-		numUnderVoltageEvents = previousUnderVoltageEvents = numOverVoltageEvents = previousOverVoltageEvents = 0;
+		numUnderVoltageEvents = 0;
+		previousUnderVoltageEvents = 0;
+		numOverVoltageEvents = 0;
+		previousOverVoltageEvents = 0;
 
 		vinFilter.Init(0);
 		IoPort::SetPinMode(VinMonitorPin, AIN);
@@ -726,7 +730,8 @@ void Platform::Init()
 #endif
 
 #if HAS_12V_MONITOR
-	currentV12 = highestV12 = 0;
+	currentV12 = 0;
+	highestV12 = 0;
 	lowestV12 = 65535;
 
 	v12Filter.Init(0);
@@ -1607,7 +1612,8 @@ MinCurMax Platform::GetPowerVoltages(bool resetMinMax) noexcept
 	result.maximum = AdcReadingToVinVoltage(highestVin);
 	if (resetMinMax)
 	{
-		lowestVin = highestVin = currentVin;
+		lowestVin = currentVin;
+		highestVin = currentVin;
 	}
 	return result;
 }
@@ -1629,7 +1635,8 @@ MinCurMax Platform::GetV12Voltages(bool resetMinMax) noexcept
 	result.maximum = AdcReadingToV12Voltage(highestV12);
 	if (resetMinMax)
 	{
-		lowestV12 = highestV12 = currentV12;
+		lowestV12 = currentV12;
+		highestV12 = currentV12;
 	}
 	return result;
 }
