@@ -197,7 +197,7 @@ namespace Platform
 	inline float AdcReadingToVinVoltage(uint16_t adcVal) noexcept
 	{
 # ifdef EXP3HC
-		return adcVal * ((boardVariant == 1)
+		return adcVal * ((boardVariant >= 1)
 							? VinMonitorVoltageRange102AndLater/(1u << AnalogIn::AdcBits)
 								: VinMonitorVoltageRangePre102/(1u << AnalogIn::AdcBits)
 						);
