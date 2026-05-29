@@ -33,16 +33,7 @@ bool FopDt::SetParameters(const CanMessageHeaterModelV3& msg, const StringRef& r
 		basicModel = msg.basicModel;
 		maxPwm = msg.maxPwm;
 		inverted = msg.inverted;
-		pidParametersOverridden = msg.pidParametersOverridden;
-
-		if (msg.pidParametersOverridden)
-		{
-			SetRawPidParameters(msg.kP, msg.recipTi, msg.tD);
-		}
-		else
-		{
-			CalcPidConstants(100.0);
-		}
+		CalcPidConstants(100.0);
 		enabled = true;
 		return true;
 	}
@@ -62,7 +53,7 @@ void FopDt::SetDefaultModel(const HeaterModel& model) noexcept
 	basicModel.zero = 0;
 
 	maxPwm = 1.0;
-	inverted = pidParametersOverridden = false;
+	inverted =  false;
 	CalcPidConstants(basicModel.typicalTemperature);
 	enabled = true;
 }
@@ -77,20 +68,6 @@ M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const noexcept
 	rslt.kI = pp.recipTi * reportedKp;
 	rslt.kD = pp.tD * reportedKp;
 	return rslt;
-}
-
-// Override the PID parameters. We set both sets to the same parameters.
-void FopDt::SetM301PidParameters(const M301PidParameters& pp) noexcept
-{
-	SetRawPidParameters(pp.kP * (1.0/255.0), pp.kI/pp.kP, pp.kD/pp.kP);
-}
-
-void FopDt::SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcept
-{
-	loadChangeParams.kP = setpointChangeParams.kP = p_kP;
-	loadChangeParams.recipTi = setpointChangeParams.recipTi = p_recipTi;
-	loadChangeParams.tD = setpointChangeParams.tD = p_tD;
-	pidParametersOverridden = true;
 }
 
 /* Re-calculate the PID parameters.
@@ -125,19 +102,16 @@ void FopDt::SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcep
 
 void FopDt::CalcPidConstants(float targetTemperature) noexcept
 {
-	if (!pidParametersOverridden)
-	{
-		// Calculate the cooling rate per degC at this temperature. We assume the fan is at 20% speed.
-		const float temperatureRise = max<float>(targetTemperature - NormalAmbientTemperature, 1.0);		// avoid division by zero!
-		const float averageCoolingRatePerDegC = GetCoolingRate(temperatureRise, 0.2)/temperatureRise;
-		loadChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
-		loadChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.25)/(1.14 * powf(basicModel.deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
-		loadChangeParams.tD = basicModel.deadTime * 0.7;
+	// Calculate the cooling rate per degC at this temperature. We assume the fan is at 20% speed.
+	const float temperatureRise = max<float>(targetTemperature - NormalAmbientTemperature, 1.0);		// avoid division by zero!
+	const float averageCoolingRatePerDegC = GetCoolingRate(temperatureRise, 0.2)/temperatureRise;
+	loadChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
+	loadChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.25)/(1.14 * powf(basicModel.deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
+	loadChangeParams.tD = basicModel.deadTime * 0.7;
 
-		setpointChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
-		setpointChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.5)/powf(basicModel.deadTime, 0.5);			// Ti = timeConstant^0.5 * deadTime^0.5
-		setpointChangeParams.tD = basicModel.deadTime * 0.7;
-	}
+	setpointChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
+	setpointChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.5)/powf(basicModel.deadTime, 0.5);			// Ti = timeConstant^0.5 * deadTime^0.5
+	setpointChangeParams.tD = basicModel.deadTime * 0.7;
 }
 
 // Calculate the change in required heater PWM due to a change in fan PWM
