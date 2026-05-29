@@ -390,6 +390,18 @@ static DriversState driversState = DriversState::shutDown;
 static LocalDriversBitmap stallEndstopsEnabled;
 std::atomic<uint16_t> SmartDrivers::driverStallsToNotify(0);
 
+#ifdef EXP3HC
+
+Sercom *tmcSercom = nullptr;
+uint8_t tmcSercomNumber;
+
+#else
+
+#define tmcSercom			SERCOM_TMC51xx
+#define tmcSercomNumber 	SERCOM_TMC51xx_NUMBER
+
+#endif
+
 //----------------------------------------------------------------------------------------------------------------------------------
 // Private types and methods
 
@@ -1413,8 +1425,8 @@ static inline void DisableDma() noexcept
 static inline void ResetSpi() noexcept
 {
 #if TMC51xx_USES_SERCOM
-	SERCOM_TMC51xx->SPI.CTRLA.bit.ENABLE = 0;			// warning: this makes SCLK float!
-	while (SERCOM_TMC51xx->SPI.SYNCBUSY.bit.ENABLE) { }
+	tmcSercom->SPI.CTRLA.bit.ENABLE = 0;			// warning: this makes SCLK float!
+	while (tmcSercom->SPI.SYNCBUSY.bit.ENABLE) { }
 #elif TMC51xx_USES_USART
 	USART_TMC51xx->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
 #else
@@ -1426,10 +1438,10 @@ static inline void ResetSpi() noexcept
 static inline void EnableSpi() noexcept
 {
 #if TMC51xx_USES_SERCOM
-	SERCOM_TMC51xx->SPI.CTRLB.bit.RXEN = 1;
-	while (SERCOM_TMC51xx->SPI.SYNCBUSY.bit.CTRLB) { }
-	SERCOM_TMC51xx->SPI.CTRLA.bit.ENABLE = 1;
-	while (SERCOM_TMC51xx->SPI.SYNCBUSY.bit.ENABLE) { }
+	tmcSercom->SPI.CTRLB.bit.RXEN = 1;
+	while (tmcSercom->SPI.SYNCBUSY.bit.CTRLB) { }
+	tmcSercom->SPI.CTRLA.bit.ENABLE = 1;
+	while (tmcSercom->SPI.SYNCBUSY.bit.ENABLE) { }
 #elif TMC51xx_USES_USART
 	USART_TMC51xx->US_CR = US_CR_RXEN | US_CR_TXEN;		// enable transmitter and receiver
 #else
@@ -1690,13 +1702,34 @@ void SmartDrivers::Init() noexcept
 	SetPinMode(DriverSdModePin, OUTPUT_HIGH);									// on M23CL prototype boards high selects step/dir, low selects ramp generator
 #endif
 
-	SetPinFunction(TMC51xxMosiPin, TMC51xxMosiPinPeriphMode);
-	SetPinFunction(TMC51xxMisoPin, TMC51xxMisoPinPeriphMode);
-	SetPinFunction(TMC51xxSclkPin, TMC51xxSclkPinPeriphMode);
+#ifdef EXP3HC
+	// On the 3HC the SERCOM numbers and pins depend on whether we are using the original SAME51N19A processor or the SAME54P20A.
+	// The SAME51N19A does not have the SPI pins that we use on the SAME54P20A, therefore if we revert to using SAME51N19A we will have to revert the SPI SERCOM number.
+	// For this reason we test the processor device ID instead of the board version.
+	if ((REG_DSU_DID >> 16) == 0x6184)											// if SAME54
+	{
+		tmcSercomNumber = SERCOM_TMC51xx_NUMBER_SAME54;
+		SetPinFunction(TMC51xxMosiPin_SAME54, TMC51xxSpiPinPeriphMode_SAME54);
+		SetPinFunction(TMC51xxMisoPin_SAME54, TMC51xxSpiPinPeriphMode_SAME54);
+		SetPinFunction(TMC51xxSclkPin_SAME54, TMC51xxSpiPinPeriphMode_SAME54);
+	}
+	else
+	{
+		tmcSercomNumber = SERCOM_TMC51xx_NUMBER_SAME51;
+		SetPinFunction(TMC51xxMosiPin_SAME51, TMC51xxSpiPinPeriphMode_SAME51);
+		SetPinFunction(TMC51xxMisoPin_SAME51, TMC51xxSpiPinPeriphMode_SAME51);
+		SetPinFunction(TMC51xxSclkPin_SAME51, TMC51xxSpiPinPeriphMode_SAME51);
+	}
+	tmcSercom = Serial::GetSercom(tmcSercomNumber);
+#else
+	SetPinFunction(TMC51xxMosiPin, TMC51xxSpiPinPeriphMode);
+	SetPinFunction(TMC51xxMisoPin, TMC51xxSpiPinPeriphMode);
+	SetPinFunction(TMC51xxSclkPin, TMC51xxSpiPinPeriphMode);
+#endif
 
 	// Enable the clock to the USART or SPI
 #if SAME5x || SAMC21
-	Serial::EnableSercomClock(SERCOM_TMC51xx_NUMBER);
+	Serial::EnableSercomClock(tmcSercomNumber);
 #else
 	pmc_enable_periph_clk(ID_TMC51xx_SPI);
 #endif
@@ -1710,41 +1743,41 @@ void SmartDrivers::Init() noexcept
  	const uint32_t regCtrlC = 0;											// not 32-bit mode
 # endif
 
-	if (!hri_sercomspi_is_syncing(SERCOM_TMC51xx, SERCOM_SPI_SYNCBUSY_SWRST))
+	if (!hri_sercomspi_is_syncing(tmcSercom, SERCOM_SPI_SYNCBUSY_SWRST))
 	{
 		uint32_t mode = regCtrlA & SERCOM_SPI_CTRLA_MODE_Msk;
-		if (hri_sercomspi_get_CTRLA_reg(SERCOM_TMC51xx, SERCOM_SPI_CTRLA_ENABLE))
+		if (hri_sercomspi_get_CTRLA_reg(tmcSercom, SERCOM_SPI_CTRLA_ENABLE))
 		{
-			hri_sercomspi_clear_CTRLA_ENABLE_bit(SERCOM_TMC51xx);
-			hri_sercomspi_wait_for_sync(SERCOM_TMC51xx, SERCOM_SPI_SYNCBUSY_ENABLE);
+			hri_sercomspi_clear_CTRLA_ENABLE_bit(tmcSercom);
+			hri_sercomspi_wait_for_sync(tmcSercom, SERCOM_SPI_SYNCBUSY_ENABLE);
 		}
-		hri_sercomspi_write_CTRLA_reg(SERCOM_TMC51xx, SERCOM_SPI_CTRLA_SWRST | mode);
+		hri_sercomspi_write_CTRLA_reg(tmcSercom, SERCOM_SPI_CTRLA_SWRST | mode);
 	}
-	hri_sercomspi_wait_for_sync(SERCOM_TMC51xx, SERCOM_SPI_SYNCBUSY_SWRST);
+	hri_sercomspi_wait_for_sync(tmcSercom, SERCOM_SPI_SYNCBUSY_SWRST);
 
-	hri_sercomspi_write_CTRLA_reg(SERCOM_TMC51xx, regCtrlA);
-	hri_sercomspi_write_CTRLB_reg(SERCOM_TMC51xx, regCtrlB);
+	hri_sercomspi_write_CTRLA_reg(tmcSercom, regCtrlA);
+	hri_sercomspi_write_CTRLB_reg(tmcSercom, regCtrlB);
 # if !SAMC21
-	hri_sercomspi_write_CTRLC_reg(SERCOM_TMC51xx, regCtrlC);
+	hri_sercomspi_write_CTRLC_reg(tmcSercom, regCtrlC);
 # endif
-	hri_sercomspi_write_BAUD_reg(SERCOM_TMC51xx, SERCOM_SPI_BAUD_BAUD(Serial::SercomFastGclkFreq/(2 * DriversSpiClockFrequency) - 1));
-	hri_sercomspi_write_DBGCTRL_reg(SERCOM_TMC51xx, SERCOM_I2CM_DBGCTRL_DBGSTOP);			// baud rate generator is stopped when CPU halted by debugger
+	hri_sercomspi_write_BAUD_reg(tmcSercom, SERCOM_SPI_BAUD_BAUD(Serial::SercomFastGclkFreq/(2 * DriversSpiClockFrequency) - 1));
+	hri_sercomspi_write_DBGCTRL_reg(tmcSercom, SERCOM_I2CM_DBGCTRL_DBGSTOP);			// baud rate generator is stopped when CPU halted by debugger
 
 	// Set up the DMA descriptors
 	// We use separate write-back descriptors, so we only need to set this up once
 	DmacManager::SetBtctrl(DmacChanTmcRx, DMAC_BTCTRL_VALID | DMAC_BTCTRL_EVOSEL_DISABLE | DMAC_BTCTRL_BLOCKACT_INT | DMAC_BTCTRL_BEATSIZE_BYTE
 								| DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_STEPSIZE_X1);
-	DmacManager::SetSourceAddress(DmacChanTmcRx, &(SERCOM_TMC51xx->SPI.DATA.reg));
-	DmacManager::SetTriggerSourceSercomRx(DmacChanTmcRx, SERCOM_TMC51xx_NUMBER);
+	DmacManager::SetSourceAddress(DmacChanTmcRx, &(tmcSercom->SPI.DATA.reg));
+	DmacManager::SetTriggerSourceSercomRx(DmacChanTmcRx, tmcSercomNumber);
 
 	DmacManager::SetBtctrl(DmacChanTmcTx, DMAC_BTCTRL_VALID | DMAC_BTCTRL_EVOSEL_DISABLE | DMAC_BTCTRL_BLOCKACT_INT | DMAC_BTCTRL_BEATSIZE_BYTE
 								| DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_STEPSIZE_X1);
-	DmacManager::SetDestinationAddress(DmacChanTmcTx, &(SERCOM_TMC51xx->SPI.DATA.reg));
-	DmacManager::SetTriggerSourceSercomTx(DmacChanTmcTx, SERCOM_TMC51xx_NUMBER);
+	DmacManager::SetDestinationAddress(DmacChanTmcTx, &(tmcSercom->SPI.DATA.reg));
+	DmacManager::SetTriggerSourceSercomTx(DmacChanTmcTx, tmcSercomNumber);
 
 	DmacManager::SetInterruptCallback(DmacChanTmcRx, RxDmaCompleteCallback, CallbackParameter(0U));
 
-	SERCOM_TMC51xx->SPI.CTRLA.bit.ENABLE = 1;		// keep the SPI enabled all the time so that the SPCLK line is driven
+	tmcSercom->SPI.CTRLA.bit.ENABLE = 1;		// keep the SPI enabled all the time so that the SPCLK line is driven
 
 #elif TMC51xx_USES_USART
 	// Set USART_EXT_DRV in SPI mode, with data changing on the falling edge of the clock and captured on the rising edge
