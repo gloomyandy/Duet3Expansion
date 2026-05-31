@@ -90,15 +90,18 @@ constexpr Pin GlobalTmcEnablePin = PortBPin(23);
 constexpr Pin GlobalTmcCSPin = PortBPin(22);
 
 #define TMC_USES_SERCOM			1
-Sercom * const SERCOM_TMC = SERCOM0;
-constexpr uint8_t TmcSercomNumber = 0;
 
-constexpr Pin TMCMosiPin = PortBPin(24);
-constexpr GpioPinFunction TMCMosiPinPeriphMode = GpioPinFunction::C;
-constexpr Pin TMCSclkPin = PortBPin(25);
-constexpr GpioPinFunction TMCSclkPinPeriphMode = GpioPinFunction::C;
-constexpr Pin TMCMisoPin = PortCPin(25);
-constexpr GpioPinFunction TMCMisoPinPeriphMode = GpioPinFunction::C;
+constexpr uint8_t SERCOM_TMC51xx_NUMBER_SAME51 = 0;
+constexpr Pin TMC51xxMosiPin_SAME51 = PortBPin(24);
+constexpr Pin TMC51xxSclkPin_SAME51 = PortBPin(25);
+constexpr Pin TMC51xxMisoPin_SAME51 = PortCPin(25);
+constexpr GpioPinFunction TMC51xxSpiPinPeriphMode_SAME51 = GpioPinFunction::C;
+
+constexpr uint8_t SERCOM_TMC51xx_NUMBER_SAME54 = 2;
+constexpr Pin TMC51xxMosiPin_SAME54 = PortBPin(26);
+constexpr Pin TMC51xxSclkPin_SAME54 = PortBPin(27);
+constexpr Pin TMC51xxMisoPin_SAME54 = PortBPin(29);
+constexpr GpioPinFunction TMC51xxSpiPinPeriphMode_SAME54 = GpioPinFunction::C;
 
 PortGroup * const StepPio = &(PORT->Group[0]);		// the PIO that all the step pins are on
 constexpr Pin StepPins[NumDrivers] = { PortAPin(25), PortAPin(27), PortAPin(1) };
@@ -221,14 +224,14 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		sercom3cPad1,		SercomIo::none,		Nx,	"uart2.rx"		},	// PB21 also connected to io2_in
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB22 drivers CS
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB23 drivers ENN
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB24 spi0 mosi
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB25 spi0 clock
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB26 not on 100-pin chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB27 not on 100-pin chip
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB24 spi0 mosi (v1.02 and earlier)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB25 spi0 clock (v1.02 and earlier)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB26 not on 100-pin chip, spi0 mosi (v1.03)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB27 not on 100-pin chip, spi0 sclk (v1.03)
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB28 not on 100-pin chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB29 not on 100-pin chip
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB29 not on 100-pin chip, spi0 miso (v1.03)
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		14,	"ate.d2.diag0"	},	// PB30 driver2 diag0
-	{ TcOutput::none,	TccOutput::tcc4_1F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		15,	"io4.out"	},	// PB31
+	{ TcOutput::none,	TccOutput::tcc4_1F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		15,	"io4.out"		},	// PB31
 
 	// Port C
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_10,	SercomIo::none,		SercomIo::none,		0,	"io2.in"		},	// PC00 IO2 in
@@ -256,7 +259,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PC22 not on 100-pin chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PC23 not on 100-pin chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		8,	"io4.in"		},	// PC24
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PC25 spi0 mosi
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PC25 spi0 mosi (v1.02 and earlier)
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"ate.d1.diag1"	},	// PC26 driver1 diag1
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		11,	"ate.d1.diag0"	},	// PC27 driver1 diag0
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"ate.d1.dir"	},	// PC28 driver1 dir
