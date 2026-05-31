@@ -9,6 +9,7 @@
 #include <Platform/Platform.h>
 #include <Platform/TaskPriorities.h>
 #include <Movement/Move.h>
+#include <Movement/StepperDrivers/SmartDrivers.h>
 #include <Heating/Heat.h>
 #include <InputMonitors/InputMonitor.h>
 #include <CommandProcessing/CommandProcessor.h>
@@ -1034,10 +1035,18 @@ static inline void CheckSpinLockAndResetIfStuck() noexcept
 		Heat::SwitchOffAll();
 #if SUPPORT_DRIVERS
 # if SUPPORT_TMC51xx
+#  if TMC51xx_USES_SEPARATE_ENABLE
+		SmartDrivers::TurnDriversOff();
+#  else
 		IoPort::WriteDigital(GlobalTmc51xxEnablePin, true);
+#  endif
 # endif
 # if SUPPORT_TMC22xx
+#  if TMC22xx_HAS_ENABLE_PINS && TMC22xx_VARIABLE_NUM_DRIVERS
+		SmartDrivers::TurnDriversOff();
+#  else
 		IoPort::WriteDigital(GlobalTmc22xxEnablePin, true);
+#  endif
 # endif
 		moveInstance->DisableAllDrives();
 #endif
