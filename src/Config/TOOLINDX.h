@@ -54,11 +54,9 @@ constexpr uint8_t TmcSercomNumber = 0;
 Sercom * const SERCOM_TMC = SERCOM0;
 
 constexpr Pin TMCMosiPin = PortAPin(4);
-constexpr GpioPinFunction TMCMosiPinPeriphMode = GpioPinFunction::D;
 constexpr Pin TMCMisoPin = PortAPin(7);
-constexpr GpioPinFunction TMCMisoPinPeriphMode = GpioPinFunction::D;
 constexpr Pin TMCSclkPin = PortAPin(5);
-constexpr GpioPinFunction TMCSclkPinPeriphMode = GpioPinFunction::D;
+constexpr GpioPinFunction TMCSpiPinsPeriphMode = GpioPinFunction::D;
 
 constexpr uint32_t Tmc2240CurrentRange = 0x01;								// which current range we set the TMC2240 to (2A)
 constexpr uint32_t Tmc2240SlopeControl = 0x01;								// which slope control we set the TMC2240 to (200V/us)
@@ -204,11 +202,6 @@ const I2cParameters I2C0Params =
 	.irqPriority = NvicPriorityI2C
 };
 
-# define I2C0_HANDLER0		SERCOM3_0_Handler
-# define I2C0_HANDLER1		SERCOM3_1_Handler
-# define I2C0_HANDLER2		SERCOM3_2_Handler
-# define I2C0_HANDLER3		SERCOM3_3_Handler
-
 #endif
 
 #if NUM_I2C_CHANNELS >= 2
@@ -222,11 +215,6 @@ const I2cParameters I2C1Params =
 	.pinFunction = GpioPinFunction::D,
 	.irqPriority = NvicPriorityI2C
 };
-
-# define I2C1_HANDLER0		SERCOM4_0_Handler
-# define I2C1_HANDLER1		SERCOM4_1_Handler
-# define I2C1_HANDLER2		SERCOM4_2_Handler
-# define I2C1_HANDLER3		SERCOM4_3_Handler
 
 #endif
 

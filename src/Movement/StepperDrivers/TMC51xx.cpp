@@ -413,8 +413,8 @@ uint8_t tmcSercomNumber;
 
 #else
 
-#define tmcSercom			SERCOM_TMC51xx
-#define tmcSercomNumber 	SERCOM_TMC51xx_NUMBER
+#define tmcSercom			SERCOM_TMC
+#define tmcSercomNumber 	TmcSercomNumber
 
 #endif
 
@@ -1406,10 +1406,10 @@ static inline void DisableDma() noexcept
 
 static inline void ResetSpi() noexcept
 {
-#if TMC51xx_USES_SERCOM
+#if TMC_USES_SERCOM
 	tmcSercom->SPI.CTRLA.bit.ENABLE = 0;			// warning: this makes SCLK float!
 	while (tmcSercom->SPI.SYNCBUSY.bit.ENABLE) { }
-#elif TMC51xx_USES_USART
+#elif TMC_USES_USART
 	USART_TMC51xx->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
 #else
 	SPI_TMC->SPI_CR = SPI_CR_SPIDIS;				// disable the SPI
@@ -1419,12 +1419,12 @@ static inline void ResetSpi() noexcept
 
 static inline void EnableSpi() noexcept
 {
-#if TMC51xx_USES_SERCOM
+#if TMC_USES_SERCOM
 	tmcSercom->SPI.CTRLB.bit.RXEN = 1;
 	while (tmcSercom->SPI.SYNCBUSY.bit.CTRLB) { }
 	tmcSercom->SPI.CTRLA.bit.ENABLE = 1;
 	while (tmcSercom->SPI.SYNCBUSY.bit.ENABLE) { }
-#elif TMC51xx_USES_USART
+#elif TMC_USES_USART
 	USART_TMC51xx->US_CR = US_CR_RXEN | US_CR_TXEN;		// enable transmitter and receiver
 #else
 	SPI_TMC->SPI_CR = SPI_CR_SPIEN;					// enable SPI
@@ -1704,9 +1704,9 @@ void SmartDrivers::Init() noexcept
 	}
 	tmcSercom = Serial::GetSercom(tmcSercomNumber);
 #else
-	SetPinFunction(TMC51xxMosiPin, TMC51xxSpiPinPeriphMode);
-	SetPinFunction(TMC51xxMisoPin, TMC51xxSpiPinPeriphMode);
-	SetPinFunction(TMC51xxSclkPin, TMC51xxSpiPinPeriphMode);
+	SetPinFunction(TMCMosiPin, TMCSpiPinsPeriphMode);
+	SetPinFunction(TMCMisoPin, TMCSpiPinsPeriphMode);
+	SetPinFunction(TMCSclkPin, TMCSpiPinsPeriphMode);
 #endif
 
 	// Enable the clock to the USART or SPI
