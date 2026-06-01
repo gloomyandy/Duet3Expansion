@@ -63,7 +63,6 @@ public:
 	}
 
 private:
-	float GetCoolingRate(float temperatureRise, float fanPwm) const noexcept;
 	static float EstimateMaxTemperatureRise(float hr, float cr, float cre) noexcept;
 
 	HeaterModel basicModel;
