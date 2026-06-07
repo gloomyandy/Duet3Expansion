@@ -6,7 +6,9 @@
  */
 
 #include "FOPDT.h"
-#include "CanMessageFormats.h"
+#include <CanMessageFormats.h>
+
+#define SQRT_FAN_SCALING		0		// 1 = fan cooling rate assumed to scale with square root of fan PWM, 0 = assumed to scale linearly
 
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
 FopDt::FopDt() noexcept
@@ -18,7 +20,7 @@ FopDt::FopDt() noexcept
 bool FopDt::SetParameters(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept
 {
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
-	const char *const err =
+	const char *_ecv_array const err =
 		  (msg.basicModel.heatingRate/msg.basicModel.basicCoolingRate < 0.1) ? "estimated temperature rise too small"					// minimum 10C temperature rise (same as with earlier heater model)
 		: (msg.basicModel.fanCoolingRate < 0.0) ? "fan reduces cooling rate"
 		: (msg.basicModel.coolingRateExponent < 1.0 || msg.basicModel.coolingRateExponent > 1.6) ? "cooling rate exponent out of range"
@@ -31,16 +33,7 @@ bool FopDt::SetParameters(const CanMessageHeaterModelV3& msg, const StringRef& r
 		basicModel = msg.basicModel;
 		maxPwm = msg.maxPwm;
 		inverted = msg.inverted;
-		pidParametersOverridden = msg.pidParametersOverridden;
-
-		if (msg.pidParametersOverridden)
-		{
-			SetRawPidParameters(msg.kP, msg.recipTi, msg.tD);
-		}
-		else
-		{
-			CalcPidConstants(100.0);
-		}
+		CalcPidConstants(100.0);
 		enabled = true;
 		return true;
 	}
@@ -60,13 +53,13 @@ void FopDt::SetDefaultModel(const HeaterModel& model) noexcept
 	basicModel.zero = 0;
 
 	maxPwm = 1.0;
-	inverted = pidParametersOverridden = false;
+	inverted =  false;
 	CalcPidConstants(basicModel.typicalTemperature);
 	enabled = true;
 }
 
 // Get the PID parameters as reported by M301
-M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const
+M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const noexcept
 {
 	M301PidParameters rslt;
 	const PidParameters& pp = GetPidParameters(forLoadChange);
@@ -75,20 +68,6 @@ M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const
 	rslt.kI = pp.recipTi * reportedKp;
 	rslt.kD = pp.tD * reportedKp;
 	return rslt;
-}
-
-// Override the PID parameters. We set both sets to the same parameters.
-void FopDt::SetM301PidParameters(const M301PidParameters& pp) noexcept
-{
-	SetRawPidParameters(pp.kP * (1.0/255.0), pp.kI/pp.kP, pp.kD/pp.kP);
-}
-
-void FopDt::SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcept
-{
-	loadChangeParams.kP = setpointChangeParams.kP = p_kP;
-	loadChangeParams.recipTi = setpointChangeParams.recipTi = p_recipTi;
-	loadChangeParams.tD = setpointChangeParams.tD = p_tD;
-	pidParametersOverridden = true;
 }
 
 /* Re-calculate the PID parameters.
@@ -123,55 +102,26 @@ void FopDt::SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcep
 
 void FopDt::CalcPidConstants(float targetTemperature) noexcept
 {
-	if (!pidParametersOverridden)
-	{
-		// Calculate the cooling rate per degC at this temperature. We assume the fan is at 20% speed.
-		const float temperatureRise = max<float>(targetTemperature - NormalAmbientTemperature, 1.0);		// avoid division by zero!
-		const float averageCoolingRatePerDegC = GetCoolingRate(temperatureRise, 0.2)/temperatureRise;
-		loadChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
-		loadChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.25)/(1.14 * powf(basicModel.deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
-		loadChangeParams.tD = basicModel.deadTime * 0.7;
+	// Calculate the cooling rate per degC at this temperature. We assume the fan is at 20% speed.
+	const float temperatureRise = max<float>(targetTemperature - NormalAmbientTemperature, 1.0);		// avoid division by zero!
+	const float averageCoolingRatePerDegC = basicModel.GetTotalCoolingRate(temperatureRise, 0.2)/temperatureRise;
+	loadChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
+	loadChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.25)/(1.14 * powf(basicModel.deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
+	loadChangeParams.tD = basicModel.deadTime * 0.7;
 
-		setpointChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
-		setpointChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.5)/powf(basicModel.deadTime, 0.5);			// Ti = timeConstant^0.5 * deadTime^0.5
-		setpointChangeParams.tD = basicModel.deadTime * 0.7;
-	}
+	setpointChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
+	setpointChangeParams.recipTi = fastSqrtf(averageCoolingRatePerDegC/basicModel.deadTime);			// Ti = timeConstant^0.5 * deadTime^0.5
+	setpointChangeParams.tD = basicModel.deadTime * 0.7;
 }
 
-// Adjust the actual heater PWM for supply voltage
-float FopDt::CorrectPwmForVoltage(float requiredPwm, float actualVoltage) const noexcept
+// Calculate the change in required heater PWM due to a change in fan PWM
+float FopDt::GetPwmCorrectionForFan(float temperatureRise, float oldFanPwm, float newFanPwm) const noexcept
 {
-	if (requiredPwm < maxPwm && basicModel.standardVoltage >= 10.0 && actualVoltage >= 10.0)
-	{
-		requiredPwm *= fsquare(basicModel.standardVoltage/actualVoltage);
-	}
-	return min<float>(requiredPwm, maxPwm);
-}
-
-float FopDt::GetPwmCorrectionForFan(float temperatureRise, float fanPwmChange) const noexcept
-{
-	return temperatureRise * 0.01 * basicModel.fanCoolingRate * fanPwmChange / basicModel.heatingRate;
-}
-
-// Calculate the expected cooling rate for a given temperature rise above ambient
-float FopDt::GetCoolingRate(float temperatureRise, float fanPwm) const noexcept
-{
-	temperatureRise *= 0.01;
-	// If the temperature rise is negative then we must not try to raise it to a non-integral power!
-	const float adjustedTemperatureRise = (temperatureRise < 0.0) ? -powf(-temperatureRise, basicModel.coolingRateExponent) : powf(temperatureRise, basicModel.coolingRateExponent);
-	return basicModel.basicCoolingRate * adjustedTemperatureRise + temperatureRise * basicModel.fanCoolingRate * fanPwm;
-}
-
-// Get an estimate of the expected heating rate at the specified temperature rise and PWM. The result may be negative.
-float FopDt::GetNetHeatingRate(float temperatureRise, float fanPwm, float heaterPwm) const noexcept
-{
-	return basicModel.heatingRate * heaterPwm - GetCoolingRate(temperatureRise, fanPwm);
-}
-
-// Get an estimate of the heater PWM required to maintain a specified temperature
-float FopDt::EstimateRequiredPwm(float temperatureRise, float fanPwm) const noexcept
-{
-	return GetCoolingRate(temperatureRise, fanPwm)/basicModel.heatingRate;
+#if SQRT_FAN_SCALING
+	return temperatureRise * 0.01 * basicModel.fanCoolingRate * (fastSqrtf(newFanPwm) - fastSqrtf(oldFanPwm)) / basicModel.heatingRate;
+#else
+	return temperatureRise * 0.01 * basicModel.fanCoolingRate * (newFanPwm - oldFanPwm) / basicModel.heatingRate;
+#endif
 }
 
 /*static*/ float FopDt::EstimateMaxTemperatureRise(float hr, float cr, float cre) noexcept

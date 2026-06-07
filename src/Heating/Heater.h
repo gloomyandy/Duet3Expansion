@@ -27,8 +27,9 @@ class CanMessageBuffer;
 class Heater
 {
 public:
-	Heater(unsigned int num) noexcept;
+	explicit Heater(unsigned int num) noexcept;
 	virtual ~Heater();
+	Heater(const Heater &_ecv_from) = delete;
 
 	// Configuration methods
 	virtual GCodeResult ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) noexcept = 0;
@@ -76,6 +77,7 @@ protected:
 	void SetSensorNumber(int sn) noexcept { sensorNumber = sn; }
 	float GetMaxTemperatureExcursion() const noexcept { return maxTempExcursion; }
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
+	float GetMaxPwmFaultTime() const noexcept { return maxPwmFaultTime; }
 	uint32_t GetMaxBadTemperatureCount() const noexcept { return maxBadTemperatureCount; }
 	float GetTargetTemperature() const noexcept { return requestedTemperature; }
 	float GetHighestTemperatureLimit() const noexcept;
@@ -87,6 +89,7 @@ protected:
 
 	FopDt model;
 	float maxHeatingFaultTime = DefaultMaxHeatingFaultTime;				// how long a heater fault is permitted to persist before a heater fault is raised
+	float maxPwmFaultTime = DefaultMaxPwmFaultTime;						// how long a heater pwm fault is permitted to persist before a heater fault is raised
 
 private:
 	unsigned int heaterNumber;

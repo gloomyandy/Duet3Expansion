@@ -637,6 +637,7 @@ void CommandProcessor::Spin()
 		GCodeResult rslt;
 		CanRequestId requestId;
 		uint8_t extra = 0;
+		const bool requestUsedBrs = buf->useBrs;
 
 		switch (id)
 		{
@@ -936,6 +937,7 @@ void CommandProcessor::Spin()
 			// Re-use the message buffer to send a standard reply
 			const CanAddress srcAddress = buf->id.Src();
 			CanMessageStandardReply *msg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
+			buf->useBrs = requestUsedBrs;
 			msg->resultCode = (uint16_t)rslt;
 			msg->extra = extra;
 			const size_t totalLength = reply.strlen();

@@ -23,6 +23,7 @@ namespace CanInterface
 
 	CanAddress GetCanAddress() noexcept;
 	CanAddress GetCurrentMasterAddress() noexcept;
+	void ReportCanTiming(const StringRef& reply) noexcept;
 	GCodeResult ChangeAddressAndDataRate(const CanMessageSetAddressAndNormalTiming& msg, const StringRef& reply) noexcept;
 	bool GetCanMessage(CanMessageBuffer *buf) noexcept;
 	CanMessageBuffer *GetCanMove(uint32_t timeout) noexcept;
@@ -30,6 +31,7 @@ namespace CanInterface
 	bool SendAsync(CanMessageBuffer *buf) noexcept;
 	bool SendAndFree(CanMessageBuffer *buf) noexcept;
 	CanMessageBuffer *GetCanCommand(uint32_t timeout) noexcept;
+	void CheckBrs(const CanMessageTimeSync& msg) noexcept;
 
 #if !USE_SERIAL_DEBUG
 	bool DebugPutc(char c) noexcept;
