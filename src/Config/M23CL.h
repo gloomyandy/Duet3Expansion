@@ -56,11 +56,9 @@ Sercom * const SERCOM_TMC51xx = SERCOM0;
 constexpr uint8_t SERCOM_TMC51xx_NUMBER = 0;
 
 constexpr Pin TMC51xxMosiPin = PortAPin(8);
-constexpr GpioPinFunction TMC51xxMosiPinPeriphMode = GpioPinFunction::C;
 constexpr Pin TMC51xxSclkPin = PortAPin(9);
-constexpr GpioPinFunction TMC51xxSclkPinPeriphMode = GpioPinFunction::C;
 constexpr Pin TMC51xxMisoPin = PortAPin(11);
-constexpr GpioPinFunction TMC51xxMisoPinPeriphMode = GpioPinFunction::C;
+constexpr GpioPinFunction TMC51xxSpiPinPeriphMode = GpioPinFunction::C;
 
 PortGroup * const StepPio = &(PORT->Group[1]);				// the PIO that all the step pins are on (port B)
 constexpr Pin StepPins[NumDrivers] = { PortBPin(23) };
