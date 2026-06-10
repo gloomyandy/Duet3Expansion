@@ -143,4 +143,29 @@ GCodeResult Heater::SetTemperature(const CanMessageSetHeaterTemperatureV1& msg, 
 	return GCodeResult::ok;
 }
 
+float Heater::GetMaxPwmFaultTime() const noexcept
+{
+	switch (function)
+	{
+	case HeaterFunction::tool:
+		return max<float>(DefaultToolHeaterPwmFaultTime, 5 * model.GetDeadTime());
+	default:										// this case should not happen
+	case HeaterFunction::bed:
+		return max<float>(DefaultBedHeaterPwmFaultTime, 5 * model.GetDeadTime());
+	}
+}
+
+float Heater::GetPwmFaultLevel() const noexcept
+{
+	switch (function)
+	{
+	case HeaterFunction::tool:
+		return DefaultToolHeaterPwmFaultLevel;
+	case HeaterFunction::bed:
+		return DefaultBedHeaterPwmFaultLevel;
+	default:
+		return 1e3;									// a very high number to suppress fault detection
+	}
+}
+
 // End

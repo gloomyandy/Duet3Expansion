@@ -21,10 +21,10 @@ class CanMessageHeaterTuningReport;
 
 class LocalHeater : public Heater
 {
-	static const size_t NumPreviousTemperatures = 4; // How many samples we average the temperature derivative over
+	static const size_t NumPreviousTemperatures = 4; 			// How many samples we average the temperature derivative over
 
 public:
-	LocalHeater(unsigned int heaterNum);
+	explicit LocalHeater(unsigned int heaterNum) noexcept;
 	~LocalHeater();
 
 	GCodeResult ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) noexcept override;
@@ -43,7 +43,7 @@ public:
 	bool IsCustom() const noexcept override;					// returns true if this is a custom heater with unusual default model parameters
 	void SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept override;	// set and return the default heater model
 
-	static bool GetTuningCycleData(CanMessageHeaterTuningReport& msg);	// get a heater tuning cycle report, if we have one
+	static bool GetTuningCycleData(CanMessageHeaterTuningReport& msg) noexcept;	// get a heater tuning cycle report, if we have one
 
 protected:
 	void ResetHeater() noexcept override;
