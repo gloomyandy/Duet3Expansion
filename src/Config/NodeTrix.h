@@ -68,7 +68,7 @@ constexpr float MaxMotorCurrent = DriverFullScaleCurrent;
 
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
-PortGroup * const StepPio = &(PORT->Group[1]);								// the PIO that all the step pins are on
+//PortGroup * const StepPio = &(PORT->Group[1]);								// the PIO that all the step pins are on
 constexpr Pin StepPins[NumDrivers] = { PortDPin(2) };
 constexpr Pin DirectionPins[NumDrivers] = { PortCPin(7) };
 constexpr Pin DriverDiagPins[NumDrivers] = { PortCPin(13) };
@@ -190,7 +190,7 @@ constexpr GpioPinFunction TmcClockPinPeriphMode = GpioPinFunction::AF0;
 #if NUM_I2C_CHANNELS >= 1
 
 // I2C0 using pins PA22,23 (SERCOM 3)
-const I2cParameters I2C0Params =
+constexpr I2cParameters I2C0Params =
 {
 	.instanceNumber = 2,
 	.sclPin = PortBPin(10),
@@ -258,99 +258,84 @@ constexpr GpioPinFunction NeopixelOutPinFunction = GpioPinFunction::AF4;	// TIM1
 // Table of pin functions that we are allowed to use
 constexpr PinDescription PinTable[] =
 {
-	//	TC					TCC					ADC					SERCOM in			SERCOM out	  Exint PinName
+	//	Timer					ADC					Exint PinName
 	// Port A
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		0,	"pcfan.tach"	},	// PA00 print cooling fan tacho
-	{ TcOutput::tc2_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pcfan"			},	// PA01 print cooling fan out
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_0,	SercomIo::none,		SercomIo::none,		Nx,	"ate.vin"		},	// PA02 VIN monitor
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_1,	SercomIo::none,		SercomIo::none,		Nx, nullptr			},	// PA03 board type
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA04 SPI0 MOSI (Stepper, sercom0)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA05 SPI0 SCK
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA06 heater voltage feedback (also on PB05)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA07 SPI0 MISO
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"led"			},	// PA08 NP out (QSPI D0)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		9,	"io0.in"		},	// PA09 endstop
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA10 SPI0_CS
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_11,	SercomIo::none,		SercomIo::none,		Nx,	"ate.envtemp"	},	// PA11 hot end surround thermistor
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr 		},	// PA12 I2C1 SCL (sercom4)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA13 I2C1 SDA
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA14 crystal
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA15 crystal
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA16 SPI1 MOSI (ADC, sercom1)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA17 SPI1 SCLK
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA18 SPI1 CS
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx, nullptr			},	// PA19 SPI1 MISO
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		4,	"hsfan.tach"	},	// PA20 heatsink fan tacho
-	{ TcOutput::none,	TccOutput::tcc1_5F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"hsfan"			},	// PA21 heatsink fan
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA22 I2C0 SCL (sercom3)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA23 I2C0 SDA
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA24 USB DN
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA25 USB DP
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA26 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		11,	nullptr			},	// PA27 accelerometer interrupt
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA28 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA29 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA30 swclk and LED0
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PA31 swdio and LED1
+	{ TimerOutput::none,		AdcInput::adc12_0,	Nx,	"temp3"			},	// PA00 thermistor 3
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PA01 ads132m02 drdy
+	{ TimerOutput::tim15_ch1,	AdcInput::none,		Nx,	"led"			},	// PA02 NP out via timer 15
+	{ TimerOutput::none,		AdcInput::adc12_15,	Nx, nullptr			},	// PA03 board type
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PA04 driver CS
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PA05 driver SCK
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PA06 driver MISO
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PA07 driver MOSI
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PA08 driver TMC clock
+	{ TimerOutput::tim1_ch2,	AdcInput::none,		Nx,	"out0"			},	// PA09 OUT0
+	{ TimerOutput::none,		AdcInput::none,		Nx,	"out2.tach"		},	// PA10
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PA11 USB D-
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr 		},	// PA12 USB D+
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PA13 SWDIO, ACT LED
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PA14 SWCLK, STATUS LED
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PA15 adc131m02 CS
 
 	// Port B
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB00 SPI2_CS0 (AS5047D,sercom5)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB01 SPI2 MISO
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx, nullptr			},	// PB02 SPI2 MOSI
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx, nullptr			},	// PB03 SPI2 SCK
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB04 Driver ENN
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_7,	SercomIo::none,		SercomIo::none,		Nx,	"ate.heaterv"	},	// PB05 Heater voltage feedback (also on PA06)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_8,	SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB06 Heater current
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		7,	nullptr			},	// PB07 Driver diag
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_2,	SercomIo::none,		SercomIo::none,		Nx,	"boardtemp"		},	// PB08 board thermistor
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_3,	SercomIo::none,		SercomIo::none,		Nx,	"coiltemp"		},	// PB09 LDC coil temperature
-	{ TcOutput::none,	TccOutput::tcc0_4F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		10,	nullptr			},	// PB10 LDC interrupt
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB11 LDC1612 clock (GCLK5)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB12 Driver step
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB13 Driver clock (GCLK7)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB14 CAN1 Tx
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB15 CAN1 Rx
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB16 ADC clock (GCLK2)
-	{ TcOutput::none,	TccOutput::tcc3_1F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB17 CCL_OUT3 for heater FET drive
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB18 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB19 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB20 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB21 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		6,	nullptr			},	// PB22 ADC !DRDY
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB23 driver DIR and BOOTLOADER_RESET jumper
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB24 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB25 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB26 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB27 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB28 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB29 not on chip
-	{ TcOutput::none,	TccOutput::tcc4_0F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pb30"			},	// PB30 unused
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr			},	// PB31 USB/!CAN select
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PB00 LDC interrupt
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PB01 AS5047D CS
+	{ TimerOutput::lptim_ch1,	AdcInput::none,		Nx, "io0.out"		},	// PB02 IO0 out
+	{ TimerOutput::none,		AdcInput::none,		Nx, "io2.in"		},	// PB03 IO2 in
+	{ TimerOutput::none,		AdcInput::none,		Nx,	"out1.tach"		},	// PB04 OUT1 tacho input
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PB05 accelerometer interrupt
+	{ TimerOutput::tim4_ch1,	AdcInput::none,		Nx,	nullptr			},	// PB06 ADC clock via timer 4
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PB07 CAN1 Tx
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PB08 CAN1 Rx
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PB09 not on chip
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PB10 I2C SCL
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PB11 not on chip
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PB12 I2C SDA
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PB13 shared SPI SCK
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PB14 shared SPI MISO
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PB15 shared SPI SCK
+
+	// Port C
+	{ TimerOutput::none,		AdcInput::adc12_10,	Nx,	"temp0"			},	// PC00 thermistor 0
+	{ TimerOutput::none,		AdcInput::adc12_11,	Nx,	"temp1"			},	// PC01 thermistor 1
+	{ TimerOutput::none,		AdcInput::adc12_12,	Nx, "temp2"			},	// PC02 thermistor 2
+	{ TimerOutput::none,		AdcInput::adc12_13,	Nx, nullptr			},	// PC03 VIN monitor
+	{ TimerOutput::tim2_ch4,	AdcInput::none,		Nx,	"out2"			},	// PC04 OUT2
+	{ TimerOutput::none,		AdcInput::adc12_8,	Nx,	nullptr			},	// PC05 heater current
+	{ TimerOutput::tim8_ch1,	AdcInput::none,		Nx,	"out1"			},	// PC06 OUT1
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PC07 driver dir
+	{ TimerOutput::none,		AdcInput::none,		8,	"io0.in"		},	// PC08 IO0 in
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PC09 LDC1612 clock
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PC10 loadcell SPI SCK
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PC11 loadcell SPI MISO
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PC12 loadcell SPI MOSI
+	{ TimerOutput::none,		AdcInput::none,		13,	nullptr			},	// PC13 driver diag
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PC14 driver enable
+	{ TimerOutput::none,		AdcInput::none,		14,	"io1.in"		},	// PC15 IO1 in
+
+	// Port D
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PD00 not on chip
+	{ TimerOutput::none,		AdcInput::none,		Nx,	nullptr			},	// PD01 not on chip
+	{ TimerOutput::none,		AdcInput::none,		Nx, nullptr			},	// PD02 driver step
 
 	// Virtual pins
 #if SUPPORT_LIS3DH
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"i2c.lis3dh,i2c.lis2dw,i2c.accelerometer"	},	// LIS3DH or LIS2DW12 sensor connected via I2C
+	{ TimerOutput::none,		AdcInput::none,		Nx,	"i2c.lis3dh,i2c.lis2dw,i2c.accelerometer"	},	// LIS3DH or LIS2DW12 sensor connected via I2C
 #endif
 #if SUPPORT_LDC1612
-	{ TcOutput::none,	TccOutput::none,	AdcInput::ldc1612,	SercomIo::none,		SercomIo::none,		Nx,	"i2c.ldc1612"	},	// LDC1612 sensor connected via I2C
+	{ TimerOutput::none,		AdcInput::ldc1612,	Nx,	"i2c.ldc1612"	},	// LDC1612 sensor connected via I2C
 #endif
 #if SUPPORT_AS5601
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"i2c.mfm"		},	// AS5601+TCA6408A filament monitor connected via I2C
-#endif
-#if SUPPORT_INDUCTIVE_HEATER
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx, "nozzleheat"	},	// inductive heater
+	{ TimerOutput::none,		AdcInput::none,		Nx,	"i2c.mfm"		},	// AS5601+TCA6408A filament monitor connected via I2C
 #endif
 #if SUPPORT_ADS131M02
-	{ TcOutput::none,	TccOutput::none,	AdcInput::ads131m02, SercomIo::none,	SercomIo::none,		Nx, "loadcell"		},	// load cell connected to ADA131M02
-#endif
-#if SUPPORT_LP5817
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx, "ate.lp5817"	},	// LP5817
+	{ TimerOutput::none,		AdcInput::ads131m02, Nx, "loadcell"		},	// load cell connected to ADA131M02
 #endif
 };
 
 constexpr size_t NumPins = ARRAY_SIZE(PinTable);
-constexpr size_t NumRealPins = 32 + 32;			// 32 pins on port A (some missing), 32 on port B (some missing)
-constexpr size_t NumVirtualPins = SUPPORT_LIS3DH + SUPPORT_LDC1612 + SUPPORT_AS5601 + SUPPORT_INDUCTIVE_HEATER + SUPPORT_ADS131M02 + SUPPORT_LP5817;
+constexpr size_t NumRealPins = (3 * 16) + 3;							// 16 pins each on ports A thru C, 3 pins on port D
+constexpr size_t NumVirtualPins = SUPPORT_LIS3DH + SUPPORT_LDC1612 + SUPPORT_AS5601 + SUPPORT_ADS131M02;
 
 static_assert(NumPins == NumRealPins + NumVirtualPins);
 
@@ -368,10 +353,10 @@ constexpr Pin LP5817Pin = NumRealPins + SUPPORT_LIS3DH + SUPPORT_LDC1612 + SUPPO
 #endif
 
 // Timer/counter used to generate step pulses and other sub-millisecond timings
-constexpr unsigned int StepTcNumber = 0;
-TcCount32 * const StepTc = &(TC0->COUNT32);
-constexpr IRQn StepTcIRQn = TC0_IRQn;
-#define STEP_TC_HANDLER			TC0_Handler
+//constexpr unsigned int StepTcNumber = 0;
+//TcCount32 * const StepTc = &(TC0->COUNT32);
+//constexpr IRQn StepTcIRQn = TC0_IRQn;
+//#define STEP_TC_HANDLER			TC0_Handler
 
 // Available UART ports
 #define NUM_ASYNC_PORTS		0
