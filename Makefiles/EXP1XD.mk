@@ -55,6 +55,7 @@ SRC_DIRS := \
 C_INCLUDES := \
 	-I$(WORKSPACE)/Qfplib-M0-full \
 	-I$(WORKSPACE)/CoreN2G \
+	-I$(WORKSPACE)/RRFLibraries \
 	-I$(WORKSPACE)/FreeRTOS \
 	-I$(CURDIR)/src \
 	-I$(WORKSPACE)/CoreN2G/src \
@@ -65,6 +66,7 @@ C_INCLUDES := \
 CXX_INCLUDES := \
 	-I$(WORKSPACE)/Qfplib-M0-full \
 	-I$(WORKSPACE)/CoreN2G \
+	-I$(WORKSPACE)/RRFLibraries \
 	-I$(WORKSPACE)/FreeRTOS \
 	-I$(CURDIR)/src \
 	-I$(WORKSPACE)/CoreN2G/src \
