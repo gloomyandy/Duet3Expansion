@@ -68,7 +68,7 @@ constexpr float MaxMotorCurrent = DriverFullScaleCurrent;
 
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
 
-//PortGroup * const StepPio = &(PORT->Group[1]);								// the PIO that all the step pins are on
+GPIO_TypeDef * const StepPort = GPIOD_NS;									// the port that all the step pins are on
 constexpr Pin StepPins[NumDrivers] = { PortDPin(2) };
 constexpr Pin DirectionPins[NumDrivers] = { PortCPin(7) };
 constexpr Pin DriverDiagPins[NumDrivers] = { PortCPin(13) };
@@ -155,8 +155,7 @@ constexpr float ThermistorSeriesR[NumThermistorInputs] = { 2200, 2200, 2200, 390
 constexpr float ThermistorR25[NumThermistorInputs] = { 100000, 100000, 100000, 10000 };
 constexpr float ThermistorBeta[NumThermistorInputs] = { 4725.0, 4725.0, 4725.0, 3425.0 };
 constexpr float ThermistorShC[NumThermistorInputs] = { 7.060e-8, 7.060e-8, 7.060e-8, 1.68e-7 };
-
-//constexpr float DefaultThermistorSeriesR = 3900;							// needed for initialisation but not actually used
+constexpr float DefaultThermistorSeriesR = 2200.0;							// needed by initialisation but not actually used
 
 #if SUPPORT_CLOSED_LOOP
 

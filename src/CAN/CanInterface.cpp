@@ -32,7 +32,7 @@
 
 #if RP2040
 # include <Hardware/NonVolatileMemory.h>
-#else
+#elif SAME5x || SAMC21
 # include <hpl_user_area.h>
 #endif
 
@@ -69,7 +69,10 @@ static bool enabled = false;
 constexpr CanDevice::Config Can0Config =
 {
 	.dataSize = 64,									// must be one of: 8, 12, 16, 20, 24, 32, 48, 64
-#if RP2040
+#if STM32H5
+	.numTxBuffers = 0,								// STM32H5 has no dedicated transmit buffers
+	.txFifoSize = 3,								// STM32H5 has fixed size FIFOs
+#elif RP2040
 	.numTxBuffers = 0,								// RP2040 implementation doesn't support transmit buffers
 	.txFifo0Size = 16,
 	.txFifo1Size = 2,								// RP2040 supports multiple transmit fifos so use another one instead of dedicated transmit buffers
@@ -77,24 +80,34 @@ constexpr CanDevice::Config Can0Config =
 	.numTxBuffers = 2,								// we allocate 2 buffers to sending urgent messages in case we need to send more than one in quick succession
 	.txFifoSize = 16,								// enough to send a 512-byte response broken into 60-byte fragments, plus status messages
 #endif
-#if RP2040
+#if RP2040 || STM32H5
 	.numRxBuffers = 0,								// RP2040 implementation doesn't support receive buffers
 #else
 	.numRxBuffers = 1,								// we use a dedicated buffer for the clock sync messages
 #endif
 #if SAMC21
 	.rxFifo0Size = 16,								// save RAM on SAMC21
+#elif STM32H5
+	.rxFifo0Size = 3,								// STM32H5 has fixed size FIFOs
 #else
 	.rxFifo0Size = 32,
 #endif
-#if RP2040
+#if STM32H5
+	.rxFifo1Size = 3,								// STM32H5 has fixed size FIFOs
+#elif RP2040
 	.rxFifo1Size = 1,								// we use FIFO 1 instead of a dedicated receive buffer to receive CAN clock messages
 #else
 	.rxFifo1Size = 0,								// we don't use FIFO 1
 #endif
+#if STM32H5
+	.numShortFilterElements = 28,					// we don't use 11-bit addresses
+	.numExtendedFilterElements = 8,
+	.txEventFifoSize = 3							// we don't need transmit events
+#else
 	.numShortFilterElements = 0,					// we don't use 11-bit addresses
 	.numExtendedFilterElements = 3,
 	.txEventFifoSize = 0							// we don't need transmit events
+#endif
 };
 
 static_assert(Can0Config.IsValid());
