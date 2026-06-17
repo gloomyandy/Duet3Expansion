@@ -112,8 +112,18 @@ constexpr CanDevice::Config Can0Config =
 
 static_assert(Can0Config.IsValid());
 
+#if STM32H5
+
+// STM32H5 has fixed CAN buffer layout to nothing needed here
+
+#elif STM32H7
+
+static uint32_t *canMemory = reinterpret_cast<uint32_t *>(FDCAN_SRAM_BASE);
+
 // CAN buffer memory must be in the first 64Kb of RAM (SAME5x) or in non-cached RAM (SAME70), so put it in its own segment
 static uint32_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (".CanMessage")));
+
+#endif
 
 // CanClock task
 constexpr size_t CanClockTaskStackWords =
@@ -260,7 +270,19 @@ void CanInterface::Init(CanAddress defaultBoardAddress, unsigned int whichPort, 
 #else
 								0, whichPort,
 #endif
-								Can0Config, can0Memory, timing, nullptr);
+								Can0Config,
+#if STM32H5
+								reinterpret_cast<uint32_t *>(SRAMCAN_BASE_NS + 0x0350 * whichPort),			// STM32H5 has fixed message buffer allocation
+#elif STM32H7
+								canMemory,
+#else
+								can0Memory,
+#endif
+								timing, nullptr);
+
+#if STM32H7
+	canMemory += Can0Config.GetMemorySize();					// advance memory pointer in case we create another CAN device
+#endif
 
 #ifdef SAMMYC21
 	SetPinMode(CanStandbyPin, OUTPUT_LOW);						// take the CAN drivers out of standby
