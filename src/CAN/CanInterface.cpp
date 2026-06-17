@@ -120,6 +120,8 @@ static_assert(Can0Config.IsValid());
 
 static uint32_t *canMemory = reinterpret_cast<uint32_t *>(FDCAN_SRAM_BASE);
 
+#else
+
 // CAN buffer memory must be in the first 64Kb of RAM (SAME5x) or in non-cached RAM (SAME70), so put it in its own segment
 static uint32_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (".CanMessage")));
 
