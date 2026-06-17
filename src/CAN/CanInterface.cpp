@@ -114,7 +114,7 @@ static_assert(Can0Config.IsValid());
 
 #if STM32H5
 
-// STM32H5 has fixed CAN buffer layout to nothing needed here
+// STM32H5 has fixed CAN buffer layout so nothing needed here
 
 #elif STM32H7
 
