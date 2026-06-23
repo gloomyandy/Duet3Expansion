@@ -369,7 +369,9 @@ void CanInterface::CheckBrs(const CanMessageTimeSync& msg) noexcept
 		CanTiming timing;
 		can0dev->GetLocalCanTiming(timing);
 		timing.EnableBrs(msg.fastDataRate + 1);
-		timing.SetDataSamplePointDirect(msg.tseg1Minus1);
+		// the value of msg.tseg1Minus1 currently assumes a clock speed of 48MHz. We may be running on a different
+		// clock so we need to adjust it.
+		timing.SetDataSamplePointDirect((msg.tseg1Minus1*(CanTiming::ClockFrequency >> 8)/(48000000 >> 8)));
 		can0dev->ChangeLocalCanTiming(timing);
 		fastDataRate = msg.fastDataRate;
 		dTseg1MinusOne = msg.tseg1Minus1;
