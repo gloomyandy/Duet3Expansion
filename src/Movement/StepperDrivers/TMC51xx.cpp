@@ -1323,9 +1323,11 @@ static bool setCoilCurrents = false;
 
 #if !TMC_USES_SHARED_SPI
 static volatile DmaCallbackReason dmaFinishedReason;
+#endif
 
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-
+// Stage a new XDIRECT (0x2D) coil-current value to be written on the next SPI cycle.
+// Used by both the DMA (SAME5x) and the shared-SPI (RP) transports.
 inline bool TmcDriverState::SetXdirect(uint32_t regVal) noexcept
 {
 	if (regVal != phaseToSet)
@@ -1336,9 +1338,9 @@ inline bool TmcDriverState::SetXdirect(uint32_t regVal) noexcept
 	}
 	return false;
 }
-
 #endif
 
+#if !TMC_USES_SHARED_SPI
 static void InitialiseDMA() noexcept
 {
 #if SAME70
@@ -1746,6 +1748,17 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			fastDigitalWriteHigh(Tmc51xxCSPins[i]);			// set CS high
 		}
 # else
+#  if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		if (setCoilCurrents)
+		{
+			// In direct mode, write the staged coil currents (XDIRECT) first. We don't need the response so it
+			// goes to tmcAltRcvData. CS is toggled per transaction, which gives the chip the required CS-high gap.
+			setCoilCurrents = false;
+			fastDigitalWriteLow(GlobalTmcCSPin);
+			spiDevice->TransceivePacket(const_cast<uint8_t*>(tmcPhaseSendData), const_cast<uint8_t*>(tmcAltRcvData), sizeof(tmcPhaseSendData));
+			fastDigitalWriteHigh(GlobalTmcCSPin);
+		}
+#  endif
 		fastDigitalWriteLow(GlobalTmcCSPin);			// set CS low
 		spiDevice->TransceivePacket(const_cast<uint8_t*>(tmcSendData), const_cast<uint8_t*>(tmcRcvData), sizeof(tmcSendData));
 		fastDigitalWriteHigh(GlobalTmcCSPin);			// set CS high
@@ -1807,6 +1820,32 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 #endif
 		}
 #endif
+# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+#  if TMC_USES_SHARED_SPI
+		// Blocking shared-SPI transport (RP): the transfer above completed synchronously, so we pace the
+		// closed-loop / phase-stepping iterations here at a regular interval (DriversDirectSleepMicroseconds).
+		// On the DMA (SAME5x) transport this inter-cycle pacing is done in RxDmaCompleteCallback instead.
+		TaskBase::ClearCurrentTaskNotifyCount(NotifyIndices::Tmc);
+		{
+			bool runNow;
+			{
+				AtomicCriticalSectionLocker lock;
+				lastWakeupTime += DriversDirectSleepClocks;
+				runNow = tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime);			// true if that wake time has already passed
+				if (runNow)
+				{
+					lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled();
+				}
+			}
+			if (!runNow)
+			{
+				(void)TaskBase::TakeIndexed(NotifyIndices::Tmc, TransferTimeout);	// wait for the timer callback
+			}
+		}
+#  endif
+# else
+		delay(1);
+# endif
 	}
 }
 
