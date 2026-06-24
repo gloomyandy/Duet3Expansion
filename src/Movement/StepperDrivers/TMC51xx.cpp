@@ -337,6 +337,9 @@ constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
 
 #if TMC_TYPE == 2240
 // ADC registers (TMC2240-specific)
+constexpr uint8_t REGNUM_ADC_VSUPPLY = 0x50;					// ADC_VSUPPLY_AIN register: supply voltage (and AIN) ADC readings
+constexpr uint32_t ADC_VSUPPLY_MASK = 0x1FFF;					// supply-voltage ADC reading is in bits 12:0
+constexpr float ADC_VSUPPLY_TO_VOLTS = 0.009732f;				// VS = ADC_VSUPPLY * 9.732mV (TMC2240 datasheet)
 constexpr uint8_t REGNUM_ADC_TEMP = 0x51;
 constexpr uint32_t ADC_TEMP_SHIFT = 0;
 constexpr uint32_t ADC_TEMP_MASK = 0x01FFF << ADC_TEMP_SHIFT;	// ADC temperature reading
@@ -484,6 +487,8 @@ public:
 	float CalculateCurrent() const noexcept;				// calculate what current the driver is actually using based on register values
 #if TMC_TYPE == 2240
 	float GetDriverTemperature() const noexcept;			// get driver temperature from ADC_TEMP register
+	float GetSupplyVoltage() const noexcept;				// get supply voltage from the ADC_VSUPPLY register
+	float GetPeakSupplyVoltage(bool clear) noexcept;		// get the peak supply voltage seen since the last call, optionally clearing it
 #endif
 
 	static void TransferTimedOut() noexcept { ++numTimeouts; }
@@ -529,7 +534,7 @@ private:
 	static const uint8_t WriteRegNumbers[NumWriteRegisters];	// the register numbers that we write to
 
 #if TMC_TYPE == 2240
-	static constexpr unsigned int NumReadRegisters = 6;		// the number of registers that we read from (includes ADC_TEMP)
+	static constexpr unsigned int NumReadRegisters = 7;		// the number of registers that we read from (includes ADC_TEMP and ADC_VSUPPLY)
 #else
 	static constexpr unsigned int NumReadRegisters = 5;		// the number of registers that we read from
 #endif
@@ -543,6 +548,7 @@ private:
 	static constexpr unsigned int ReadPwmAuto = 4;
 #if TMC_TYPE == 2240
 	static constexpr unsigned int ReadAdcTemp = 5;			// ADC_TEMP register for TMC2240
+	static constexpr unsigned int ReadAdcVsupply = 6;		// ADC_VSUPPLY register for TMC2240
 #endif
 	static constexpr unsigned int ReadSpecial = NumReadRegisters;
 
@@ -568,6 +574,9 @@ private:
 	uint16_t numReads, numWrites;							// how many successful reads and writes we had
 	uint16_t standstillCurrentFraction;						// divide this by 256 to get the motor current standstill fraction
 
+#if TMC_TYPE == 2240
+	volatile uint16_t maxVsupplyAdc = 0;					// peak ADC_VSUPPLY since last reported, for overvoltage monitoring
+#endif
 	static uint16_t numTimeouts;							// how many times a transfer timed out
 
 	uint8_t driverNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
@@ -609,7 +618,8 @@ const uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 	REGNUM_PWM_SCALE,
 	REGNUM_PWM_AUTO,
 #if TMC_TYPE == 2240
-	REGNUM_ADC_TEMP
+	REGNUM_ADC_TEMP,
+	REGNUM_ADC_VSUPPLY
 #endif
 };
 
@@ -966,6 +976,19 @@ float TmcDriverState::GetDriverTemperature() const noexcept
 	// TMC2240 datasheet: temperature = (ADC_TEMP - 2038) / 7.7
 	return (float)(((readRegisters[ReadAdcTemp] & ADC_TEMP_MASK) >> ADC_TEMP_SHIFT) - 2038) / 7.7f;
 }
+
+float TmcDriverState::GetSupplyVoltage() const noexcept
+{
+	// TMC2240 datasheet: VS = ADC_VSUPPLY * 9.732mV
+	return (float)(readRegisters[ReadAdcVsupply] & ADC_VSUPPLY_MASK) * ADC_VSUPPLY_TO_VOLTS;
+}
+
+float TmcDriverState::GetPeakSupplyVoltage(bool clear) noexcept
+{
+	const float v = (float)maxVsupplyAdc * ADC_VSUPPLY_TO_VOLTS;
+	if (clear) { maxVsupplyAdc = 0; }
+	return v;
+}
 #endif
 
 void TmcDriverState::UpdateCurrent() noexcept
@@ -1071,6 +1094,7 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 	reply.catf(", mspos %u, reads %u, writes %u timeouts %u", (unsigned int)(readRegisters[ReadMsCnt] & 1023), numReads, numWrites, numTimeouts);
 #if TMC_TYPE == 2240
 	reply.catf(", temp %.1fC", (double)GetDriverTemperature());
+	reply.catf(", VS %.1fV peak %.1fV", (double)GetSupplyVoltage(), (double)GetPeakSupplyVoltage(true));
 #endif
 	numReads = numWrites = 0;
 	if (clearGlobalStats)
@@ -1226,6 +1250,13 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 		else
 		{
 			readRegisters[previousRegIndexRequested] = regVal;
+#if TMC_TYPE == 2240
+			if (previousRegIndexRequested == ReadAdcVsupply)
+			{
+				const uint16_t v = (uint16_t)(regVal & ADC_VSUPPLY_MASK);
+				if (v > maxVsupplyAdc) { maxVsupplyAdc = v; }		// peak-hold the supply voltage to catch decel/regen transients
+			}
+#endif
 			if (previousRegIndexRequested == ReadSpecial)
 			{
 				specialReadRegisterNumber = 0xFE;
