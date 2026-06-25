@@ -61,6 +61,10 @@
 # include "RP2350Test.h"
 #elif defined(MNBN17)
 # include "MnBN17r1_5.h"
+#elif defined(TOOLINDX)
+# include "TOOLINDX.h"
+#elif defined(NODETRIX)
+# include "NodeTrix.h"
 #else
 # error Board type not defined
 #endif
@@ -137,7 +141,7 @@ constexpr size_t NumDrivers = 0;
 #endif
 
 #ifndef SUPPORT_PIO_NEOPIXEL
-# define SUPPORT_PIO_NEOPIXEL			(SUPPORT_LED_STRIPS && RP2040)
+# define SUPPORT_PIO_NEOPIXEL			(SUPPORT_LED_STRIPS && RPXXXX)
 #endif
 
 #ifndef SUPPORT_LDC1612

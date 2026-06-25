@@ -77,7 +77,8 @@ protected:
 	void SetSensorNumber(int sn) noexcept { sensorNumber = sn; }
 	float GetMaxTemperatureExcursion() const noexcept { return maxTempExcursion; }
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
-	float GetMaxPwmFaultTime() const noexcept { return maxPwmFaultTime; }
+	float GetPwmFaultLevel() const noexcept;
+	float GetMaxPwmFaultTime() const noexcept;
 	uint32_t GetMaxBadTemperatureCount() const noexcept { return maxBadTemperatureCount; }
 	float GetTargetTemperature() const noexcept { return requestedTemperature; }
 	float GetHighestTemperatureLimit() const noexcept;
@@ -89,7 +90,6 @@ protected:
 
 	FopDt model;
 	float maxHeatingFaultTime = DefaultMaxHeatingFaultTime;				// how long a heater fault is permitted to persist before a heater fault is raised
-	float maxPwmFaultTime = DefaultMaxPwmFaultTime;						// how long a heater pwm fault is permitted to persist before a heater fault is raised
 
 private:
 	unsigned int heaterNumber;
