@@ -974,7 +974,11 @@ float TmcDriverState::CalculateCurrent() const noexcept
 float TmcDriverState::GetDriverTemperature() const noexcept
 {
 	// TMC2240 datasheet: temperature = (ADC_TEMP - 2038) / 7.7
-	return (float)(((readRegisters[ReadAdcTemp] & ADC_TEMP_MASK) >> ADC_TEMP_SHIFT) - 2038) / 7.7f;
+	// Cast to signed before subtracting: the masked ADC value is unsigned, so when ADC_TEMP reads
+	// below 2038 (e.g. the chip is unpowered/unread and the register is 0) the subtraction would
+	// otherwise underflow and report a nonsense temperature.
+	const int32_t adcTemp = (int32_t)((readRegisters[ReadAdcTemp] & ADC_TEMP_MASK) >> ADC_TEMP_SHIFT);
+	return (float)(adcTemp - 2038) / 7.7f;
 }
 
 float TmcDriverState::GetSupplyVoltage() const noexcept
