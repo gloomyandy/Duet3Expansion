@@ -91,11 +91,13 @@ void NonVolatileMemory::EnsureWritten() noexcept
 		state = NvmState::clean;
 	}
 #elif RPXXXX
+	// Each page has its own flash sector, at the same offset that EnsureRead reads from
+	const uint32_t pageFlashOffset = NvmPage0Offset - (FlashSectorSize * (unsigned int)page);
 	if (state == NvmState::eraseAndWriteNeeded)
 	{
 		DisableCore1Processing();
 		IrqDisable();
-		flash_range_erase(NvmPage0Offset, FlashSectorSize);
+		flash_range_erase(pageFlashOffset, FlashSectorSize);
 		IrqEnable();
 		//TODO allocate a new page in the sector, if there is one, else erase the sector
 		state = NvmState::writeNeeded;
@@ -106,7 +108,7 @@ void NonVolatileMemory::EnsureWritten() noexcept
 	{
 		DisableCore1Processing();
 		IrqDisable();
-		flash_range_program(NvmPage0Offset, (uint8_t *)&buffer, 512);
+		flash_range_program(pageFlashOffset, (uint8_t *)&buffer, 512);
 		IrqEnable();
 		state = NvmState::clean;
 		EnableCore1Processing();
