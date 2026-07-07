@@ -6,6 +6,7 @@
  */
 
 #include "CanInterface.h"
+
 #include "CanMessageQueue.h"
 
 #include <CanSettings.h>
@@ -178,6 +179,7 @@ static CanMessageQueue PendingMoves;
 static CanMessageQueue PendingCommands;
 
 static Mutex txFifoMutex;
+static unsigned int rxBufferStarvationCount = 0;		// times the receiver loop found the buffer pool empty
 
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept;
@@ -708,9 +710,9 @@ void CanInterface::Diagnostics(const StringRef& reply) noexcept
 					errs.rxFifoOverlow[0], errs.rxFifoOverlow[1], errs.wrongMessageType, errs.badStuffing, errs.stuffCountParity, errs.wrongStuffCount,
 						errs.wrongCrc, errs.missingCrcDelimiter, errs.noAck, errs.missingEofBit1, errs.missingEofBit2, errs.tooLateToAck);
 #else
-	reply.lcatf("CAN messages queued %u, send timeouts %u, received %u, lost %u, ignored %u, errs %u, boc %u, free buffers %u, min %u, error reg %" PRIx32,
+	reply.lcatf("CAN messages queued %u, send timeouts %u, received %u, lost %u, ignored %u, errs %u, boc %u, free buffers %u, min %u, rx starve %u, error reg %" PRIx32,
 					stats.messagesQueuedForSending, txTimeouts, stats.messagesReceived, stats.messagesLost, messagesIgnored, stats.protocolErrors, stats.busOffCount,
-					CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers(), can0dev->GetErrorRegister());
+					CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers(), rxBufferStarvationCount, can0dev->GetErrorRegister());
 #endif
 	txTimeouts = 0;
 	messagesIgnored = 0;
@@ -900,10 +902,19 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 		}
 		else
 		{
-			// Get a buffer
+			// Get a buffer. Don't block unboundedly on the buffer pool: if the pool is exhausted (seen when
+			// another part of the system saturates and replies back up in the transmit path), a receiver
+			// blocked forever here makes the board permanently unresponsive to CAN. Poll instead, and count
+			// the starvation so that it is visible in the diagnostics.
 			if (buf == nullptr)
 			{
-				buf = CanMessageBuffer::BlockingAllocate();
+				buf = CanMessageBuffer::Allocate();
+				if (buf == nullptr)
+				{
+					++rxBufferStarvationCount;
+					delay(10);
+					continue;
+				}
 			}
 
 			if (can0dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo0, TaskBase::TimeoutUnlimited, buf))
