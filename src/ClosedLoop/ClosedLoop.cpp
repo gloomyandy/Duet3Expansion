@@ -282,6 +282,18 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 
 	if (seenT)
 	{
+		// Diverges from upstream: own the encoder SPI bus for the whole delete/create/initialise sequence.
+		// The phase step control loop polls encoder->TakeReading() from the TMC task as soon as 'encoder'
+		// is non-null, guarded only by a try-lock on this bus mutex. Owning the bus here turns those polls
+		// into harmless failed try-locks; without it, the control loop can be inside the encoder object
+		// when we delete it below (or when the Init() error path deletes it) - a use-after-free that can
+		// take the whole board down. The mutex is recursive, so encoder->Init() can still take it from here.
+		if (!Platform::GetSharedSpi(Encoder_SpiChannel).Take(500))
+		{
+			reply.copy("encoder SPI bus is busy");
+			return GCodeResult::error;
+		}
+
 		// We set the mode to open loop earlier in this function so no need to do it here
 		DeleteObject(encoder);
 
@@ -294,6 +306,7 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 				magEncoderType = MagneticEncoderType(magneticEncoderTypeString.c_str());
 				if (!magEncoderType.IsValid())
 				{
+					Platform::GetSharedSpi(Encoder_SpiChannel).Release();
 					reply.printf("unrecognised magnetic encoder type '%s'", magneticEncoderTypeString.c_str());
 					return GCodeResult::error;
 				}
@@ -326,9 +339,10 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 #endif
 		}
 
+		GCodeResult rslt = GCodeResult::ok;
 		if (encoder != nullptr)
 		{
-			const GCodeResult rslt = encoder->Init(reply);
+			rslt = encoder->Init(reply);
 			if (rslt <= GCodeResult::warning)
 			{
 				tuningError = encoder->MinimalTuningNeeded();
@@ -338,13 +352,15 @@ GCodeResult ClosedLoop::ProcessM569Point1(CanMessageGenericParser& parser, const
 			{
 				DeleteObject(encoder);
 			}
-			return rslt;
 		}
 		else if (tempEncoderType != EncoderType::none)
 		{
+			Platform::GetSharedSpi(Encoder_SpiChannel).Release();
 			reply.printf("unsupported encoder type %u", (unsigned int)tempEncoderType);
 			return GCodeResult::error;
 		}
+		Platform::GetSharedSpi(Encoder_SpiChannel).Release();
+		return rslt;
 	}
 
 	return GCodeResult::ok;
