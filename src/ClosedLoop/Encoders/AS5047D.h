@@ -43,6 +43,8 @@ private:
 	};
 
 	bool DoSpiTransaction(uint16_t command, uint16_t& response) noexcept;
+
+	bool anglePipelined = false;						// true if the previous SPI frame requested ANGLECOM, so the next response carries it
 	bool GetDiagnosticRegisters(DiagnosticRegisters& regs) noexcept;
 };
 

@@ -130,15 +130,30 @@ bool AS5047D::GetRawReading() noexcept
 	if (spi.Select(0))			// get the mutex and set the clock rate
 	{
 		uint16_t response;
-		const bool ok = DoSpiTransaction(AddParityBit(AS5047ReadCommand | AS5047RegAngleCom), response)
+		bool ok;
+		if (anglePipelined)
+		{
+			// Streaming read: the previous frame also requested ANGLECOM, so this frame's response carries
+			// it and simultaneously requests the next one. This halves the SPI time of the read that the
+			// control loop performs every iteration; the returned angle is the one latched at the previous
+			// frame, a constant one-loop-period latency. Any other transaction (diagnostics, initialisation)
+			// clears anglePipelined, which forces the two-frame sequence below to re-prime the pipeline.
+			ok = DoSpiTransaction(AddParityBit(AS5047ReadCommand | AS5047RegAngleCom), response);
+		}
+		else
+		{
+			ok = DoSpiTransaction(AddParityBit(AS5047ReadCommand | AS5047RegAngleCom), response)
 					 && (DelayCycles(GetCurrentCycles(), Clocks350ns), 				// need at least 350ns CS high time
-						 DoSpiTransaction(AddParityBit(AS5047ReadCommand | AS5047RegNop), response));
+						 DoSpiTransaction(AddParityBit(AS5047ReadCommand | AS5047RegAngleCom), response));
+			anglePipelined = ok;
+		}
 		spi.Deselect();			// release the mutex
 		if (ok && CheckResponse(response))
 		{
 			rawReading = response & 0x3FFF;
 			return true;
 		}
+		anglePipelined = false;										// after any error, re-prime next time
 	}
 
 	return false;
@@ -149,6 +164,7 @@ bool AS5047D::GetDiagnosticRegisters(DiagnosticRegisters& regs) noexcept
 {
 	if (spi.Select(0))			// get the mutex and set the clock rate
 	{
+		anglePipelined = false;										// these transactions interrupt the streaming angle read pipeline
 		const bool ok = DoSpiTransaction(AddParityBit(AS5047ReadCommand | AS5047RegDiag), regs.diag)
 					 && (DelayCycles(GetCurrentCycles(), Clocks350ns), 				// need at least 350ns CS high time
 						 DoSpiTransaction(AddParityBit(AS5047ReadCommand | AS5047RegMag), regs.diag))
@@ -263,11 +279,12 @@ void AS5047D::AppendStatus(const StringRef& reply) noexcept
 // Leave at least 350ns between multiple calls to this function.
 bool AS5047D::DoSpiTransaction(uint16_t command, uint16_t &response) noexcept
 {
-	IoPort::WriteDigital(csPin, false);
+	// This runs in the control loop at the loop rate, so use the fast pin accessors for CS
+	fastDigitalWriteLow(csPin);
 	const uint8_t txBuffer[2] = { (uint8_t)(command >> 8), (uint8_t)(command & 0xFF) };
 	uint8_t rxBuffer[2];
 	const bool ok = spi.TransceivePacket(txBuffer, rxBuffer, 2);
-	IoPort::WriteDigital(csPin, true);
+	fastDigitalWriteHigh(csPin);
 	response = ((uint16_t)rxBuffer[0]) << 8 | rxBuffer[1];
 	return ok;
 }
