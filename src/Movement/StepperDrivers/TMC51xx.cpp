@@ -1880,7 +1880,23 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 				runNow = tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime);			// true if that wake time has already passed
 				if (runNow)
 				{
-					lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled();
+					// The deadline has already passed. If we are only slightly late (interrupt/preemption
+					// jitter), run immediately and keep the deadline sequence, so that jitter does not cost
+					// loop rate. If we are grossly late the loop is genuinely overrunning: skip forward and
+					// schedule one full period from now instead of running back-to-back, so that overload
+					// degrades the loop rate gracefully instead of making the task CPU-bound. A saturated
+					// TMC task starves every lower-priority task (in closed loop mode it runs above the CAN
+					// receive task), which ends in CAN buffer exhaustion and an unresponsive board.
+					const uint32_t lateness = StepTimer::GetTimerTicksWhenInterruptsDisabled() - lastWakeupTime;
+					if (lateness >= DriversDirectSleepClocks/2)
+					{
+						lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled() + DriversDirectSleepClocks;
+						runNow = tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime);
+						if (runNow)
+						{
+							lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled();	// should not happen; give up and run now
+						}
+					}
 				}
 			}
 			if (!runNow)
