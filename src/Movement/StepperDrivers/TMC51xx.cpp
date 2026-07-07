@@ -1319,6 +1319,11 @@ static uint32_t lastWakeupTime = 0;
 static StepTimer tmcTimer;
 static bool needToSetCoilCurrents = false;
 static bool setCoilCurrents = false;
+#if TMC_USES_SHARED_SPI
+static bool lastTransferHadXdirect = false;					// whether the last transfer sent an XDIRECT frame before the register frame
+static bool tmcRegRequestOutstanding = false;				// whether a register request has been sent whose response has not yet been captured
+static bool tmcHarvestReady = false;						// whether the last transfer's first frame captured the response to an outstanding request
+#endif
 #endif
 
 #if !TMC_USES_SHARED_SPI
@@ -1593,8 +1598,27 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 			AtomicCriticalSectionLocker lock;
 			if (tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime))
 			{
-				lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled();
-				tmcTask.GiveFromISR(NotifyIndices::Tmc);
+				// The deadline has already passed. If only slightly late (interrupt/preemption jitter), wake
+				// immediately and keep the deadline sequence so that jitter does not cost loop rate. If
+				// grossly late the loop is genuinely overrunning: skip forward and schedule one full period
+				// from now instead of running back-to-back, so that overload degrades the loop rate
+				// gracefully instead of making the task CPU-bound. A saturated TMC task starves every
+				// lower-priority task (in closed loop mode it runs above the CAN receive task), which ends
+				// in CAN buffer exhaustion and an unresponsive board.
+				const uint32_t lateness = StepTimer::GetTimerTicksWhenInterruptsDisabled() - lastWakeupTime;
+				if (lateness < DriversDirectSleepClocks/2)
+				{
+					tmcTask.GiveFromISR(NotifyIndices::Tmc);
+				}
+				else
+				{
+					lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled() + DriversDirectSleepClocks;
+					if (tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime))
+					{
+						lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled();	// should not happen; give up and wake now
+						tmcTask.GiveFromISR(NotifyIndices::Tmc);
+					}
+				}
 			}
 		}
 	}
@@ -1641,7 +1665,22 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		{
 			// Handle the read response - data comes out of the drivers in reverse driver order
 #if SINGLE_DRIVER
+# if TMC_USES_SHARED_SPI && (SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP)
+			// Each TMC datagram returns the data requested by the previous datagram, so the response to a
+			// register request is captured by the first frame of the following transfer, and is available
+			// here one cycle after that transfer. If that transfer began with an XDIRECT coil-current frame
+			// the response is in the XDIRECT frame's receive buffer; without this distinction the readings
+			// (VS, temperature, DRV_STATUS etc.) intermittently read as zero whenever the coil currents are
+			// being updated. Register frames are also decimated while streaming coil currents, so a valid
+			// response is not present after every transfer.
+			if (tmcHarvestReady)
+			{
+				driverStates[0].TransferSucceeded(const_cast<const uint8_t*>((lastTransferHadXdirect) ? tmcAltRcvData : tmcRcvData));
+				tmcHarvestReady = false;
+			}
+# else
 			driverStates[0].TransferSucceeded(const_cast<const uint8_t*>(tmcRcvData));
+# endif
 			if (driversState == DriversState::initialising && !driverStates[0].UpdatePending())
 			{
 				fastDigitalWriteLow(GlobalTmcEnablePin);
@@ -1691,8 +1730,6 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 
 		// Set up data to write. Driver 0 is the first in the SPI chain so we must write them in reverse order.
 #if SINGLE_DRIVER
-		driverStates[0].GetSpiCommand(const_cast<uint8_t*>(tmcSendData));
-
 # if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		if (needToSetCoilCurrents)
 		{
@@ -1702,6 +1739,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			setCoilCurrents = true;
 		}
 # endif
+		driverStates[0].GetSpiCommand(const_cast<uint8_t*>(tmcSendData));
 #else
 		volatile uint8_t *writeBufPtr = tmcSendData + 5 * numTmcDrivers;
 		for (size_t i = 0; i < numTmcDrivers; ++i)
@@ -1749,15 +1787,23 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		}
 # else
 #  if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		lastTransferHadXdirect = setCoilCurrents;
 		if (setCoilCurrents)
 		{
-			// In direct mode, write the staged coil currents (XDIRECT) first. We don't need the response so it
-			// goes to tmcAltRcvData. CS is toggled per transaction, which gives the chip the required CS-high gap.
+			// In direct mode, write the staged coil currents (XDIRECT) first. Its response (which carries the
+			// data requested by the previous register frame - see the harvesting code) goes to tmcAltRcvData.
+			// CS is toggled per transaction, which gives the chip the required CS-high gap.
 			setCoilCurrents = false;
 			fastDigitalWriteLow(GlobalTmcCSPin);
 			spiDevice->TransceivePacket(const_cast<uint8_t*>(tmcPhaseSendData), const_cast<uint8_t*>(tmcAltRcvData), sizeof(tmcPhaseSendData));
 			fastDigitalWriteHigh(GlobalTmcCSPin);
 		}
+#  endif
+#  if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		// A register request goes out in every transfer; its response is captured by the following
+		// transfer's first frame and harvested one iteration later
+		tmcHarvestReady = tmcRegRequestOutstanding;
+		tmcRegRequestOutstanding = true;
 #  endif
 		fastDigitalWriteLow(GlobalTmcCSPin);			// set CS low
 		spiDevice->TransceivePacket(const_cast<uint8_t*>(tmcSendData), const_cast<uint8_t*>(tmcRcvData), sizeof(tmcSendData));
