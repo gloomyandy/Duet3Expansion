@@ -93,21 +93,25 @@ void NonVolatileMemory::EnsureWritten() noexcept
 #elif RPXXXX
 	// Each page has its own flash sector, at the same offset that EnsureRead reads from
 	const uint32_t pageFlashOffset = NvmPage0Offset - (FlashSectorSize * (unsigned int)page);
-	if (state == NvmState::eraseAndWriteNeeded)
+	if (state >= NvmState::writeNeeded)
 	{
+		// Park core 1 once for the whole erase+program sequence (it must not execute from flash while
+		// we erase or program). Kick the watchdog immediately before each flash operation: interrupts
+		// are disabled during it so the tick cannot feed the watchdog, and a worst-case sector erase
+		// (~400ms) would otherwise eat most of the watchdog window.
 		DisableCore1Processing();
-		IrqDisable();
-		flash_range_erase(pageFlashOffset, FlashSectorSize);
-		IrqEnable();
-		//TODO allocate a new page in the sector, if there is one, else erase the sector
-		state = NvmState::writeNeeded;
-		EnableCore1Processing();
-	}
+		if (state == NvmState::eraseAndWriteNeeded)
+		{
+			IrqDisable();
+			WatchdogReset();
+			flash_range_erase(pageFlashOffset, FlashSectorSize);
+			IrqEnable();
+			//TODO allocate a new page in the sector, if there is one, else erase the sector
+			state = NvmState::writeNeeded;
+		}
 
-	if (state == NvmState::writeNeeded)
-	{
-		DisableCore1Processing();
 		IrqDisable();
+		WatchdogReset();
 		flash_range_program(pageFlashOffset, (uint8_t *)&buffer, 512);
 		IrqEnable();
 		state = NvmState::clean;
