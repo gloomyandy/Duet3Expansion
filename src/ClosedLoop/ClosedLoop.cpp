@@ -125,9 +125,8 @@ void ClosedLoop::SetMotorPhase(uint16_t phase, float magnitude) noexcept
 # endif
 }
 
-#if SAME5x
+#if SAME5x	// only SAME5x boards generate an external TMC clock via a GCLK; on other boards (e.g. the TMC2240) the driver uses its internal oscillator
 static_assert(TmcClockGclkNumber == GclkNumApp1 || TmcClockGclkNumber == GclkNumApp2);	// check that this GCLK number has been reserved for application use
-#endif
 
 static void GenerateTmcClock()
 {
@@ -142,11 +141,14 @@ static void GenerateTmcClock()
 #endif
 	SmartDrivers::SetTmcExternalClock(15000000);
 }
+#endif
 
 // Module initialisation
 /*static*/ void ClosedLoop::Init() noexcept
 {
+#if SAME5x
 	GenerateTmcClock();															// generate the clock for the TMC2160A
+#endif
 }
 
 void ClosedLoop::InitInstance() noexcept
