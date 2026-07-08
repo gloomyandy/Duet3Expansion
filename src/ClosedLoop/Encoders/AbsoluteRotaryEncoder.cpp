@@ -7,6 +7,8 @@
 
 #include "AbsoluteRotaryEncoder.h"
 
+#include <cmath>
+
 #if SUPPORT_CLOSED_LOOP
 
 #include <Hardware/NonVolatileMemory.h>
@@ -110,6 +112,20 @@ void AbsoluteRotaryEncoder::LoadLUT(TuningErrors& tuningNeeded) noexcept
 	NonVolatileMemory mem(NvmPage::closedLoop);
 	if (mem.GetClosedLoopCalibrationDataValid())
 	{
+		// Diverges from upstream: reject stored harmonic data that is not finite. Flash slots that were
+		// never written read as 0xFFFFFFFF, which is a float NaN; if the page is flagged valid but holds
+		// such data (e.g. after a partial or unrelated write), PopulateLUT spends tens of seconds in
+		// non-converging NaN arithmetic on the CAN task, making the board appear dead. Treat as uncalibrated.
+		// Only harmonics 1 to NumHarmonics-1 are stored, as sine/cosine pairs at indices 0 to 2*(NumHarmonics-1)-1
+		// (see PopulateLUT and Calibrate); the remaining slots are never written and read as NaN from erased flash.
+		const NonVolatileMemory::HarmonicDataElement *const harmonicData = mem.GetClosedLoopHarmonicValues();
+		for (size_t i = 0; i < 2 * (NumHarmonics - 1); ++i)
+		{
+			if (!std::isfinite(harmonicData[i].f))
+			{
+				return;										// leave the NotCalibrated tuning error set
+			}
+		}
 		PopulateLUT(mem);
 		tuningNeeded &= ~TuningError::NotCalibrated;
 	}
