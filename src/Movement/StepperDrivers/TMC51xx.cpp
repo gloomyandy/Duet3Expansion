@@ -1811,7 +1811,13 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 # endif
 		spiDevice->Deselect();
 # if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-		lastWakeupTime = StepTimer::GetTimerTicks();
+		// Do not reset lastWakeupTime here: the wakeup deadline sequence must advance by a fixed period per
+		// cycle (absolute pacing) so that the loop rate is work-independent. Resetting to "now" makes the
+		// period work+sleep; on boards where the iteration work is significant (about 75us on the RP2350
+		// shared-SPI boards) that halves the loop rate, which changes the balance of the closed-loop V and A
+		// feedforward terms (scaled by ticksSinceLastCall) against the P term clamp and causes large
+		// transient position errors at direction reversals. The overrun handling below deals with
+		// iterations that miss their deadline.
 # else
 		delay(1);
 # endif
