@@ -17,6 +17,10 @@
 
 namespace SmartDrivers
 {
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	void PollClosedLoopCycleRate() noexcept;
+#endif
+
 	void Init() noexcept;
 	void Exit() noexcept;
 	void Spin(bool powered) noexcept;

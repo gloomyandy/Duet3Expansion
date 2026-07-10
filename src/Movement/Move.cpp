@@ -318,6 +318,11 @@ void Move::Spin() noexcept
 	SmartDrivers::Spin(true);
 # endif
 
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	// Warn if the closed-loop control cycle is not keeping its intended rate
+	SmartDrivers::PollClosedLoopCycleRate();
+#endif
+
 	// Check one TMC driver for warnings and errors
 	if (enableValues[nextDriveToPoll] >= 0)				// don't poll driver if it is flagged "no poll"
 	{

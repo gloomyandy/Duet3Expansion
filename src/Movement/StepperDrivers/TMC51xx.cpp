@@ -107,6 +107,9 @@ constexpr uint32_t DriversSpiClockFrequency = 4000000;		// 4MHz SPI clock (max w
 
 constexpr uint32_t DriversDirectSleepMicroseconds = 80;		// how long the closed loop task sleeps for in each cycle
 constexpr uint32_t DriversDirectSleepClocks = (StepTimer::StepClockRate * DriversDirectSleepMicroseconds)/1000000;
+
+static volatile uint32_t clCycleCount = 0;			// closed-loop/phase-step cycles completed since last read
+static volatile uint32_t clCycleOverruns = 0;		// of those, cycles that missed their wakeup deadline by at least half a period
 #else
 // With a 2MHz SPI clock, on the 3HC the TMC task takes about 25% of the CPU time. So we now use 500kHz. This means the SPI transfer will complete in a little over 240us.
 constexpr uint32_t DriversSpiClockFrequency = 500000;		// 500kHz SPI clock
@@ -1096,6 +1099,9 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 	ResetLoadRegisters();
 
 	reply.catf(", mspos %u, reads %u, writes %u timeouts %u", (unsigned int)(readRegisters[ReadMsCnt] & 1023), numReads, numWrites, numTimeouts);
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	reply.catf(", cl cycles %" PRIu32 " (%" PRIu32 " late)", clCycleCount, clCycleOverruns);
+#endif
 #if TMC_TYPE == 2240
 	reply.catf(", temp %.1fC", (double)GetDriverTemperature());
 	reply.catf(", VS %.1fV peak %.1fV", (double)GetSupplyVoltage(), (double)GetPeakSupplyVoltage(true));
@@ -1612,6 +1618,7 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 				}
 				else
 				{
+					++clCycleOverruns;
 					lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled() + DriversDirectSleepClocks;
 					if (tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime))
 					{
@@ -1811,6 +1818,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 # endif
 		spiDevice->Deselect();
 # if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		++clCycleCount;
 		// Do not reset lastWakeupTime here: the wakeup deadline sequence must advance by a fixed period per
 		// cycle (absolute pacing) so that the loop rate is work-independent. Resetting to "now" makes the
 		// period work+sleep; on boards where the iteration work is significant (about 75us on the RP2350
@@ -1896,6 +1904,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 					const uint32_t lateness = StepTimer::GetTimerTicksWhenInterruptsDisabled() - lastWakeupTime;
 					if (lateness >= DriversDirectSleepClocks/2)
 					{
+						++clCycleOverruns;
 						lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled() + DriversDirectSleepClocks;
 						runNow = tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime);
 						if (runNow)
@@ -2077,6 +2086,33 @@ void SmartDrivers::Exit() noexcept
 #endif
 	tmcTask.TerminateAndUnlink();
 	driversState = DriversState::shutDown;						// prevent Spin() calls from doing anything
+}
+
+// Check periodically whether the closed-loop cycle is maintaining its intended rate, and raise a driver warning if not.
+// The V and A feedforward terms of the closed-loop controller scale with the cycle time, so a degraded rate changes the
+// controller balance and must not go unnoticed. Called regularly from the main loop; cheap when the check interval has not expired.
+void SmartDrivers::PollClosedLoopCycleRate() noexcept
+{
+	constexpr uint32_t CheckIntervalMillis = 5000;
+	static uint32_t lastCheckMillis = 0;
+	static bool wasDegraded = false;
+	const uint32_t now = millis();
+	if (now - lastCheckMillis >= CheckIntervalMillis)
+	{
+		const uint32_t elapsed = now - lastCheckMillis;
+		lastCheckMillis = now;
+		const uint32_t cycles = clCycleCount;
+		clCycleCount = 0;
+		clCycleOverruns = 0;
+		const uint32_t expectedCycles = (elapsed * 1000)/DriversDirectSleepMicroseconds;
+		const bool degraded = (cycles < (expectedCycles * 4)/5);				// degraded if below 80% of the design rate
+		if (degraded && !wasDegraded)
+		{
+			CanInterface::RaiseEventf(EventType::driver_warning, 0, 0, ", closed loop rate low (%" PRIu32 " of %" PRIu32 "Hz)",
+										(cycles * 1000)/elapsed, 1000000u/DriversDirectSleepMicroseconds);
+		}
+		wasDegraded = degraded;
+	}
 }
 
 void SmartDrivers::SetCurrent(size_t driver, float current) noexcept

@@ -852,6 +852,14 @@ uint16_t CanInterface::GetTimeStampPeriod() noexcept
 #endif
 
 // Send an event. The text will be truncated if it is longer than 55 characters.
+void CanInterface::RaiseEventf(EventType type, uint16_t param, uint8_t device, const char *format, ...) noexcept
+{
+	va_list vargs;
+	va_start(vargs, format);
+	RaiseEvent(type, param, device, format, vargs);
+	va_end(vargs);
+}
+
 void CanInterface::RaiseEvent(EventType type, uint16_t param, uint8_t device, const char *format, va_list vargs) noexcept
 {
 	CanMessageBuffer buf;
