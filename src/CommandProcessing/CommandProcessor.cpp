@@ -257,7 +257,7 @@ static GCodeResult SetStepsPerMmAndMicrostepping(const CanMessageMultipleDrivesR
 
 static GCodeResult ProcessM569Point2(const CanMessageGeneric& msg, const StringRef& reply)
 {
-#if SUPPORT_TMC22xx || SUPPORT_TMC51xx
+#if SUPPORT_TMC22xx || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
 	CanMessageGenericParser parser(msg, M569Point2Params);
 	uint8_t drive;
 	uint8_t regNum;
