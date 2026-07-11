@@ -617,17 +617,18 @@ constexpr uint32_t FlashStart = XIP_BASE;
 {
 	// make sure that nothing runs from flash memory
 	IrqDisable();
-	// Reboot in 5 seconds if any single step below hangs (each step is normally well under a second)
-	watchdog_reboot(0, 0, 5000);
+	// Reboot in 1 second if any single step below hangs; the slowest single operation is a sector
+	// erase at ~400ms datasheet worst case, so this still leaves 2.5x headroom
+	watchdog_reboot(0, 0, 1000);
 	// The watchdog load register counts down in microseconds (the RP2040 counts twice per microsecond - errata RP2040-E1).
 	// We must kick the watchdog by writing the register directly: the SDK watchdog_update() is not in RAM.
 #if PICO_RP2040
-	constexpr uint32_t wdogLoad = 5000 * 1000 * 2;
+	constexpr uint32_t wdogLoad = 1000 * 1000 * 2;
 #else
-	constexpr uint32_t wdogLoad = 5000 * 1000;
+	constexpr uint32_t wdogLoad = 1000 * 1000;
 #endif
-	// Erase one sector at a time, kicking the watchdog after each, so that the 5s watchdog bounds each
-	// sector erase (worst case ~400ms) rather than the whole erase, which can legitimately exceed 5s.
+	// Erase one sector at a time, kicking the watchdog after each, so that the watchdog bounds each
+	// sector erase rather than the whole erase, which can legitimately exceed it.
 	for (uint32_t offset = 0; offset < length; offset += FlashSectorSize)
 	{
 		flash_range_erase(offset, FlashSectorSize);
