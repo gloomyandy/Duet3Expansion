@@ -308,7 +308,7 @@ constexpr HeaterModel InductiveHeaterDefaultModel =
 	.zero = 0
 };
 
-constexpr float CustomHeaterMaxFaultTime = 0.8;					// needs to be short enough to detect that there is no tool before damage is caused
+constexpr float InductiveHeaterMaxFaultTime = 0.8;							// needs to be short enough to detect that there is no tool before damage is caused
 
 #endif
 
