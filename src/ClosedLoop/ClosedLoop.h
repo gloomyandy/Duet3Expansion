@@ -192,6 +192,17 @@ private:
 	volatile bool calibrateNotCheck = false;
 	volatile TuningErrors calibrationErrors;
 
+	// Encoder reconfiguration handshake. ProcessM569Point1 (command task) sets 'changePending' before it deletes
+	// and recreates the encoder, and waits for the control loop (TMC task) to observe it and set 'paused', so the
+	// control loop cannot be inside a freed encoder object during the swap. Each transition has a single writer.
+	enum class EncoderState : uint8_t
+	{
+		active = 0,				// the control loop may read the encoder (when one is configured)
+		changePending,			// M569.1 has asked the control loop to stop using the encoder
+		paused					// the control loop has stopped; M569.1 may now delete/recreate the encoder
+	};
+	volatile EncoderState encoderState = EncoderState::active;
+
 	StepTimer::Ticks whenLastTuningStepTaken;			// when the control loop last called the tuning code
 
 	// Data collection variables
