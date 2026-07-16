@@ -50,6 +50,7 @@ extern "C" bool DRV_SPI_Initialize()
 	spiCanHardware = new SharedSpiClient(Platform::GetSharedSpi(spiCan_SpiChannel), 15000000, SpiMode::mode0, NoPin, false);
 	IoPort::SetPinMode(SPICanCsPin, OUTPUT_HIGH);
 	spiCanHardware->Select(1000);
+	spiCanHardware->Deselect();
 	debugPrintf("SPI init complete\n");
     return true;
 }
