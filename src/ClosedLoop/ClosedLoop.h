@@ -119,6 +119,7 @@ private:
 																// call this when we have stopped basic tuning movement and are ready to switch to closed loop control
 	void ReadyToCalibrate(bool store) noexcept;					// call this when encoder calibration has finished collecting data
 	void AdjustTargetMotorSteps(float amount) noexcept;			// called by tuning to execute a step
+	void SetEncoder(Encoder *newEncoder) noexcept;				// adopt a (re)configured encoder, keeping 'encoder' and 'encoderState' in step
 	void ExitTorqueMode() noexcept;
 
 	// Methods in the tuning module
@@ -191,6 +192,21 @@ private:
 	volatile CalibrationState calibrationState = CalibrationState::notReady;
 	volatile bool calibrateNotCheck = false;
 	volatile TuningErrors calibrationErrors;
+
+	// The state of the encoder, tracked so the phase-step control loop (TMC task) and M569.1 (command task) can
+	// coordinate a safe reconfiguration, and so 'ready' is the single source of truth for "there is a live encoder
+	// the control loop may read". 'changePending'/'paused' are a handshake: M569.1 requests a pause, the control
+	// loop acknowledges by setting 'paused', then M569.1 deletes/recreates the encoder and publishes the outcome
+	// (via SetEncoder) as 'ready' or 'none' - and a configuration that fails legitimately ends in 'none'. Each
+	// transition has a single writer.
+	enum class EncoderState : uint8_t
+	{
+		none = 0,				// no usable encoder: never configured, or the last configuration failed
+		ready,					// encoder configured and initialised; the control loop may read it
+		changePending,			// M569.1 has asked the control loop to stop using the encoder
+		paused					// the control loop has stopped; M569.1 may now delete/recreate the encoder
+	};
+	volatile EncoderState encoderState = EncoderState::none;
 
 	StepTimer::Ticks whenLastTuningStepTaken;			// when the control loop last called the tuning code
 
