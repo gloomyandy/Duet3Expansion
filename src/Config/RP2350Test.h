@@ -324,7 +324,7 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm7a,	AdcInput::none,		nullptr		},	// GPIO14 EN
 	{ PwmOutput::pwm7b,	AdcInput::none,		nullptr		},	// GPIO15 TMC UART
 	{ PwmOutput::pwm0a,	AdcInput::none,		"io2.in"	},	// GPIO16 ENDSTOP2
-	{ PwmOutput::pwm0b,	AdcInput::none,		"max31865cs,rtdcs" },	// GPIO17 MAX31865_CS
+	{ PwmOutput::pwm0b,	AdcInput::none,		"spi.cs.rtd,max31865cs,rtdcs" },	// GPIO17 MAX31865_CS
 	{ PwmOutput::pwm1a,	AdcInput::none,		nullptr 	},	// GPIO18 I2C_SDA
 	{ PwmOutput::pwm1b,	AdcInput::none,		nullptr		},	// GPIO19 I2C_SDL
 	{ PwmOutput::pwm2a,	AdcInput::none,		"io1.in"	},	// GPIO20 ENDSTOP1
