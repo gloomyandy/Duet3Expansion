@@ -227,7 +227,7 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm7a,	AdcInput::none,		nullptr		},	// GPIO14 DIAG
 	{ PwmOutput::pwm7b,	AdcInput::none,		nullptr		},	// GPIO15 TMC UART
 	{ PwmOutput::pwm0a,	AdcInput::none,		"io2.in"	},	// GPIO16 ENDSTOP2
-	{ PwmOutput::pwm0b,	AdcInput::none,		"max31865cs,rtdcs"		},	// GPIO17 SPI MAX31856 CS
+	{ PwmOutput::pwm0b,	AdcInput::none,		"spi.cs.rtd,max31865cs,rtdcs"		},	// GPIO17 SPI MAX31856 CS
 	{ PwmOutput::pwm1a,	AdcInput::none,		"i2c.sda" 	},	// GPIO18 I2C SDA
 	{ PwmOutput::pwm1b,	AdcInput::none,		"i2c.sdl"	},	// GPIO19 I2C SCL
 	{ PwmOutput::pwm2a,	AdcInput::none,		"io1.in"	},	// GPIO20 ENDSTOP1
@@ -260,7 +260,7 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm5a,	AdcInput::none,		nullptr		},	// GPIO10 SPI SCLK
 	{ PwmOutput::pwm5b,	AdcInput::none,		nullptr		},	// GPIO11 SPI MOSI
 	{ PwmOutput::pwm6a,	AdcInput::none,		nullptr 	},	// GPIO12 SPI MISO
-	{ PwmOutput::pwm6b,	AdcInput::none,		"max31865cs,rtdcs" },	// GPIO13 SPI MAX31856 CS
+	{ PwmOutput::pwm6b,	AdcInput::none,		"spi.cs.rtd,max31865cs,rtdcs" },	// GPIO13 SPI MAX31856 CS
 	{ PwmOutput::pwm7a,	AdcInput::none,		"out2"		},	// GPIO14 FAN1
 	{ PwmOutput::pwm7b,	AdcInput::none,		"out1"		},	// GPIO15 FAN0
 	{ PwmOutput::pwm0a,	AdcInput::none,		nullptr		},	// GPIO16 SPI0 MISO
