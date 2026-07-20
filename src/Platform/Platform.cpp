@@ -348,7 +348,7 @@ namespace Platform
 	{
 		Heat::SwitchOffAll();
 #if SUPPORT_DRIVERS
-# if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI || SUPPORT_TMC22xx
+# if HAS_SMART_DRIVERS
 		IoPort::WriteDigital(GlobalTmcEnablePin, true);
 # endif
 		moveInstance->DisableAllDrives();
