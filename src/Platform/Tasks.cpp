@@ -1098,7 +1098,7 @@ static inline void CheckSpinLockAndResetIfStuck() noexcept
 		Heat::SwitchOffAll();
 #if SUPPORT_DRIVERS
 
-# if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI || SUPPORT_TMC22xx
+# if HAS_SMART_DRIVERS
 #  if TMCSPI_USES_SEPARATE_ENABLE || (TMC22xx_HAS_ENABLE_PINS && TMC22xx_VARIABLE_NUM_DRIVERS)
 		SmartDrivers::TurnDriversOff();
 #  else

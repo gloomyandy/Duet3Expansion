@@ -65,15 +65,15 @@ LocalHeater::~LocalHeater()
 	}
 }
 
-// Returns true if this is a custom heater with unusual default model parameters
-bool LocalHeater::IsCustom() const noexcept
-{
 #if SUPPORT_INDUCTIVE_HEATER
+
+// Returns true if this is a custom heater with unusual default model parameters
+bool LocalHeater::IsInductiveHeater() const noexcept
+{
 	return ports[0].IsInductiveHeaterPort();
-#else
-	return false;
-#endif
 }
+
+#endif
 
 // Set and return the default model for this heater
 void LocalHeater::SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept
@@ -155,7 +155,7 @@ void LocalHeater::ResetHeater() noexcept
 }
 
 // Configure the heater port and the sensor number
-GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) noexcept
+GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, int ambientSn, const StringRef& reply) noexcept
 {
 	if constexpr (MaxPortsPerHeater == 1)
 	{
@@ -167,7 +167,7 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 		if (ports[0].IsInductiveHeaterPort())
 		{
 			model.SetDefaultModel(InductiveHeaterDefaultModel);			// override the default model parameters
-			maxHeatingFaultTime = CustomHeaterMaxFaultTime;
+			maxHeatingFaultTime = InductiveHeaterMaxFaultTime;
 		}
 #endif
 	}
@@ -191,10 +191,17 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 	{
 		port.SetFrequency(freq);
 	}
+
 	SetSensorNumber(sn);
+	SetAmbientSensorNumber(ambientSn);
 	if (Heat::FindSensor(sn).IsNull())
 	{
 		reply.printf("Sensor number %u has not been defined", sn);
+		return GCodeResult::warning;
+	}
+	if (ambientSn >= 0 && Heat::FindSensor(ambientSn).IsNull())
+	{
+		reply.printf("Sensor number %u has not been defined", ambientSn);
 		return GCodeResult::warning;
 	}
 
@@ -238,6 +245,14 @@ GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const noexcept
 	{
 		reply.cat(", no sensor");
 	}
+	if (GetAmbientSensorNumber() >= 0)
+	{
+		reply.catf(", ambient sensor %d", GetAmbientSensorNumber());
+	}
+	else
+	{
+		reply.cat(", no ambient sensor");
+	}
 	return GCodeResult::ok;
 }
 
@@ -245,7 +260,20 @@ GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const noexcept
 TemperatureError LocalHeater::ReadTemperature() noexcept
 {
 	TemperatureError err(TemperatureError::unknownError);
-	temperature = Heat::GetSensorTemperature(GetSensorNumber(), err);		// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
+	temperature = Heat::GetSensorTemperature(GetSensorNumber(), err);						// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
+	if (GetAmbientSensorNumber() >= 0)
+	{
+		TemperatureError err2(TemperatureError::unknownError);
+		ambientTemperature = Heat::GetSensorTemperature(GetAmbientSensorNumber(), err2);	// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
+		if (err2 != TemperatureError::ok)
+		{
+			ambientTemperature = NormalAmbientTemperature;
+		}
+	}
+	else
+	{
+		ambientTemperature = NormalAmbientTemperature;
+	}
 	return err;
 }
 
@@ -498,7 +526,7 @@ void LocalHeater::Spin() noexcept
 					// If the P and D terms together demand that the heater is full on or full off, disregard the I term to reduce integral windup
 					const float errorMinusDterm = error - (params.tD * derivative);
 					const float pPlusD = params.kP * errorMinusDterm;
-					const float expectedPwm = GetModel().EstimateRequiredPwm(temperature - NormalAmbientTemperature, lastFanPwm, currentVoltage, 0.0);		//TODO pass filamentPwm
+					const float expectedPwm = GetModel().EstimateRequiredPwm(temperature - ambientTemperature, lastFanPwm, currentVoltage, 0.0);		//TODO pass filamentPwm
 					if (pPlusD + expectedPwm > GetModel().GetMaxPwm())
 					{
 						lastPwm = GetModel().GetMaxPwm();
@@ -639,23 +667,42 @@ GCodeResult LocalHeater::TuningCommand(const CanMessageHeaterTuningCommand& msg,
 {
 	if (msg.on)
 	{
-		if (lastPwm > 0.0 || GetAveragePWM() > 0.02)
+#if SUPPORT_INDUCTIVE_HEATER
+		if (msg.calibrate && ports[0].IsInductiveHeaterPort())
 		{
-			reply.printf("heater %u must be off and cold before auto tuning it", GetHeaterNumber());
-			return GCodeResult::error;
+			return StartHeaterCalibration(reply);
 		}
+		else
+#else
+		if (!msg.calibrate)							// we only calibrate inductive heaters, so just return completed if asked to calibrate
+#endif
+		{
+			if (lastPwm > 0.0 || GetAveragePWM() > 0.02)
+			{
+				reply.printf("heater %u must be off and cold before auto tuning it", GetHeaterNumber());
+				return GCodeResult::error;
+			}
 
-		// We could do some more checks here but the main board should have done all the checks needed already
-		tuningHighTemp = msg.highTemp;
-		tuningLowTemp = msg.lowTemp;
-		tuningPwm = msg.pwm;
-		tuningPeakTempDrop = msg.peakTempDrop;
-		timeSetHeating = millis();
-		tuningCycleComplete = false;
-		cyclesDone = 0;
-		mode = HeaterMode::tuning1;
+			// We could do some more checks here but the main board should have done all the checks needed already
+			tuningHighTemp = msg.highTemp;
+			tuningLowTemp = msg.lowTemp;
+			tuningPwm = msg.pwm;
+			tuningPeakTempDrop = msg.peakTempDrop;
+			timeSetHeating = millis();
+			tuningCycleComplete = false;
+			cyclesDone = 0;
+			mode = HeaterMode::tuning1_heating_up;
+		}
+	}
+#if SUPPORT_INDUCTIVE_HEATER
+	if (msg.calibrate && ports[0].IsInductiveHeaterPort())
+	{
+		return CheckHeaterCalibrationComplete(reply);
 	}
 	else
+#else
+	else if (!msg.calibrate)						// we only calibrate inductive heaters, so just return completed if asked to calibrate
+#endif
 	{
 		SwitchOff();
 	}
@@ -673,7 +720,7 @@ GCodeResult LocalHeater::ApplyFeedForward(const CanMessageHeaterFeedForwardV1& m
 		{
 			const float oldFanPwm = lastFanPwm;
 			lastFanPwm = msg.fanPwmFraction;
-			pwmBoost += GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, oldFanPwm, msg.fanPwmFraction) * FanFeedForwardMultiplier;
+			pwmBoost += GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - ambientTemperature, oldFanPwm, msg.fanPwmFraction) * FanFeedForwardMultiplier;
 		}
 		TaskCriticalSectionLocker lock;
 		iAccumulator += pwmBoost;
@@ -689,7 +736,7 @@ void LocalHeater::DoTuningStep() noexcept
 	const uint32_t now = millis();
 	switch (mode)
 	{
-	case HeaterMode::tuning1:		// Heating up
+	case HeaterMode::tuning1_heating_up:		// Heating up
 		if (temperature >= tuningHighTemp)							// if reached target
 		{
 			// Move on to next phase
@@ -697,7 +744,7 @@ void LocalHeater::DoTuningStep() noexcept
 			SetHeater(0.0);
 			peakTemp = afterPeakTemp = temperature;
 			lastOffTime = peakTime = afterPeakTime = now;
-			mode = HeaterMode::tuning2;
+			mode = HeaterMode::tuning2_heater_off;
 		}
 		else
 		{
@@ -705,7 +752,7 @@ void LocalHeater::DoTuningStep() noexcept
 		}
 		return;
 
-	case HeaterMode::tuning2:		// Heater is off, record the peak temperature and time
+	case HeaterMode::tuning2_heater_off:		// Heater is off, record the peak temperature and time
 		if (temperature >= peakTemp)
 		{
 			peakTemp = afterPeakTemp = temperature;
@@ -724,7 +771,7 @@ void LocalHeater::DoTuningStep() noexcept
 			lastOnTime = peakTime = afterPeakTime = now;
 			peakTemp = afterPeakTemp = temperature;
 			lastPwm = tuningPwm;						// turn on heater at specified power
-			mode = HeaterMode::tuning3;
+			mode = HeaterMode::tuning3_heater_on;
 		}
 		else if (afterPeakTime == peakTime && tuningHighTemp - temperature >= tuningPeakTempDrop)
 		{
@@ -733,7 +780,7 @@ void LocalHeater::DoTuningStep() noexcept
 		}
 		return;
 
-	case HeaterMode::tuning3:	// Heater is turned on, record the lowest temperature and time
+	case HeaterMode::tuning3_heater_on:	// Heater is turned on, record the lowest temperature and time
 		if (temperature <= peakTemp)
 		{
 			peakTemp = afterPeakTemp = temperature;
@@ -753,7 +800,7 @@ void LocalHeater::DoTuningStep() noexcept
 			lastOffTime = peakTime = afterPeakTime = now;
 			peakTemp = afterPeakTemp = temperature;
 			lastPwm = 0.0;										// turn heater off
-			mode = HeaterMode::tuning2;
+			mode = HeaterMode::tuning2_heater_off;
 			++cyclesDone;
 			tuningCycleComplete = true;
 		}
@@ -861,4 +908,19 @@ void LocalHeater::UpdateStatusLed() noexcept
 
 #endif
 
+#if SUPPORT_INDUCTIVE_HEATER
+
+GCodeResult LocalHeater::StartHeaterCalibration(const StringRef& reply) noexcept
+{
+	//TODO
+	return GCodeResult::notFinished;
+}
+
+GCodeResult LocalHeater::CheckHeaterCalibrationComplete(const StringRef& reply) noexcept
+{
+	//TODO
+	return GCodeResult::ok;
+}
+
+#endif
 // End
