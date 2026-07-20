@@ -108,8 +108,8 @@ constexpr uint32_t DriversSpiClockFrequency = 4000000;		// 4MHz SPI clock (max w
 constexpr uint32_t DriversDirectSleepMicroseconds = 80;		// how long the closed loop task sleeps for in each cycle
 constexpr uint32_t DriversDirectSleepClocks = (StepTimer::StepClockRate * DriversDirectSleepMicroseconds)/1000000;
 
-static volatile uint32_t clCycleCount = 0;			// closed-loop/phase-step cycles completed since last read
-static volatile uint32_t clCycleOverruns = 0;		// of those, cycles that missed their wakeup deadline by at least half a period
+static std::atomic<uint32_t> clCycleCount = 0;				// closed-loop/phase-step cycles completed since last read
+static std::atomic<uint32_t>  clCycleOverruns = 0;			// of those, cycles that missed their wakeup deadline by at least half a period
 #else
 // With a 2MHz SPI clock, on the 3HC the TMC task takes about 25% of the CPU time. So we now use 500kHz. This means the SPI transfer will complete in a little over 240us.
 constexpr uint32_t DriversSpiClockFrequency = 500000;		// 500kHz SPI clock
@@ -1100,7 +1100,7 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 
 	reply.catf(", mspos %u, reads %u, writes %u timeouts %u", (unsigned int)(readRegisters[ReadMsCnt] & 1023), numReads, numWrites, numTimeouts);
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-	reply.catf(", cl cycles %" PRIu32 " (%" PRIu32 " late)", clCycleCount, clCycleOverruns);
+	reply.catf(", cl cycles %" PRIu32 " (%" PRIu32 " late)", clCycleCount.load(), clCycleOverruns.load());
 #endif
 #if TMC_TYPE == 2240
 	reply.catf(", temp %.1fC", (double)GetDriverTemperature());
@@ -2088,6 +2088,7 @@ void SmartDrivers::Exit() noexcept
 	driversState = DriversState::shutDown;						// prevent Spin() calls from doing anything
 }
 
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 // Check periodically whether the closed-loop cycle is maintaining its intended rate, and raise a driver warning if not.
 // The V and A feedforward terms of the closed-loop controller scale with the cycle time, so a degraded rate changes the
 // controller balance and must not go unnoticed. Called regularly from the main loop; cheap when the check interval has not expired.
@@ -2114,6 +2115,7 @@ void SmartDrivers::PollClosedLoopCycleRate() noexcept
 		wasDegraded = degraded;
 	}
 }
+#endif
 
 void SmartDrivers::SetCurrent(size_t driver, float current) noexcept
 {
