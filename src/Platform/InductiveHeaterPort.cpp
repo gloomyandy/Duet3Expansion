@@ -11,6 +11,8 @@
 
 #include <Platform/Platform.h>
 #include <Timers.h>
+#include <Platform/TaskPriorities.h>
+#include <AppNotifyIndices.h>
 
 #if SAME5x
 # include <hri_tc_e54.h>
@@ -61,6 +63,8 @@ constexpr uint32_t OverVoltageACValue =  (uint32_t)(64.0 * OverVoltage/Inductive
 
 static_assert(OverVoltageACValue <= 63);
 static_assert(TargetVoltageACValue < OverVoltageACValue);
+
+Task<InductiveHeaterPort::CalibrationTaskStackWords> *_ecv_null InductiveHeaterPort::calibrationTask = nullptr;
 
 InductiveHeaterPort::InductiveHeaterPort()
 {
@@ -140,7 +144,7 @@ void InductiveHeaterPort::Init() noexcept
 									| CCL_LUTCTRL_INSEL2(CCL_LUTCTRL_INSEL2_MASK_Val);	// INSEL2 not used
 	CCL->LUTCTRL[InductiveHeaterCCLNumber].reg = Lut3RegValue;
 	CCL->LUTCTRL[InductiveHeaterCCLNumber].reg = Lut3RegValue | CCL_LUTCTRL_ENABLE;
-	CCL->CTRL.reg = CCL_CTRL_ENABLE;										// SAME5x errata: the LUT config registers are enable-protected by the global enable bit
+	CCL->CTRL.reg = CCL_CTRL_ENABLE;													// SAME5x errata: the LUT config registers are enable-protected by the global enable bit
 
 	// Finally, set the FET drive pin to be the CCL3 output
 	SetPinFunction(InductiveHeaterCCLOutPin, InductiveHeaterCCLOutPinPeriphMode);
@@ -159,7 +163,14 @@ void InductiveHeaterPort::SetPwm(float pwm) noexcept
 // Returns GCodeResult::notFinished if we started, else GCodeResult::error with an error message in 'reply' if we couldn't start calibrating
 GCodeResult InductiveHeaterPort::StartCalibration(const StringRef& reply) noexcept
 {
-	//TODO
+	SetPwm(0.0);
+	if (calibrationTask == nullptr)
+	{
+		calibrationTask = new Task<CalibrationTaskStackWords>;
+		calibrationTask->Create(CalibrationTaskEntry, "IndCalib", (void*)this, TaskPriority::InductiveHeaterCalibration);
+	}
+	calState = CalibrationState::starting;
+	calibrationTask->Give(NotifyIndices::InductiveHeaterCalibration);
 	return GCodeResult::notFinished;
 }
 
@@ -168,8 +179,33 @@ GCodeResult InductiveHeaterPort::StartCalibration(const StringRef& reply) noexce
 // or GCodeResult::error with an error message in 'reply' if calibration failed.
 GCodeResult InductiveHeaterPort::CheckCalibrationComplete(const StringRef& reply) noexcept
 {
-	//TODO
-	return GCodeResult::ok;
+	return (calState == CalibrationState::idle) ? GCodeResult::ok : GCodeResult::notFinished;		//TODO check for errors
+}
+
+// Initial entry point of the calibration task
+/*static*/ void InductiveHeaterPort::CalibrationTaskEntry(void *pv) noexcept
+{
+	((InductiveHeaterPort*)pv)->CalibrationTaskFunc();
+}
+
+// Member function that the calibration task executes
+void InductiveHeaterPort::CalibrationTaskFunc() noexcept
+{
+	for (;;)
+	{
+		switch (calState)
+		{
+		case CalibrationState::idle:
+			TaskBase::TakeIndexed(NotifyIndices::InductiveHeaterCalibration);
+			break;
+
+		//TODO other cases that actually do the calibration
+
+		default:
+			calState = CalibrationState::idle;
+			break;
+		}
+	}
 }
 
 #endif
