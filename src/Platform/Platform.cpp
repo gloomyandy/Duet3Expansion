@@ -158,7 +158,6 @@ namespace Platform
 	static uint32_t lastPollTime;
 	static uint32_t lastFanCheckTime = 0;
 	static uint32_t heatTaskIdleTicks = 0;
-	static uint32_t syncedIdleTicks = 0;
 
 	static uint32_t whenLastCanMessageProcessed = 0;
 
@@ -1009,9 +1008,7 @@ void Platform::Spin()
 
 	// Update the Status LED. Flash it quickly (8Hz) if we are not synced to the master, else flash in sync with the master (about 2Hz).
 	const bool synced = StepTimer::CheckSynced();
-	if (synced) {
-		syncedIdleTicks = 0;
-	}
+	CanInterface::UpdateSyncLockState(synced);
 	WriteLed(0,
 				(synced)
 					? (StepTimer::GetMasterTime() & (1u << 19)) != 0
@@ -1299,11 +1296,6 @@ uint32_t Platform::GetHeatTaskIdleTicks()
 	return heatTaskIdleTicks;
 }
 
-uint32_t Platform::GetSyncedIdleTicks()
-{
-	return syncedIdleTicks;
-}
-
 #if USE_SERIAL_DEBUG
 
 // Output a character to the debug channel
@@ -1430,7 +1422,6 @@ const UniqueIdBase& Platform::GetUniqueId() noexcept
 void Platform::Tick() noexcept
 {
 	++heatTaskIdleTicks;
-	++syncedIdleTicks;
 }
 
 void Platform::StartFirmwareUpdate()
