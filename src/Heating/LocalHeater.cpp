@@ -17,6 +17,10 @@
 # include <Platform/LedStatusControl.h>
 #endif
 
+#if SUPPORT_INDUCTIVE_HEATER
+# include <Platform/InductiveHeaterPort.h>
+#endif
+
 // Private constants
 const uint32_t InitialTuningReadingInterval = 250;		// the initial reading interval in milliseconds
 const uint32_t TempSettleTimeout = 20000;				// how long we allow the initial temperature to settle
@@ -670,7 +674,7 @@ GCodeResult LocalHeater::TuningCommand(const CanMessageHeaterTuningCommand& msg,
 #if SUPPORT_INDUCTIVE_HEATER
 		if (msg.calibrate && ports[0].IsInductiveHeaterPort())
 		{
-			return StartHeaterCalibration(reply);
+			return Platform::GetInductiveHeater().StartCalibration(reply);
 		}
 		else
 #else
@@ -697,7 +701,7 @@ GCodeResult LocalHeater::TuningCommand(const CanMessageHeaterTuningCommand& msg,
 #if SUPPORT_INDUCTIVE_HEATER
 	if (msg.calibrate && ports[0].IsInductiveHeaterPort())
 	{
-		return CheckHeaterCalibrationComplete(reply);
+		return Platform::GetInductiveHeater().CheckCalibrationComplete(reply);
 	}
 	else
 #else
@@ -908,19 +912,4 @@ void LocalHeater::UpdateStatusLed() noexcept
 
 #endif
 
-#if SUPPORT_INDUCTIVE_HEATER
-
-GCodeResult LocalHeater::StartHeaterCalibration(const StringRef& reply) noexcept
-{
-	//TODO
-	return GCodeResult::notFinished;
-}
-
-GCodeResult LocalHeater::CheckHeaterCalibrationComplete(const StringRef& reply) noexcept
-{
-	//TODO
-	return GCodeResult::ok;
-}
-
-#endif
 // End

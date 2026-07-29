@@ -1638,9 +1638,9 @@ float Platform::GetCurrentV12Voltage() noexcept
 
 #if SUPPORT_INDUCTIVE_HEATER
 
-void Platform::SetInductiveHeaterPwm(float pwm) noexcept
+InductiveHeaterPort& Platform::GetInductiveHeater() noexcept
 {
-	inductiveHeaterPort.SetPwm(pwm);
+	return inductiveHeaterPort;
 }
 
 #endif

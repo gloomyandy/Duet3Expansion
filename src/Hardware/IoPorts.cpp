@@ -27,6 +27,10 @@
 # include <Platform/LedStatusControl.h>
 #endif
 
+#if SUPPORT_INDUCTIVE_HEATER
+# include <Platform/InductiveHeaterPort.h>
+#endif
+
 #if SUPPORT_OVERRIDE_STEP_PIN
 # include <RepRapFirmware.h>
 # include <Movement/Move.h>
@@ -662,7 +666,7 @@ void PwmPort::WriteAnalog(float pwm) const noexcept
 #if SUPPORT_INDUCTIVE_HEATER
 	if (IsInductiveHeaterPort())
 	{
-		Platform::SetInductiveHeaterPwm(pwm);
+		Platform::GetInductiveHeater().SetPwm(pwm);
 		return;
 	}
 #endif

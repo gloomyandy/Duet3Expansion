@@ -155,6 +155,23 @@ void InductiveHeaterPort::SetPwm(float pwm) noexcept
 	tccdev->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = cc;
 }
 
+// Start calibrating the heater
+// Returns GCodeResult::notFinished if we started, else GCodeResult::error with an error message in 'reply' if we couldn't start calibrating
+GCodeResult InductiveHeaterPort::StartCalibration(const StringRef& reply) noexcept
+{
+	//TODO
+	return GCodeResult::notFinished;
+}
+
+// Check whether heater calibration is complete
+// Return GCodeResult::notFinished if calibration still in progress, GCodeResult::ok if finished,
+// or GCodeResult::error with an error message in 'reply' if calibration failed.
+GCodeResult InductiveHeaterPort::CheckCalibrationComplete(const StringRef& reply) noexcept
+{
+	//TODO
+	return GCodeResult::ok;
+}
+
 #endif
 
 // End
