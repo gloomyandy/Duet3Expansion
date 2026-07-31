@@ -34,6 +34,8 @@ InductiveHeaterPort::InductiveHeaterPort()
 	// Nothing to do here
 }
 
+static void SetupAnalogComparator() noexcept;					// forward declaration
+
 void InductiveHeaterPort::Init() noexcept
 {
 	// Set up the oscillator TCC to generate a square wave at the coil resonant frequency
@@ -111,6 +113,8 @@ void InductiveHeaterPort::Init() noexcept
 
 	// Finally, set the FET drive pin to be the CCL3 output
 	SetPinFunction(InductiveHeaterCCLOutPin, InductiveHeaterCCLOutPinPeriphMode);
+
+	SetupAnalogComparator();												// enable the AC so that we can do overvoltage detection
 }
 
 // Set the PWM value in the range 0..1
@@ -237,13 +241,15 @@ static void SetupAnalogComparator() noexcept
 	hri_mclk_set_APBCMASK_AC_bit(MCLK);
 	GCLK->PCHCTRL[AC_GCLK_ID].reg = GCLK_PCHCTRL_GEN(GclkNum60MHz) | GCLK_PCHCTRL_CHEN;
 
-	// Set the AC input pin function
-	SetPinFunction(InductiveHeaterVoltageFeedbackAcPin, GpioPinFunction::B);
-
     AC->CTRLA.bit.SWRST = 1;
     while (AC->SYNCBUSY.bit.SWRST) { }
 
-    // COMP0: overvoltage detector, interrupt triggers on rising edge which indicates over voltage.
+	// Set the AC input pin function
+	SetPinFunction(InductiveHeaterVoltageFeedbackAcPin, GpioPinFunction::B);
+
+    AC->CALIB.reg = (*reinterpret_cast<const uint32_t*>(AC_FUSES_BIAS0_ADDR) & AC_FUSES_BIAS0_Msk) >> AC_FUSES_BIAS0_Pos;	// set the calibration value
+
+    // COMP0: overvoltage detector, interrupt triggers on rising edge which indicates over voltage
     AC->SCALER[0].reg = AC_SCALER_VALUE(OverVoltageACValue);
     AC->COMPCTRL[0].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
                           AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING |
@@ -251,12 +257,19 @@ static void SetupAnalogComparator() noexcept
                           AC_COMPCTRL_ENABLE;
     while (AC->SYNCBUSY.bit.COMPCTRL0) { }
 
-    // COMP1: tuner peak detector. Latches rising edge, not used in normal driving. No hysteresis as that would bias the detect peak high.
+    // COMP1: tuner peak detector. Latches rising edge, not used in normal driving
     AC->SCALER[1].reg = AC_SCALER_VALUE(TargetVoltageACValue);
     AC->COMPCTRL[1].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
                           AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING |
+                          AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
                           AC_COMPCTRL_ENABLE;
     while (AC->SYNCBUSY.bit.COMPCTRL1) { }
+
+    AC->CTRLA.reg = AC_CTRLA_ENABLE;
+    while (AC->SYNCBUSY.bit.ENABLE) { }
+
+   // Wait for both comparators to become ready before enabling interrupts, see SAME5x errata 2.2.2
+    while ((AC->STATUSB.reg & 0x03) != 0x03) { }
 
 //	AC->EVCTRL.reg = AC_EVCTRL_COMPEO0;								// COMP0 state sent to event output
     AC->INTENSET.reg = AC_INTENSET_COMP0;							// COMP0 rising edge interrupt is always enabled to detect overvoltage
@@ -264,8 +277,6 @@ static void SetupAnalogComparator() noexcept
     NVIC_SetPriority(AC_IRQn, NvicPriorityAC);
     NVIC_EnableIRQ(AC_IRQn);
 
-    AC->CTRLA.reg = AC_CTRLA_ENABLE;
-    while (AC->SYNCBUSY.bit.ENABLE) { }
 }
 
 // This function is called by the calibration task to calibrate the heater.
@@ -273,7 +284,6 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 {
 	// 1. Calibrate the first cycle length. This is the cycle length that just reaches the target peak voltage when sent as an isolated cycle.
 	// Set up the analog comparator to interrupt when the target peak voltage is reached.
-	SetupAnalogComparator();
 	acIntflag.store(0);
     AC->INTENSET.reg = AC_INTENSET_COMP1;							// enable interrupt on COMP1 rising edge
 
