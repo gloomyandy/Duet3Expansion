@@ -199,8 +199,17 @@ void InductiveHeaterPort::CalibrationTaskFunc() noexcept
 			TaskBase::TakeIndexed(NotifyIndices::InductiveHeaterCalibration);
 			break;
 
-		//TODO other cases that actually do the calibration
+		case CalibrationState::starting:
+			//TODO set up first cycle calibration parameters
+			calState = CalibrationState::tuningFirstCycle;
+			break;
 
+		case CalibrationState::tuningFirstCycle:
+			//TODO calibrate the first cycle on-time, when we have finished then execute the next instruction
+			calState = CalibrationState::tuningLaterCycles;
+			break;
+
+		case CalibrationState::tuningLaterCycles:
 		default:
 			calState = CalibrationState::idle;
 			break;
