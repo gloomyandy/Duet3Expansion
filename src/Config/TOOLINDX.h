@@ -124,6 +124,7 @@ constexpr DmaPriority DmacPrioADS131M02Tx = 0;
 constexpr DmaPriority DmacPrioADS131M02Rx = 3;
 
 // Interrupt priorities, lower means higher priority. 0-2 can't make RTOS calls.
+constexpr NvicPriority NvicPriorityAC = 2;				// we only use the AC interrupt to set a flag, not to wake a task
 constexpr NvicPriority NvicPriorityStep = 3;			// step interrupt is next highest, it can preempt most other interrupts
 constexpr NvicPriority NvicPriorityDmac = 3;			// priority for DMA complete interrupts
 constexpr NvicPriority NvicPriorityUart = 3;			// serial driver makes RTOS calls

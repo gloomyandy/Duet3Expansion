@@ -13,6 +13,7 @@
 #include <Timers.h>
 #include <Platform/TaskPriorities.h>
 #include <AppNotifyIndices.h>
+#include <atomic>
 
 #if SAME5x
 # include <hri_tc_e54.h>
@@ -25,44 +26,6 @@
 #else
 # error Unsupported processor
 #endif
-
-// Heater on-time tuning constants
-constexpr uint32_t TuneOnFirstSeed = 180;			// safe starting floor
-constexpr uint32_t TuneOnStep = 2;					// ramp granularity
-constexpr uint32_t TuneOnMax = 1080;
-
-// Provisional OFF used while ramping ON: long enough to contain a full positive
-// resonance halfcycle even at the lowest resonant frequency.
-constexpr uint32_t TuneOffProv = 840;
-
-// OFF cycles fired after the last measured cycle so its resonance completes
-// before the timer stops.
-constexpr uint32_t TuneTrailingOff = 1;
-
-// Quiet time between bursts, long enough for the tank to fully stop resonating.
-constexpr uint32_t TunsSettleMicroseconds = 350;
-
-// Whole-tune watchdog. A full sweep is typically well under ~2 s, so this is just a timeout to ensure that session doesn't hang in case of hardware faults etc.
-constexpr uint32_t TuneTotalTimeoutMicroseconds = 10000000;		// 10 s
-
-// Waveform sweep parameters for OFF time tuning. Must be long enough to encompass the full on+off cycle to ensure we can capture the full positive resonance halfcycle.
-constexpr uint32_t TuneSampleStep = 8;
-constexpr uint32_t TuneNumSamples = (TuneOnMax + TuneOffProv) / TuneSampleStep;
-
-// Margin when finding the resonance cycle in the sampled data.
-constexpr float TuneZeroMarginV = 1.0;
-
-// Waveform-dump pacing interval, to reduce risk of lost messages.
-constexpr uint32_t TuneDumpIntervalMicroseconds = 3000;
-
-// The AC provides 64 trigger levels. Define the values that indicate over target and over maximum.
-constexpr float TargetVoltage = 96.0;
-constexpr float OverVoltage = 100.0;
-constexpr uint32_t TargetVoltageACValue = (uint32_t)(64.0 * TargetVoltage/InductiveHeaterVoltageFeedbackRange);
-constexpr uint32_t OverVoltageACValue =  (uint32_t)(64.0 * OverVoltage/InductiveHeaterVoltageFeedbackRange);
-
-static_assert(OverVoltageACValue <= 63);
-static_assert(TargetVoltageACValue < OverVoltageACValue);
 
 Task<InductiveHeaterPort::CalibrationTaskStackWords> *_ecv_null InductiveHeaterPort::calibrationTask = nullptr;
 
@@ -159,6 +122,46 @@ void InductiveHeaterPort::SetPwm(float pwm) noexcept
 	tccdev->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = cc;
 }
 
+///////////////////////// Heater calibration constants and functions ////////////////////////////////
+
+// Heater on-time tuning constants
+constexpr uint32_t TuneOnFirstSeed = 180;			// safe starting floor
+constexpr uint32_t TuneOnStep = 2;					// ramp granularity
+constexpr uint32_t TuneOnMax = 1080;
+
+// Provisional OFF used while ramping ON: long enough to contain a full positive
+// resonance halfcycle even at the lowest resonant frequency.
+constexpr uint32_t TuneOffProv = 840;
+
+// OFF cycles fired after the last measured cycle so its resonance completes
+// before the timer stops.
+constexpr uint32_t TuneTrailingOff = 1;
+
+// Quiet time between bursts, long enough for the tank to fully stop resonating.
+constexpr uint32_t TunsSettleMicroseconds = 350;
+
+// Whole-tune watchdog. A full sweep is typically well under ~2 s, so this is just a timeout to ensure that session doesn't hang in case of hardware faults etc.
+constexpr uint32_t TuneTotalTimeoutMicroseconds = 10000000;		// 10 s
+
+// Waveform sweep parameters for OFF time tuning. Must be long enough to encompass the full on+off cycle to ensure we can capture the full positive resonance halfcycle.
+constexpr uint32_t TuneSampleStep = 8;
+constexpr uint32_t TuneNumSamples = (TuneOnMax + TuneOffProv) / TuneSampleStep;
+
+// Margin when finding the resonance cycle in the sampled data.
+constexpr float TuneZeroMarginV = 1.0;
+
+// Waveform-dump pacing interval, to reduce risk of lost messages.
+constexpr uint32_t TuneDumpIntervalMicroseconds = 3000;
+
+// The AC provides 64 trigger levels. Define the values that indicate over target and over maximum.
+constexpr float TargetVoltage = 96.0;
+constexpr float OverVoltage = 100.0;
+constexpr uint32_t TargetVoltageACValue = (uint32_t)(64.0 * TargetVoltage/InductiveHeaterVoltageFeedbackRange);
+constexpr uint32_t OverVoltageACValue =  (uint32_t)(64.0 * OverVoltage/InductiveHeaterVoltageFeedbackRange);
+
+static_assert(OverVoltageACValue <= 63);
+static_assert(TargetVoltageACValue < OverVoltageACValue);
+
 // Start calibrating the heater
 // Returns GCodeResult::notFinished if we started, else GCodeResult::error with an error message in 'reply' if we couldn't start calibrating
 GCodeResult InductiveHeaterPort::StartCalibration(const StringRef& reply) noexcept
@@ -169,7 +172,7 @@ GCodeResult InductiveHeaterPort::StartCalibration(const StringRef& reply) noexce
 		calibrationTask = new Task<CalibrationTaskStackWords>;
 		calibrationTask->Create(CalibrationTaskEntry, "IndCalib", (void*)this, TaskPriority::InductiveHeaterCalibration);
 	}
-	calState = CalibrationState::starting;
+	calState = CalibrationState::start;
 	calibrationTask->Give(NotifyIndices::InductiveHeaterCalibration);
 	return GCodeResult::notFinished;
 }
@@ -179,7 +182,21 @@ GCodeResult InductiveHeaterPort::StartCalibration(const StringRef& reply) noexce
 // or GCodeResult::error with an error message in 'reply' if calibration failed.
 GCodeResult InductiveHeaterPort::CheckCalibrationComplete(const StringRef& reply) noexcept
 {
-	return (calState == CalibrationState::idle) ? GCodeResult::ok : GCodeResult::notFinished;		//TODO check for errors
+	switch (calState)
+	{
+	case CalibrationState::calibrating:
+	case CalibrationState::start:
+		return GCodeResult::notFinished;
+
+	case CalibrationState::complete:
+		calState = CalibrationState::idle;
+		return GCodeResult::ok;		//TODO check for errors
+
+	case CalibrationState::idle:
+	default:
+		reply.copy("unexpected heater calibration state");
+		return GCodeResult::error;
+	}
 }
 
 // Initial entry point of the calibration task
@@ -193,28 +210,78 @@ void InductiveHeaterPort::CalibrationTaskFunc() noexcept
 {
 	for (;;)
 	{
-		switch (calState)
+		if (calState == CalibrationState::start)
 		{
-		case CalibrationState::idle:
-			TaskBase::TakeIndexed(NotifyIndices::InductiveHeaterCalibration);
-			break;
-
-		case CalibrationState::starting:
-			//TODO set up first cycle calibration parameters
-			calState = CalibrationState::tuningFirstCycle;
-			break;
-
-		case CalibrationState::tuningFirstCycle:
-			//TODO calibrate the first cycle on-time, when we have finished then execute the next instruction
-			calState = CalibrationState::tuningLaterCycles;
-			break;
-
-		case CalibrationState::tuningLaterCycles:
-		default:
-			calState = CalibrationState::idle;
-			break;
+			calState = CalibrationState::calibrating;
+			CalibrateHeater();
+			calState = CalibrationState::complete;
 		}
+		TaskBase::TakeIndexed(NotifyIndices::InductiveHeaterCalibration);
 	}
+}
+
+static std::atomic<uint32_t> acIntflag(0);
+
+// Analog comparator interrupt handler
+extern "C" void AC_Handler()
+{
+	const uint32_t intFlag = AC->INTFLAG.reg;
+    acIntflag |= intFlag;
+    AC->INTFLAG.reg = intFlag;
+    //TODO do we need to take any other action on overvoltage?
+}
+
+static void SetupAnalogComparator() noexcept
+{
+	// Enable clocks for the AC
+	hri_mclk_set_APBCMASK_AC_bit(MCLK);
+	GCLK->PCHCTRL[AC_GCLK_ID].reg = GCLK_PCHCTRL_GEN(GclkNum60MHz) | GCLK_PCHCTRL_CHEN;
+
+	// Set the AC input pin function
+	SetPinFunction(InductiveHeaterVoltageFeedbackAcPin, GpioPinFunction::B);
+
+    AC->CTRLA.bit.SWRST = 1;
+    while (AC->SYNCBUSY.bit.SWRST) { }
+
+    // COMP0: overvoltage detector, interrupt triggers on rising edge which indicates over voltage.
+    AC->SCALER[0].reg = AC_SCALER_VALUE(OverVoltageACValue);
+    AC->COMPCTRL[0].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
+                          AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING |
+                          AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
+                          AC_COMPCTRL_ENABLE;
+    while (AC->SYNCBUSY.bit.COMPCTRL0) { }
+
+    // COMP1: tuner peak detector. Latches rising edge, not used in normal driving. No hysteresis as that would bias the detect peak high.
+    AC->SCALER[1].reg = AC_SCALER_VALUE(TargetVoltageACValue);
+    AC->COMPCTRL[1].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
+                          AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING |
+                          AC_COMPCTRL_ENABLE;
+    while (AC->SYNCBUSY.bit.COMPCTRL1) { }
+
+//	AC->EVCTRL.reg = AC_EVCTRL_COMPEO0;								// COMP0 state sent to event output
+    AC->INTENSET.reg = AC_INTENSET_COMP0;							// COMP0 rising edge interrupt is always enabled to detect overvoltage
+
+    NVIC_SetPriority(AC_IRQn, NvicPriorityAC);
+    NVIC_EnableIRQ(AC_IRQn);
+
+    AC->CTRLA.reg = AC_CTRLA_ENABLE;
+    while (AC->SYNCBUSY.bit.ENABLE) { }
+}
+
+// This function is called by the calibration task to calibrate the heater.
+void InductiveHeaterPort::CalibrateHeater() noexcept
+{
+	// 1. Calibrate the first cycle length. This is the cycle length that just reaches the target peak voltage when sent as an isolated cycle.
+	// Set up the analog comparator to interrupt when the target peak voltage is reached.
+	SetupAnalogComparator();
+	acIntflag.store(0);
+    AC->INTENSET.reg = AC_INTENSET_COMP1;							// enable interrupt on COMP1 rising edge
+
+	//TODO
+	// 2. Calibrate the subsequent cycle length.
+	//TODO
+	// 3. Calibrate the off-time
+	//TODO
 }
 
 #endif

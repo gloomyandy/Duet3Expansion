@@ -27,7 +27,7 @@ public:
 private:
 	enum class CalibrationState : uint8_t
 	{
-		idle = 0, starting, tuningFirstCycle, tuningLaterCycles, tuningOffTime
+		idle = 0, start, calibrating, complete
 	};
 
 	// Legacy heater constants - remove when calibration has been fully implemented
@@ -46,6 +46,8 @@ private:
 	static Task<CalibrationTaskStackWords> *_ecv_null calibrationTask;
 
 	[[noreturn]] static void CalibrationTaskEntry(void *pv) noexcept;
+
+	void CalibrateHeater() noexcept;
 
 	//TODO remove/refactor these when heater calibration is fully implemented
 	uint32_t oscTimerPeriod;
