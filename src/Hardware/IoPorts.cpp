@@ -220,7 +220,9 @@ int32_t IoPort::ReadAnalog() const noexcept
 		if (chan == AdcInput::ads131m02)
 		{
 			ADS131M02 *const loadCellAdc = Platform::GetLoadCellAdc();
-			return (loadCellAdc == nullptr) ? std::numeric_limits<int32_t>::min() : loadCellAdc->GetLatestData();
+			return (loadCellAdc == nullptr) ? std::numeric_limits<int32_t>::min()
+				: (totalInvert) ? -(loadCellAdc->GetLatestData())
+					: loadCellAdc->GetLatestData();
 		}
 #endif
 		if (chan != AdcInput::none)
