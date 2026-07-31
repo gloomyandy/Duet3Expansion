@@ -27,6 +27,15 @@
 # error Unsupported processor
 #endif
 
+// The AC provides 64 trigger levels. Define the values that indicate over target and over maximum.
+constexpr float TargetVoltage = 96.0;
+constexpr float OverVoltage = 100.0;
+constexpr uint32_t TargetVoltageACValue = (uint32_t)(64.0 * TargetVoltage/InductiveHeaterVoltageFeedbackRange);
+constexpr uint32_t OverVoltageACValue =  (uint32_t)(64.0 * OverVoltage/InductiveHeaterVoltageFeedbackRange);
+
+static_assert(OverVoltageACValue <= 63);
+static_assert(TargetVoltageACValue < OverVoltageACValue);
+
 Task<InductiveHeaterPort::CalibrationTaskStackWords> *_ecv_null InductiveHeaterPort::calibrationTask = nullptr;
 
 InductiveHeaterPort::InductiveHeaterPort()
@@ -34,60 +43,16 @@ InductiveHeaterPort::InductiveHeaterPort()
 	// Nothing to do here
 }
 
-static void SetupAnalogComparator() noexcept;					// forward declaration
-
 void InductiveHeaterPort::Init() noexcept
 {
-	// Set up the oscillator TCC to generate a square wave at the coil resonant frequency
-	EnableTccClock(InductiveHeaterOscTccDeviceNumber, GclkNum120MHz);	// use the 120MHz GCLK to get the best frequency setting resolution
-	const uint32_t oscPrescaler = 0;									// 16-or 24-bit TCC with a 120MHz clock and prescaler 1 gives us frequencies from 1.8kHz upwards
-	oscTimerPeriod = 120'000'000/OscResonantFrequency;
-	const uint32_t oscMarkCount = (uint32_t)((float)oscTimerPeriod * OscMarkSpaceRatio);
-
-	volatile Tcc *const tccosc = Timers::TccDevices[InductiveHeaterOscTccDeviceNumber];
-	hri_tcc_clear_CTRLA_ENABLE_bit(tccosc);
-	hri_tcc_set_CTRLA_SWRST_bit(tccosc);
-	tccosc->CTRLA.bit.PRESCALER = oscPrescaler;
-	tccosc->CTRLA.bit.RESOLUTION = 0;
-	hri_tcc_write_WAVE_WAVEGEN_bf(tccosc, TCC_WAVE_WAVEGEN_NPWM_Val);
-	tccosc->PERBUF.bit.PERBUF = oscTimerPeriod - 1;
-	tccosc->PER.bit.PER = oscTimerPeriod - 1;
-	tccosc->CCBUF[InductiveHeaterOscTccOutputNumber].bit.CCBUF = oscMarkCount - 1;
-	tccosc->CC[InductiveHeaterOscTccOutputNumber].bit.CC = oscMarkCount - 1;
-
-	hri_tcc_set_CTRLA_ENABLE_bit(tccosc);
-
-	// Set up the PWM TCC to generate the PWM.
-	// We sync it to the oscillator TCC to avoid short pulses at the start or end of a PWM period.
-	// To do this we use the same GCLK and prescaler as the oscillator TCC and just multiple the period by a suitable integer.
-	// Then we always set the counter match value to a multiple of the oscillator period. Because of this, we need a 24-bit TCC.
+	// Enable the TCC clocks
+	EnableTccClock(InductiveHeaterOscTccDeviceNumber, GclkNum120MHz);		// use the 120MHz GCLK to get the best frequency setting resolution
 	EnableTccClock(InductiveHeaterPwmTccDeviceNumber, GclkNum120MHz);
-	const uint32_t pwmPrescaler = 0;
-	pwmTimerPeriod = oscTimerPeriod * PwmFrequencyDivisor;
 
-	volatile Tcc *const tccpwm = Timers::TccDevices[InductiveHeaterPwmTccDeviceNumber];
-	hri_tcc_clear_CTRLA_ENABLE_bit(tccpwm);
-	hri_tcc_set_CTRLA_SWRST_bit(tccpwm);
+	// Set the oscillator to use the default values, or (TODO)values fetched from NVRAM
+	SetupOscillator();
 
-	tccpwm->CTRLA.bit.PRESCALER = pwmPrescaler;
-	tccpwm->CTRLA.bit.RESOLUTION = 0;
-	hri_tcc_write_WAVE_WAVEGEN_bf(tccpwm, TCC_WAVE_WAVEGEN_NPWM);
-
-	tccpwm->PERBUF.bit.PERBUF = pwmTimerPeriod - 1;
-	tccpwm->PER.bit.PER = pwmTimerPeriod - 1;
-	tccpwm->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = 0;
-	tccpwm->CC[InductiveHeaterPwmTccOutputNumber].bit.CC = 0;
-
-	hri_tcc_set_CTRLA_ENABLE_bit(tccpwm);
-
-	// Retrigger them both to synchronise them.
-	{
-		AtomicCriticalSectionLocker lock;
-		tccpwm->CTRLBSET.reg = TCC_CTRLBSET_CMD_RETRIGGER;					// if we don't do this then there is a delay before PWM starts
-		tccosc->CTRLBSET.reg = TCC_CTRLBSET_CMD_RETRIGGER;					// if we don't do this then there is a delay before PWM starts
-	}
-
-	// Set up the CCL to gate them together
+	// Set up the CCL to gate the oscillator and the PWM timer together
 	MCLK->APBCMASK.reg |= MCLK_APBCMASK_CCL;								// enable the CCL APB clock
 	CCL->CTRL.reg = 0;														// SAME5x errata: the LUT config registers are enable-protected by the global enable bit
 
@@ -111,16 +76,105 @@ void InductiveHeaterPort::Init() noexcept
 	CCL->LUTCTRL[InductiveHeaterCCLNumber].reg = Lut3RegValue | CCL_LUTCTRL_ENABLE;
 	CCL->CTRL.reg = CCL_CTRL_ENABLE;													// SAME5x errata: the LUT config registers are enable-protected by the global enable bit
 
-	// Finally, set the FET drive pin to be the CCL3 output
+	// Set the FET drive pin to be the CCL3 output
 	SetPinFunction(InductiveHeaterCCLOutPin, InductiveHeaterCCLOutPinPeriphMode);
 
-	SetupAnalogComparator();												// enable the AC so that we can do overvoltage detection
+	// Enable clocks for the AC
+	hri_mclk_set_APBCMASK_AC_bit(MCLK);
+	GCLK->PCHCTRL[AC_GCLK_ID].reg = GCLK_PCHCTRL_GEN(GclkNum60MHz) | GCLK_PCHCTRL_CHEN;
+
+	AC->CTRLA.bit.SWRST = 1;
+	while (AC->SYNCBUSY.bit.SWRST) { }
+
+	// Set the AC input pin function
+	SetPinFunction(InductiveHeaterVoltageFeedbackAcPin, GpioPinFunction::B);
+
+	AC->CALIB.reg = (*reinterpret_cast<const uint32_t*>(AC_FUSES_BIAS0_ADDR) & AC_FUSES_BIAS0_Msk) >> AC_FUSES_BIAS0_Pos;	// set the calibration value
+
+	// COMP0: overvoltage detector, interrupt triggers on rising edge which indicates over voltage
+	AC->SCALER[0].reg = AC_SCALER_VALUE(OverVoltageACValue);
+	AC->COMPCTRL[0].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
+						  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING |
+						  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
+						  AC_COMPCTRL_ENABLE;
+	while (AC->SYNCBUSY.bit.COMPCTRL0) { }
+
+	// COMP1: tuner peak detector. Latches rising edge, not used in normal driving
+	AC->SCALER[1].reg = AC_SCALER_VALUE(TargetVoltageACValue);
+	AC->COMPCTRL[1].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
+						  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING |
+						  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
+						  AC_COMPCTRL_ENABLE;
+	while (AC->SYNCBUSY.bit.COMPCTRL1) { }
+
+	AC->CTRLA.reg = AC_CTRLA_ENABLE;
+	while (AC->SYNCBUSY.bit.ENABLE) { }
+
+   // Wait for both comparators to become ready before enabling interrupts, see SAME5x errata 2.2.2
+	while ((AC->STATUSB.reg & 0x03) != 0x03) { }
+
+//	AC->EVCTRL.reg = AC_EVCTRL_COMPEO0;								// COMP0 state sent to event output
+	AC->INTENSET.reg = AC_INTENSET_COMP0;							// COMP0 rising edge interrupt is always enabled to detect overvoltage
+
+	NVIC_SetPriority(AC_IRQn, NvicPriorityAC);
+	NVIC_EnableIRQ(AC_IRQn);
+}
+
+// Set up the timing parameters from firstCycleLength, laterCycleLength and offTime
+void InductiveHeaterPort::SetupOscillator() noexcept
+{
+	// Set up the oscillator TCC to generate output with the required on (except first pulse) and off times
+	const uint32_t oscPrescaler = 0;									// 16-or 24-bit TCC with a 120MHz clock and prescaler 1 gives us frequencies from 1.8kHz upwards
+	const uint32_t oscTimerPeriod = mainOnTime + offTime;
+
+	volatile Tcc *const tccosc = Timers::TccDevices[InductiveHeaterOscTccDeviceNumber];
+	hri_tcc_clear_CTRLA_ENABLE_bit(tccosc);
+	hri_tcc_set_CTRLA_SWRST_bit(tccosc);
+	tccosc->CTRLA.bit.PRESCALER = oscPrescaler;
+	tccosc->CTRLA.bit.RESOLUTION = 0;
+	hri_tcc_write_WAVE_WAVEGEN_bf(tccosc, TCC_WAVE_WAVEGEN_NPWM_Val);
+	tccosc->PERBUF.bit.PERBUF = oscTimerPeriod - 1;
+	tccosc->PER.bit.PER = oscTimerPeriod - 1;
+	tccosc->CCBUF[InductiveHeaterOscTccOutputNumber].bit.CCBUF = mainOnTime - 1;
+	tccosc->CC[InductiveHeaterOscTccOutputNumber].bit.CC = mainOnTime - 1;
+
+	// Set up the PWM TCC to generate the PWM.
+	// We sync it to the oscillator TCC to avoid short pulses at the start or end of a PWM period.
+	// To do this we use the same GCLK and prescaler as the oscillator TCC and just multiply the period by a suitable integer.
+	// Then we always set the counter match value to a multiple of the oscillator period. Because of this, we need a 24-bit TCC.
+	const uint32_t pwmPrescaler = 0;
+	pwmTimerPeriod = oscTimerPeriod * PwmFrequencyDivisor;
+
+	volatile Tcc *const tccpwm = Timers::TccDevices[InductiveHeaterPwmTccDeviceNumber];
+	hri_tcc_clear_CTRLA_ENABLE_bit(tccpwm);
+	hri_tcc_set_CTRLA_SWRST_bit(tccpwm);
+
+	tccpwm->CTRLA.bit.PRESCALER = pwmPrescaler;
+	tccpwm->CTRLA.bit.RESOLUTION = 0;
+	hri_tcc_write_WAVE_WAVEGEN_bf(tccpwm, TCC_WAVE_WAVEGEN_NPWM);
+
+	tccpwm->PERBUF.bit.PERBUF = pwmTimerPeriod - 1;
+	tccpwm->PER.bit.PER = pwmTimerPeriod - 1;
+	tccpwm->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = 0;
+	tccpwm->CC[InductiveHeaterPwmTccOutputNumber].bit.CC = 0;
+
+	hri_tcc_set_CTRLA_ENABLE_bit(tccosc);
+	hri_tcc_set_CTRLA_ENABLE_bit(tccpwm);
+
+	// Retrigger them both to synchronise them.
+	{
+		AtomicCriticalSectionLocker lock;
+		tccpwm->CTRLBSET.reg = TCC_CTRLBSET_CMD_RETRIGGER;					// if we don't do this then there is a delay before PWM starts
+		tccosc->CTRLBSET.reg = TCC_CTRLBSET_CMD_RETRIGGER;					// if we don't do this then there is a delay before PWM starts
+	}
+
 }
 
 // Set the PWM value in the range 0..1
 void InductiveHeaterPort::SetPwm(float pwm) noexcept
 {
 	const uint32_t ccIdeal = (uint32_t)(pwm * (float)pwmTimerPeriod);
+	const uint32_t oscTimerPeriod = mainOnTime + offTime;
 	const uint32_t cc = ccIdeal - (ccIdeal % oscTimerPeriod);
 	volatile Tcc *const tccdev = Timers::TccDevices[InductiveHeaterPwmTccDeviceNumber];
 	tccdev->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = cc;
@@ -156,15 +210,6 @@ constexpr float TuneZeroMarginV = 1.0;
 
 // Waveform-dump pacing interval, to reduce risk of lost messages.
 constexpr uint32_t TuneDumpIntervalMicroseconds = 3000;
-
-// The AC provides 64 trigger levels. Define the values that indicate over target and over maximum.
-constexpr float TargetVoltage = 96.0;
-constexpr float OverVoltage = 100.0;
-constexpr uint32_t TargetVoltageACValue = (uint32_t)(64.0 * TargetVoltage/InductiveHeaterVoltageFeedbackRange);
-constexpr uint32_t OverVoltageACValue =  (uint32_t)(64.0 * OverVoltage/InductiveHeaterVoltageFeedbackRange);
-
-static_assert(OverVoltageACValue <= 63);
-static_assert(TargetVoltageACValue < OverVoltageACValue);
 
 // Start calibrating the heater
 // Returns GCodeResult::notFinished if we started, else GCodeResult::error with an error message in 'reply' if we couldn't start calibrating
@@ -233,50 +278,6 @@ extern "C" void AC_Handler()
     acIntflag |= intFlag;
     AC->INTFLAG.reg = intFlag;
     //TODO do we need to take any other action on overvoltage?
-}
-
-static void SetupAnalogComparator() noexcept
-{
-	// Enable clocks for the AC
-	hri_mclk_set_APBCMASK_AC_bit(MCLK);
-	GCLK->PCHCTRL[AC_GCLK_ID].reg = GCLK_PCHCTRL_GEN(GclkNum60MHz) | GCLK_PCHCTRL_CHEN;
-
-    AC->CTRLA.bit.SWRST = 1;
-    while (AC->SYNCBUSY.bit.SWRST) { }
-
-	// Set the AC input pin function
-	SetPinFunction(InductiveHeaterVoltageFeedbackAcPin, GpioPinFunction::B);
-
-    AC->CALIB.reg = (*reinterpret_cast<const uint32_t*>(AC_FUSES_BIAS0_ADDR) & AC_FUSES_BIAS0_Msk) >> AC_FUSES_BIAS0_Pos;	// set the calibration value
-
-    // COMP0: overvoltage detector, interrupt triggers on rising edge which indicates over voltage
-    AC->SCALER[0].reg = AC_SCALER_VALUE(OverVoltageACValue);
-    AC->COMPCTRL[0].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
-                          AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING |
-                          AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
-                          AC_COMPCTRL_ENABLE;
-    while (AC->SYNCBUSY.bit.COMPCTRL0) { }
-
-    // COMP1: tuner peak detector. Latches rising edge, not used in normal driving
-    AC->SCALER[1].reg = AC_SCALER_VALUE(TargetVoltageACValue);
-    AC->COMPCTRL[1].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
-                          AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING |
-                          AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
-                          AC_COMPCTRL_ENABLE;
-    while (AC->SYNCBUSY.bit.COMPCTRL1) { }
-
-    AC->CTRLA.reg = AC_CTRLA_ENABLE;
-    while (AC->SYNCBUSY.bit.ENABLE) { }
-
-   // Wait for both comparators to become ready before enabling interrupts, see SAME5x errata 2.2.2
-    while ((AC->STATUSB.reg & 0x03) != 0x03) { }
-
-//	AC->EVCTRL.reg = AC_EVCTRL_COMPEO0;								// COMP0 state sent to event output
-    AC->INTENSET.reg = AC_INTENSET_COMP0;							// COMP0 rising edge interrupt is always enabled to detect overvoltage
-
-    NVIC_SetPriority(AC_IRQn, NvicPriorityAC);
-    NVIC_EnableIRQ(AC_IRQn);
-
 }
 
 // This function is called by the calibration task to calibrate the heater.
