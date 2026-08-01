@@ -45,86 +45,91 @@ InductiveHeaterPort::InductiveHeaterPort()
 
 void InductiveHeaterPort::Init() noexcept
 {
-	// Enable the TCC clocks
-	EnableTccClock(InductiveHeaterOscTccDeviceNumber, GclkNum120MHz);		// use the 120MHz GCLK to get the best frequency setting resolution
-	EnableTccClock(InductiveHeaterPwmTccDeviceNumber, GclkNum120MHz);
-
-	// Set the oscillator to use the default values, or (TODO)values fetched from NVRAM
-	SetupOscillator();
+	SetPinMode(InductiveHeaterCCLOutPin, OUTPUT_LOW);							// turn the FET driver off to avoid glitches
 
 	// Set up the CCL to gate the oscillator and the PWM timer together
-	MCLK->APBCMASK.reg |= MCLK_APBCMASK_CCL;								// enable the CCL APB clock
-	CCL->CTRL.reg = 0;														// SAME5x errata: the LUT config registers are enable-protected by the global enable bit
+	{
+		MCLK->APBCMASK.reg |= MCLK_APBCMASK_CCL;								// enable the CCL APB clock
+		CCL->CTRL.reg = 0;														// SAME5x errata: the LUT config registers are enable-protected by the global enable bit
 
-	// Currently we don't need to provide a clock to the CCL because we don't use input events, a filter, edge detection or sequential logic.
-	// If we do start using any of these then we need to provide the CCL with a clock, max 100MHz.
+		// Currently we don't need to provide a clock to the CCL because we don't use input events, a filter, edge detection or sequential logic.
+		// If we do start using any of these then we need to provide the CCL with a clock, max 100MHz.
 
-	// Set up CCL0 to just copy TCC0 WO[0] to the output so that we can use it as an input to CCL3
-	constexpr uint32_t Lut0RegValue =  CCL_LUTCTRL_TRUTH(1u << 1)						// just copy INSEL0
-									| CCL_LUTCTRL_INSEL0(CCL_LUTCTRL_INSEL0_TCC_Val)	// INSEL0 from TCC output 0
-									| CCL_LUTCTRL_INSEL1(CCL_LUTCTRL_INSEL1_MASK_Val)	// INSEL1 not used
-									| CCL_LUTCTRL_INSEL2(CCL_LUTCTRL_INSEL2_MASK_Val);	// INSEL2 not used
-	CCL->LUTCTRL[InductiveHeaterAuxCCLNumber].reg = Lut0RegValue;
-	CCL->LUTCTRL[InductiveHeaterAuxCCLNumber].reg = Lut0RegValue | CCL_LUTCTRL_ENABLE;
+		// Set up CCL0 to just copy TCC0 WO[0] to the output so that we can use it as an input to CCL3
+		constexpr uint32_t Lut0RegValue =  CCL_LUTCTRL_TRUTH(1u << 1)						// just copy INSEL0 to output
+										| CCL_LUTCTRL_INSEL0(CCL_LUTCTRL_INSEL0_TCC_Val)	// INSEL0 from TCC output 0 (PWM timer)
+										| CCL_LUTCTRL_INSEL1(CCL_LUTCTRL_INSEL1_MASK_Val)	// INSEL1 not used
+										| CCL_LUTCTRL_INSEL2(CCL_LUTCTRL_INSEL2_MASK_Val);	// INSEL2 not used
+		CCL->LUTCTRL[InductiveHeaterAuxCCLNumber].reg = Lut0RegValue;
+		CCL->LUTCTRL[InductiveHeaterAuxCCLNumber].reg = Lut0RegValue | CCL_LUTCTRL_ENABLE;
 
-	// Set up CCL3 to AND the TCC3 WO[1] and the output from CCL0 together
-	constexpr uint32_t Lut3RegValue = CCL_LUTCTRL_TRUTH(1u << 3)						// AND of INSEL0 and INSEL11
-									| CCL_LUTCTRL_INSEL0(CCL_LUTCTRL_INSEL0_TCC_Val)	// INSEL0 from TCC3.0 output
-									| CCL_LUTCTRL_INSEL1(CCL_LUTCTRL_INSEL1_LINK_Val)	// INSEL1 from CCL1
-									| CCL_LUTCTRL_INSEL2(CCL_LUTCTRL_INSEL2_MASK_Val);	// INSEL2 not used
-	CCL->LUTCTRL[InductiveHeaterCCLNumber].reg = Lut3RegValue;
-	CCL->LUTCTRL[InductiveHeaterCCLNumber].reg = Lut3RegValue | CCL_LUTCTRL_ENABLE;
-	CCL->CTRL.reg = CCL_CTRL_ENABLE;													// SAME5x errata: the LUT config registers are enable-protected by the global enable bit
+		// Set up CCL3 to AND the TCC3 WO[1] and the output from CCL0 together
+		constexpr uint32_t Lut3RegValue = CCL_LUTCTRL_TRUTH(1u << 3)						// AND of INSEL0 and INSEL11
+										| CCL_LUTCTRL_INSEL0(CCL_LUTCTRL_INSEL0_TCC_Val)	// INSEL0 from TCC3.0 output (oscillator timer)
+										| CCL_LUTCTRL_INSEL1(CCL_LUTCTRL_INSEL1_LINK_Val)	// INSEL1 from CCL1 (inverted input from PWM timer)
+										| CCL_LUTCTRL_INSEL2(CCL_LUTCTRL_INSEL2_MASK_Val);	// INSEL2 not used
+		CCL->LUTCTRL[InductiveHeaterCCLNumber].reg = Lut3RegValue;
+		CCL->LUTCTRL[InductiveHeaterCCLNumber].reg = Lut3RegValue | CCL_LUTCTRL_ENABLE;
+		CCL->CTRL.reg = CCL_CTRL_ENABLE;													// SAME5x errata: the LUT config registers are enable-protected by the global enable bit
+	}
 
-	// Set the FET drive pin to be the CCL3 output
-	SetPinFunction(InductiveHeaterCCLOutPin, InductiveHeaterCCLOutPinPeriphMode);
+	// Set up the analog comparator to detect the peak voltage on the FET drain
+	{
+		MCLK->APBCMASK.reg |= MCLK_APBCMASK_AC;
+		GCLK->PCHCTRL[AC_GCLK_ID].reg = GCLK_PCHCTRL_GEN(GclkNum60MHz) | GCLK_PCHCTRL_CHEN;
 
-	// Enable clocks for the AC
-	hri_mclk_set_APBCMASK_AC_bit(MCLK);
-	GCLK->PCHCTRL[AC_GCLK_ID].reg = GCLK_PCHCTRL_GEN(GclkNum60MHz) | GCLK_PCHCTRL_CHEN;
+		AC->CTRLA.bit.SWRST = 1;
+		while (AC->SYNCBUSY.bit.SWRST) { }
 
-	AC->CTRLA.bit.SWRST = 1;
-	while (AC->SYNCBUSY.bit.SWRST) { }
+		// Set the AC input pin function
+		SetPinFunction(InductiveHeaterVoltageFeedbackAcPin, GpioPinFunction::B);
 
-	// Set the AC input pin function
-	SetPinFunction(InductiveHeaterVoltageFeedbackAcPin, GpioPinFunction::B);
+		AC->CALIB.reg = (*reinterpret_cast<const uint32_t*>(AC_FUSES_BIAS0_ADDR) & AC_FUSES_BIAS0_Msk) >> AC_FUSES_BIAS0_Pos;	// set the calibration value
 
-	AC->CALIB.reg = (*reinterpret_cast<const uint32_t*>(AC_FUSES_BIAS0_ADDR) & AC_FUSES_BIAS0_Msk) >> AC_FUSES_BIAS0_Pos;	// set the calibration value
+		// COMP0: overvoltage detector, interrupt triggers on rising edge which indicates over voltage
+		AC->SCALER[0].reg = AC_SCALER_VALUE(OverVoltageACValue);
+		AC->COMPCTRL[0].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
+							  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING |
+							  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
+							  AC_COMPCTRL_ENABLE;
+		while (AC->SYNCBUSY.bit.COMPCTRL0) { }
 
-	// COMP0: overvoltage detector, interrupt triggers on rising edge which indicates over voltage
-	AC->SCALER[0].reg = AC_SCALER_VALUE(OverVoltageACValue);
-	AC->COMPCTRL[0].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
-						  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING |
-						  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
-						  AC_COMPCTRL_ENABLE;
-	while (AC->SYNCBUSY.bit.COMPCTRL0) { }
+		// COMP1: tuner peak detector. Latches rising edge, not used in normal driving
+		AC->SCALER[1].reg = AC_SCALER_VALUE(TargetVoltageACValue);
+		AC->COMPCTRL[1].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
+							  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING |
+							  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
+							  AC_COMPCTRL_ENABLE;
+		while (AC->SYNCBUSY.bit.COMPCTRL1) { }
 
-	// COMP1: tuner peak detector. Latches rising edge, not used in normal driving
-	AC->SCALER[1].reg = AC_SCALER_VALUE(TargetVoltageACValue);
-	AC->COMPCTRL[1].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
-						  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING |
-						  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
-						  AC_COMPCTRL_ENABLE;
-	while (AC->SYNCBUSY.bit.COMPCTRL1) { }
+		AC->CTRLA.reg = AC_CTRLA_ENABLE;
+		while (AC->SYNCBUSY.bit.ENABLE) { }
 
-	AC->CTRLA.reg = AC_CTRLA_ENABLE;
-	while (AC->SYNCBUSY.bit.ENABLE) { }
+	   // Wait for both comparators to become ready before enabling interrupts, see SAME5x errata 2.2.2
+		while ((AC->STATUSB.reg & 0x03) != 0x03) { }
 
-   // Wait for both comparators to become ready before enabling interrupts, see SAME5x errata 2.2.2
-	while ((AC->STATUSB.reg & 0x03) != 0x03) { }
+//		AC->EVCTRL.reg = AC_EVCTRL_COMPEO0;									// COMP0 state sent to event output
+		AC->INTENSET.reg = AC_INTENSET_COMP0;								// COMP0 rising edge interrupt is always enabled to detect overvoltage
 
-//	AC->EVCTRL.reg = AC_EVCTRL_COMPEO0;								// COMP0 state sent to event output
-	AC->INTENSET.reg = AC_INTENSET_COMP0;							// COMP0 rising edge interrupt is always enabled to detect overvoltage
+		NVIC_SetPriority(AC_IRQn, NvicPriorityAC);
+		NVIC_EnableIRQ(AC_IRQn);
+	}
 
-	NVIC_SetPriority(AC_IRQn, NvicPriorityAC);
-	NVIC_EnableIRQ(AC_IRQn);
+	// Set the oscillator to use the default values, or (TODO)values fetched from NVRAM
+	{
+		EnableTccClock(InductiveHeaterOscTccDeviceNumber, GclkNum120MHz);		// use the 120MHz GCLK to get the best timing resolution
+		EnableTccClock(InductiveHeaterPwmTccDeviceNumber, GclkNum120MHz);
+		SetupOscillator();														// this finishes by setting the FET to be driven from the CCL output
+	}
 }
 
-// Set up the timing parameters from firstCycleLength, laterCycleLength and offTime
+// Set up the timing parameters from firstCycleLength, laterCycleLength and offTime. This is called during initialisation and during tuning.
 void InductiveHeaterPort::SetupOscillator() noexcept
 {
+	SetPinMode(InductiveHeaterCCLOutPin, OUTPUT_LOW);							// turn the FET driver off to avoid glitches
+
 	// Set up the oscillator TCC to generate output with the required on (except first pulse) and off times
-	const uint32_t oscPrescaler = 0;									// 16-or 24-bit TCC with a 120MHz clock and prescaler 1 gives us frequencies from 1.8kHz upwards
+	const uint32_t oscPrescaler = 0;											// 16-or 24-bit TCC with a 120MHz clock and prescaler 1 gives us frequencies from 1.8kHz upwards
 	const uint32_t oscTimerPeriod = mainOnTime + offTime;
 
 	volatile Tcc *const tccosc = Timers::TccDevices[InductiveHeaterOscTccDeviceNumber];
@@ -132,7 +137,8 @@ void InductiveHeaterPort::SetupOscillator() noexcept
 	hri_tcc_set_CTRLA_SWRST_bit(tccosc);
 	tccosc->CTRLA.bit.PRESCALER = oscPrescaler;
 	tccosc->CTRLA.bit.RESOLUTION = 0;
-	hri_tcc_write_WAVE_WAVEGEN_bf(tccosc, TCC_WAVE_WAVEGEN_NPWM_Val);
+	tccosc->WAVE.reg = TCC_WAVE_WAVEGEN_NPWM_Val;
+	hri_tcc_wait_for_sync(tccosc, TCC_SYNCBUSY_MASK);
 	tccosc->PERBUF.bit.PERBUF = oscTimerPeriod - 1;
 	tccosc->PER.bit.PER = oscTimerPeriod - 1;
 	tccosc->CCBUF[InductiveHeaterOscTccOutputNumber].bit.CCBUF = mainOnTime - 1;
@@ -151,15 +157,16 @@ void InductiveHeaterPort::SetupOscillator() noexcept
 
 	tccpwm->CTRLA.bit.PRESCALER = pwmPrescaler;
 	tccpwm->CTRLA.bit.RESOLUTION = 0;
-	hri_tcc_write_WAVE_WAVEGEN_bf(tccpwm, TCC_WAVE_WAVEGEN_NPWM);
+	tccpwm->WAVE.reg = TCC_WAVE_WAVEGEN_NPWM | (TCC_WAVE_POL0 << InductiveHeaterPwmTccOutputNumber);
+	hri_tcc_wait_for_sync(tccpwm, TCC_SYNCBUSY_MASK);
 
 	tccpwm->PERBUF.bit.PERBUF = pwmTimerPeriod - 1;
 	tccpwm->PER.bit.PER = pwmTimerPeriod - 1;
-	tccpwm->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = 0;
-	tccpwm->CC[InductiveHeaterPwmTccOutputNumber].bit.CC = 0;
+	tccpwm->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = 0x00FFFFFF;
+	tccpwm->CC[InductiveHeaterPwmTccOutputNumber].bit.CC = 0x00FFFFFF;
 
-	hri_tcc_set_CTRLA_ENABLE_bit(tccosc);
 	hri_tcc_set_CTRLA_ENABLE_bit(tccpwm);
+	hri_tcc_set_CTRLA_ENABLE_bit(tccosc);
 
 	// Retrigger them both to synchronise them.
 	{
@@ -168,14 +175,22 @@ void InductiveHeaterPort::SetupOscillator() noexcept
 		tccosc->CTRLBSET.reg = TCC_CTRLBSET_CMD_RETRIGGER;					// if we don't do this then there is a delay before PWM starts
 	}
 
+	// Make sure that the PWM timer output is zero before we enable the output, otherwise the heater will be on at full power for a whole PWM cycle at the start
+	while ((tccpwm->STATUS.reg & (TCC_STATUS_CMP0 << InductiveHeaterPwmTccOutputNumber)) != 0) { }
+
+	// Set the FET drive pin to be the CCL3 output
+	SetPinFunction(InductiveHeaterCCLOutPin, InductiveHeaterCCLOutPinPeriphMode);
 }
 
 // Set the PWM value in the range 0..1
 void InductiveHeaterPort::SetPwm(float pwm) noexcept
 {
-	const uint32_t ccIdeal = (uint32_t)(pwm * (float)pwmTimerPeriod);
+	const uint32_t idealOnClocks = (uint32_t)(pwm * (float)pwmTimerPeriod);						// range is 0..pwmTimerPeriod
 	const uint32_t oscTimerPeriod = mainOnTime + offTime;
-	const uint32_t cc = ccIdeal - (ccIdeal % oscTimerPeriod);
+	const uint32_t actualOnClocks = idealOnClocks - (idealOnClocks % oscTimerPeriod);			// range is still 0..pwmTimerPeriod
+	const uint32_t cc = (actualOnClocks == 0) ? 0x00FFFFFF										// heater is off
+						: (actualOnClocks == pwmTimerPeriod) ? 0								// heater is fully on
+							: pwmTimerPeriod - actualOnClocks + (mainOnTime - firstOnTime);		// delay comparison to make the first cycle shorter than the rest
 	volatile Tcc *const tccdev = Timers::TccDevices[InductiveHeaterPwmTccDeviceNumber];
 	tccdev->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = cc;
 }
