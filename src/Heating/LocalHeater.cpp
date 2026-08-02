@@ -666,47 +666,48 @@ float LocalHeater::GetExpectedHeatingRate(float voltage) const noexcept
 	return GetModel().GetExpectedHeatingRate(temperatureRise, 1.0, pwm, voltage, 0.0);
 }
 
-// Start or stop running heater tuning cycles
+// Start or stop running heater tuning cycles and/or calibration
+// If msg.on and msg.calibrate are both set then we want to start calibration
+// - Return ok if the heater doesn't implement calibration, notFinished if it does and we have started, error + message in reply if we couldn't start it.
+// If msg.on it not set but msg.calibration is set then we are asking whether calibration has completed.
+// - Return ok with the parameters in reply if it has, error with a message if it failed, or notFinished if it is ongoing.
+// If msg.calibrate is not set and msg.on is set then execute tuning cycles.
 GCodeResult LocalHeater::TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept
 {
-	if (msg.on)
+	if (msg.calibrate)
 	{
 #if SUPPORT_INDUCTIVE_HEATER
-		if (msg.calibrate && ports[0].IsInductiveHeaterPort())
+		if (ports[0].IsInductiveHeaterPort())
 		{
-			return Platform::GetInductiveHeater().StartCalibration(reply);
+			return Platform::GetInductiveHeater().Calibrate(msg.on, reply);
 		}
 		else
-#else
-		if (!msg.calibrate)							// we only calibrate inductive heaters, so just return completed if asked to calibrate
 #endif
 		{
-			if (lastPwm > 0.0 || GetAveragePWM() > 0.02)
-			{
-				reply.printf("heater %u must be off and cold before auto tuning it", GetHeaterNumber());
-				return GCodeResult::error;
-			}
-
-			// We could do some more checks here but the main board should have done all the checks needed already
-			tuningHighTemp = msg.highTemp;
-			tuningLowTemp = msg.lowTemp;
-			tuningPwm = msg.pwm;
-			tuningPeakTempDrop = msg.peakTempDrop;
-			timeSetHeating = millis();
-			tuningCycleComplete = false;
-			cyclesDone = 0;
-			mode = HeaterMode::tuning1_heating_up;
+			return GCodeResult::ok;
 		}
 	}
-#if SUPPORT_INDUCTIVE_HEATER
-	if (msg.calibrate && ports[0].IsInductiveHeaterPort())
+
+	// If we get here then we have not been asked to calibrate the heater
+	if (msg.on)
 	{
-		return Platform::GetInductiveHeater().CheckCalibrationComplete(reply);
+		if (lastPwm > 0.0 || GetAveragePWM() > 0.02)
+		{
+			reply.printf("heater %u must be off and cold before auto tuning it", GetHeaterNumber());
+			return GCodeResult::error;
+		}
+
+		// We could do some more checks here but the main board should have done all the checks needed already
+		tuningHighTemp = msg.highTemp;
+		tuningLowTemp = msg.lowTemp;
+		tuningPwm = msg.pwm;
+		tuningPeakTempDrop = msg.peakTempDrop;
+		timeSetHeating = millis();
+		tuningCycleComplete = false;
+		cyclesDone = 0;
+		mode = HeaterMode::tuning1_heating_up;
 	}
 	else
-#else
-	else if (!msg.calibrate)						// we only calibrate inductive heaters, so just return completed if asked to calibrate
-#endif
 	{
 		SwitchOff();
 	}
