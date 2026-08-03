@@ -317,12 +317,13 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 		if (receivedPositionReport)
 		{
 			// We have a completed a position report
-			lastKnownPosition = sensorValue & TypeMagnetAngleMask;
+			lastKnownPosition = val & TypeMagnetAngleMask;
 			const uint16_t angleChange = (val - sensorValue) & TypeMagnetAngleMask;			// angle change in range 0..1023
 			const int32_t movement = (angleChange <= 512) ? (int32_t)angleChange : (int32_t)angleChange - 1024;
 			movementMeasuredSinceLastSync += (float)movement/1024;
 			sensorValue = val;
 			lastMeasurementTime = millis();
+			CheckForMotion(val & TypeMagnetAngleMask, TypeMagnetAngleMask, MotionDetectionMinCounts);
 
 			if (haveStartBitData)					// if we have a synchronised value for the amount of extrusion commanded
 			{
@@ -360,12 +361,13 @@ void RotatingMagnetFilamentMonitor::HandleDirectAS5601Data() noexcept
 		sensorError = (lastErrorCode != 0);
 		if (!sensorError)
 		{
-			lastKnownPosition = sensorValue;
+			lastKnownPosition = val;
 			const uint16_t angleChange = (val - sensorValue) & TypeMagnetAngleMask;		// angle change in range 0..1023
 			const int32_t movement = (angleChange <= 512) ? (int32_t)angleChange : (int32_t)angleChange - 1024;
 			movementMeasuredSinceLastSync += (float)movement/1024;
 			sensorValue = val;
 			lastMeasurementTime = millis();
+			CheckForMotion(val & TypeMagnetAngleMask, TypeMagnetAngleMask, MotionDetectionMinCounts);
 
 			if (haveStartBitData)					// if we have a synchronised value for the amount of extrusion commanded
 			{
@@ -596,6 +598,17 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear() noexcept
 				: (sensorError) ? FilamentSensorStatus::sensorError
 					: ((sensorValue & switchOpenMask) != 0) ? FilamentSensorStatus::noFilament
 						: FilamentSensorStatus::ok;
+}
+
+// Get the filament present state of the optional microswitch, returning true if it is known
+bool RotatingMagnetFilamentMonitor::GetLocalFilamentPresent(bool& present) const noexcept
+{
+	if (switchOpenMask == 0 || !dataReceived || sensorError)
+	{
+		return false;
+	}
+	present = (sensorValue & switchOpenMask) == 0;
+	return true;
 }
 
 // Store collected data in a CAN message slot

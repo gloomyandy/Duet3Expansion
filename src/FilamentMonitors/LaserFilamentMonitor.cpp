@@ -258,6 +258,7 @@ void LaserFilamentMonitor::HandleIncomingData() noexcept
 			movementMeasuredSinceLastSync += (float)movement * ((val & TypeLaserLargeDataRangeBitMask) ? 0.01 : 0.02);
 			sensorValue = val;
 			lastMeasurementTime = millis();
+			CheckForMotion(val & (positionRange - 1), positionRange - 1, MotionDetectionMinCounts);
 
 			if (haveStartBitData)	// if we have a synchronised  value for the amount of extrusion commanded
 			{
@@ -413,6 +414,17 @@ FilamentSensorStatus LaserFilamentMonitor::Clear() noexcept
 				: (sensorError) ? FilamentSensorStatus::sensorError
 					: ((sensorValue & switchOpenMask) != 0) ? FilamentSensorStatus::noFilament
 						: FilamentSensorStatus::ok;
+}
+
+// Get the filament present state of the optional microswitch, returning true if it is known
+bool LaserFilamentMonitor::GetLocalFilamentPresent(bool& present) const noexcept
+{
+	if (switchOpenMask == 0 || !dataReceived || sensorError)
+	{
+		return false;
+	}
+	present = (sensorValue & switchOpenMask) == 0;
+	return true;
 }
 
 // Print diagnostic info for this sensor
