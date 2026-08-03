@@ -323,6 +323,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 			movementMeasuredSinceLastSync += (float)movement/1024;
 			sensorValue = val;
 			lastMeasurementTime = millis();
+			CheckForMotion(val & TypeMagnetAngleMask, TypeMagnetAngleMask, MotionDetectionMinCounts);
 
 			if (haveStartBitData)					// if we have a synchronised value for the amount of extrusion commanded
 			{
@@ -366,6 +367,7 @@ void RotatingMagnetFilamentMonitor::HandleDirectAS5601Data() noexcept
 			movementMeasuredSinceLastSync += (float)movement/1024;
 			sensorValue = val;
 			lastMeasurementTime = millis();
+			CheckForMotion(val & TypeMagnetAngleMask, TypeMagnetAngleMask, MotionDetectionMinCounts);
 
 			if (haveStartBitData)					// if we have a synchronised value for the amount of extrusion commanded
 			{
@@ -596,6 +598,17 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear() noexcept
 				: (sensorError) ? FilamentSensorStatus::sensorError
 					: ((sensorValue & switchOpenMask) != 0) ? FilamentSensorStatus::noFilament
 						: FilamentSensorStatus::ok;
+}
+
+// Get the filament present state of the optional microswitch, returning true if it is known
+bool RotatingMagnetFilamentMonitor::GetLocalFilamentPresent(bool& present) const noexcept
+{
+	if (switchOpenMask == 0 || !dataReceived || sensorError)
+	{
+		return false;
+	}
+	present = (sensorValue & switchOpenMask) == 0;
+	return true;
 }
 
 // Store collected data in a CAN message slot
