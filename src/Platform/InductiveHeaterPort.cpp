@@ -28,7 +28,7 @@
 #endif
 
 // The AC provides 64 trigger levels. Define the values that indicate over target and over maximum.
-constexpr float TargetVoltage = 96.0;
+constexpr float TargetVoltage = 80.0;
 constexpr float OverVoltage = 100.0;
 constexpr uint32_t TargetVoltageACValue = (uint32_t)(64.0 * TargetVoltage/InductiveHeaterVoltageFeedbackRange);
 constexpr uint32_t OverVoltageACValue =  (uint32_t)(64.0 * OverVoltage/InductiveHeaterVoltageFeedbackRange);
@@ -201,7 +201,7 @@ void InductiveHeaterPort::SetPwm(float pwm) noexcept
 // Used during heater calibration. burstLength is a small integer, at least 1.
 void InductiveHeaterPort::SetBurst(uint32_t burstLength) noexcept
 {
-	const uint32_t cc = pwmTimerPeriod - (burstLength - 1) * (mainOnTime + offTime) - firstOnTime;
+	const uint32_t cc = pwmTimerPeriod - (burstLength - 1) * (mainOnTime + offTime) - (firstOnTime + offTime);
 	SetupOscillator(cc);
 }
 
@@ -213,34 +213,29 @@ void InductiveHeaterPort::TurnOff() noexcept
 
 ///////////////////////// Heater calibration constants and functions ////////////////////////////////
 
-// Heater on-time tuning constants
-constexpr uint32_t TuneOnFirstSeed = 180;			// safe starting floor
-constexpr uint32_t TuneOnStep = 2;					// ramp granularity
-constexpr uint32_t TuneOnMax = 1080;
-
 // Provisional OFF used while ramping ON: long enough to contain a full positive
 // resonance halfcycle even at the lowest resonant frequency.
-constexpr uint32_t TuneOffProv = 840;
+//constexpr uint32_t TuneOffProv = 840;
 
 // OFF cycles fired after the last measured cycle so its resonance completes
 // before the timer stops.
-constexpr uint32_t TuneTrailingOff = 1;
+//constexpr uint32_t TuneTrailingOff = 1;
 
 // Quiet time between bursts, long enough for the tank to fully stop resonating.
-constexpr uint32_t TunsSettleMicroseconds = 350;
+//constexpr uint32_t TunsSettleMicroseconds = 350;
 
 // Whole-tune watchdog. A full sweep is typically well under ~2 s, so this is just a timeout to ensure that session doesn't hang in case of hardware faults etc.
-constexpr uint32_t TuneTotalTimeoutMicroseconds = 10000000;		// 10 s
+//constexpr uint32_t TuneTotalTimeoutMicroseconds = 10000000;		// 10 s
 
 // Waveform sweep parameters for OFF time tuning. Must be long enough to encompass the full on+off cycle to ensure we can capture the full positive resonance halfcycle.
-constexpr uint32_t TuneSampleStep = 8;
-constexpr uint32_t TuneNumSamples = (TuneOnMax + TuneOffProv) / TuneSampleStep;
+//constexpr uint32_t TuneSampleStep = 8;
+//constexpr uint32_t TuneNumSamples = (TuneOnMax + TuneOffProv) / TuneSampleStep;
 
 // Margin when finding the resonance cycle in the sampled data.
-constexpr float TuneZeroMarginV = 1.0;
+//constexpr float TuneZeroMarginV = 1.0;
 
 // Waveform-dump pacing interval, to reduce risk of lost messages.
-constexpr uint32_t TuneDumpIntervalMicroseconds = 3000;
+//constexpr uint32_t TuneDumpIntervalMicroseconds = 3000;
 
 // Start calibrating the heater, or check whether heater calibration is complete
 // Returns GCodeResult::notFinished if we started
@@ -270,7 +265,8 @@ GCodeResult InductiveHeaterPort::Calibrate(bool start, const StringRef& reply) n
 	case CalibrationState::success:
 		calState = CalibrationState::idle;
 		reply.printf("Calibration succeeded, parameters: %lu, %lu, %lu", firstOnTime, mainOnTime, offTime);
-		return GCodeResult::ok;
+		return GCodeResult::error;	//TEMP
+		//return GCodeResult::ok;
 
 	case CalibrationState::failed:
 		calState = CalibrationState::idle;
@@ -337,12 +333,13 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 
 		// Delay long enough for a few bursts to happen. Each burst is about 5ms long
 		delay(25);
+		AC->INTENCLR.reg = AC_INTENSET_COMP1;						// disable interrupt on COMP1 rising edge
 		TurnOff();
 
 		// Check whether the target first pulse height has been reached
 		if (acIntflag.load() & AC_INTFLAG_COMP1) { break; }
 
-		if (firstOnTime >= OscMaxOnTime)
+		if (firstOnTime >= OscMaxOnTime || (acIntflag.load() & AC_INTFLAG_COMP0))
 		{
 			calibrationFailedReason = "exceeded maximum first pulse length";
 			calState = CalibrationState::failed;
@@ -351,6 +348,15 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 
 		// Increase the pulse length
 		firstOnTime += OscOnTimeStep;
+		delay(1);													// allow time for the heater coil to stop resonating
+	}
+
+	// Here when we have detected the target peak voltage in the first cycle
+	if (firstOnTime - OscMinFirstOnTime < 10)						// we expect to have to increase the first on time above the minimum
+	{
+		calibrationFailedReason = "first pulse length too short, probably hardware error";
+		calState = CalibrationState::failed;
+		return;
 	}
 
 	//TODO
