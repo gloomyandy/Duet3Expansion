@@ -104,6 +104,7 @@ private:
 	uint8_t imageQuality;									// image quality returned by version 2 prototype sensor
 	uint8_t shutter;										// shutter value returned by sensor
 	uint8_t brightness;										// brightness returned by sensor
+	bool haveShutter;										// true if we received a shutter value
 	uint8_t lastErrorCode;									// the last error code received
 	bool sensorError;										// true if received an error report (cleared by a position report)
 
