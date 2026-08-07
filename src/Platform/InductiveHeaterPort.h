@@ -32,7 +32,7 @@ private:
 	static constexpr uint32_t OscMinFirstOnTime = 180;
 	static constexpr uint32_t OscDefaultLaterOnTime = 300;
 	static constexpr uint32_t OscMaxOnTime = 500;
-	static constexpr uint32_t OscDefaultOffTime = 600;
+	static constexpr uint32_t OscDefaultOffTime = 500;
 	static constexpr uint32_t OscOnTimeStep = 2;
 	static constexpr uint32_t StartingOffTime = 840;							// long enough to always contain a full half cycle
 
