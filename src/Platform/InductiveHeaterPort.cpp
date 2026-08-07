@@ -13,6 +13,7 @@
 #include <Timers.h>
 #include <Platform/TaskPriorities.h>
 #include <AppNotifyIndices.h>
+#include <Math/DeviationAccumulator.h>
 #include <atomic>
 
 #if SAME5x
@@ -30,8 +31,8 @@
 // The AC provides 64 trigger levels. Define the values that indicate over target and over maximum.
 constexpr float TargetVoltage = 80.0;
 constexpr float OverVoltage = 100.0;
-constexpr uint32_t TargetVoltageACValue = (uint32_t)(64.0 * TargetVoltage/InductiveHeaterVoltageFeedbackRange);
-constexpr uint32_t OverVoltageACValue =  (uint32_t)(64.0 * OverVoltage/InductiveHeaterVoltageFeedbackRange);
+constexpr uint32_t TargetVoltageACValue = (uint32_t)(64.0 * TargetVoltage/InductiveHeaterVoltageFeedbackRange) - 1;
+constexpr uint32_t OverVoltageACValue =  (uint32_t)(64.0 * OverVoltage/InductiveHeaterVoltageFeedbackRange) - 1;
 
 static_assert(OverVoltageACValue <= 63);
 static_assert(TargetVoltageACValue < OverVoltageACValue);
@@ -89,26 +90,44 @@ void InductiveHeaterPort::Init() noexcept
 		// COMP0: overvoltage detector, interrupt triggers on rising edge which indicates over voltage
 		AC->SCALER[0].reg = AC_SCALER_VALUE(OverVoltageACValue);
 		AC->COMPCTRL[0].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
-							  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING |
+							  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING | AC_COMPCTRL_FLEN(1) |
 							  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
 							  AC_COMPCTRL_ENABLE;
 		while (AC->SYNCBUSY.bit.COMPCTRL0) { }
 
+#if 0
 		// COMP1: tuner peak detector. Latches rising edge, not used in normal driving
 		AC->SCALER[1].reg = AC_SCALER_VALUE(TargetVoltageACValue);
 		AC->COMPCTRL[1].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
-							  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING |
-							  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
+							  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING | AC_COMPCTRL_FLEN(1) |
+//							  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
 							  AC_COMPCTRL_ENABLE;
 		while (AC->SYNCBUSY.bit.COMPCTRL1) { }
+#endif
+
+		AC->EVCTRL.reg = AC_EVCTRL_COMPEO0 | AC_EVCTRL_COMPEO1;					// both channels generate output events
 
 		AC->CTRLA.reg = AC_CTRLA_ENABLE;
 		while (AC->SYNCBUSY.bit.ENABLE) { }
 
 	   // Wait for both comparators to become ready before enabling interrupts, see SAME5x errata 2.2.2
-		while ((AC->STATUSB.reg & 0x03) != 0x03) { }
+		while ((AC->STATUSB.reg & AC_STATUSB_READY0) != AC_STATUSB_READY0) { }
 
-//		AC->EVCTRL.reg = AC_EVCTRL_COMPEO0;										// COMP0 state sent to event output
+		// Set up the event system to generate events on the comparators triggering
+		MCLK->APBBMASK.reg |= MCLK_APBBMASK_EVSYS;								// enable the EVSYS APB clock
+
+		// The user multiplexer must be configured before the channel (datasheet section 31.5.2.3)
+		// The definition of EVSYS_USER in the DFP is a 32-bit type whereas the datasheet says it as an 8-bit type. This affects the indexing.
+#if 0	// If we assume the datasheet is correct:
+		volatile uint8_t *const evsysUser = (volatile uint8_t *)(&EVSYS->USER);
+		evsysUser[InductiveHeaterOscTccCaptureEventUserNumber] = (AcEvent + 1) + 1;			// route channel (AcEvent + 1) events to oscillator TC capture 1
+#else	// If we assume the DFP is correct:
+		EVSYS->USER[InductiveHeaterOscTccCaptureEventUserNumber].reg = (AcEvent + 1) + 1;	// route channel (AcEvent + 1) events to oscillator TC capture 1
+#endif
+//		EVSYS->Channel[AcEvent].CHANNEL.reg = EVSYS_CHANNEL_EVGEN(0x6B) | EVSYS_CHANNEL_PATH_ASYNCHRONOUS | EVSYS_CHANNEL_EDGSEL_NO_EVT_OUTPUT;		// route comparator 0 event to event channel AcEvent
+		// Erratum 2.21.1: "TCC peripheral is not compatible with an EVSYS channel in SYNC or RESYNC mode.
+		//                  Workaround: Use TCC with an EVSYS channel in ASYNC mode."
+		EVSYS->Channel[AcEvent + 1].CHANNEL.reg = EVSYS_CHANNEL_EVGEN(0x6C) | EVSYS_CHANNEL_PATH_ASYNCHRONOUS | EVSYS_CHANNEL_EDGSEL_NO_EVT_OUTPUT;	// route comparator 1 event to event channel AcEvent + 1
 		AC->INTENSET.reg = AC_INTENSET_COMP0;									// COMP0 rising edge interrupt is always enabled to detect overvoltage
 
 		NVIC_SetPriority(AC_IRQn, NvicPriorityAC);
@@ -136,14 +155,16 @@ void InductiveHeaterPort::SetupOscillator(uint32_t pwmOnCount) noexcept
 	volatile Tcc *const tccosc = Timers::TccDevices[InductiveHeaterOscTccDeviceNumber];
 	hri_tcc_clear_CTRLA_ENABLE_bit(tccosc);
 	hri_tcc_set_CTRLA_SWRST_bit(tccosc);
-	tccosc->CTRLA.bit.PRESCALER = oscPrescaler;
-	tccosc->CTRLA.bit.RESOLUTION = 0;
+
+	tccosc->CTRLA.reg = TCC_CTRLA_PRESCALER(oscPrescaler) | (TCC_CTRLA_CPTEN0 << InductiveHeaterOscTccCaptureNumber);	// enable capture
 	tccosc->WAVE.reg = TCC_WAVE_WAVEGEN_NPWM_Val;
 	hri_tcc_wait_for_sync(tccosc, TCC_SYNCBUSY_MASK);
-	tccosc->PERBUF.bit.PERBUF = oscTimerPeriod - 1;
-	tccosc->PER.bit.PER = oscTimerPeriod - 1;
-	tccosc->CCBUF[InductiveHeaterOscTccOutputNumber].bit.CCBUF = mainOnTime - 1;
-	tccosc->CC[InductiveHeaterOscTccOutputNumber].bit.CC = mainOnTime - 1;
+
+	tccosc->PERBUF.reg = oscTimerPeriod - 1;
+	tccosc->PER.reg = oscTimerPeriod - 1;
+	tccosc->CCBUF[InductiveHeaterOscTccOutputNumber].reg = mainOnTime - 1;
+	tccosc->CC[InductiveHeaterOscTccOutputNumber].reg = mainOnTime - 1;
+	tccosc->EVCTRL.reg = (TCC_EVCTRL_MCEI0 << InductiveHeaterOscTccCaptureNumber);	// input event causes capture
 
 	// Set up the PWM TCC to generate the PWM.
 	// We sync it to the oscillator TCC to avoid short pulses at the start or end of a PWM period.
@@ -156,15 +177,14 @@ void InductiveHeaterPort::SetupOscillator(uint32_t pwmOnCount) noexcept
 	hri_tcc_clear_CTRLA_ENABLE_bit(tccpwm);
 	hri_tcc_set_CTRLA_SWRST_bit(tccpwm);
 
-	tccpwm->CTRLA.bit.PRESCALER = pwmPrescaler;
-	tccpwm->CTRLA.bit.RESOLUTION = 0;
+	tccpwm->CTRLA.reg = TCC_CTRLA_PRESCALER(pwmPrescaler);
 	tccpwm->WAVE.reg = TCC_WAVE_WAVEGEN_NPWM | (TCC_WAVE_POL0 << InductiveHeaterPwmTccOutputNumber);
 	hri_tcc_wait_for_sync(tccpwm, TCC_SYNCBUSY_MASK);
 
-	tccpwm->PERBUF.bit.PERBUF = pwmTimerPeriod - 1;
-	tccpwm->PER.bit.PER = pwmTimerPeriod - 1;
-	tccpwm->CC[InductiveHeaterPwmTccOutputNumber].bit.CC = pwmOnCount;
-	tccpwm->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = pwmOnCount;
+	tccpwm->PERBUF.reg = pwmTimerPeriod - 1;
+	tccpwm->PER.reg = pwmTimerPeriod - 1;
+	tccpwm->CC[InductiveHeaterPwmTccOutputNumber].reg = pwmOnCount;
+	tccpwm->CCBUF[InductiveHeaterPwmTccOutputNumber].reg = pwmOnCount;
 
 	hri_tcc_set_CTRLA_ENABLE_bit(tccpwm);
 	hri_tcc_set_CTRLA_ENABLE_bit(tccosc);
@@ -181,6 +201,10 @@ void InductiveHeaterPort::SetupOscillator(uint32_t pwmOnCount) noexcept
 
 	// Set the FET drive pin to be the CCL3 output
 	SetPinFunction(InductiveHeaterCCLOutPin, InductiveHeaterCCLOutPinPeriphMode);
+
+	// Enable the oscillator TCC capture interrupt
+	NVIC_SetPriority(OSC_TCC_IRQn, NvicPriorityOscTcc);
+	NVIC_EnableIRQ(OSC_TCC_IRQn);
 }
 
 // Set the PWM value in the range 0..1. Used in normal operation.
@@ -201,7 +225,8 @@ void InductiveHeaterPort::SetPwm(float pwm) noexcept
 // Used during heater calibration. burstLength is a small integer, at least 1.
 void InductiveHeaterPort::SetBurst(uint32_t burstLength) noexcept
 {
-	const uint32_t cc = pwmTimerPeriod - (burstLength - 1) * (mainOnTime + offTime) - (firstOnTime + offTime);
+	const uint32_t nextPwmTimerPeriod = (mainOnTime + offTime) * PwmFrequencyDivisor;
+	const uint32_t cc = nextPwmTimerPeriod - (burstLength - 1) * (mainOnTime + offTime) - (firstOnTime + offTime);
 	SetupOscillator(cc);
 }
 
@@ -237,6 +262,8 @@ void InductiveHeaterPort::TurnOff() noexcept
 // Waveform-dump pacing interval, to reduce risk of lost messages.
 //constexpr uint32_t TuneDumpIntervalMicroseconds = 3000;
 
+static DeviationAccumulator accumulator;
+
 // Start calibrating the heater, or check whether heater calibration is complete
 // Returns GCodeResult::notFinished if we started
 //         GCodeResult::error with an error message in 'reply' if we couldn't start calibration or calibration failed
@@ -265,12 +292,14 @@ GCodeResult InductiveHeaterPort::Calibrate(bool start, const StringRef& reply) n
 	case CalibrationState::success:
 		calState = CalibrationState::idle;
 		reply.printf("Calibration succeeded, parameters: %lu, %lu, %lu", firstOnTime, mainOnTime, offTime);
+		reply.lcatf("num %u mean %.1f dev %.1f", accumulator.GetNumSamples(), (double)accumulator.GetMean(), (double)accumulator.GetDeviation());
 		return GCodeResult::error;	//TEMP
 		//return GCodeResult::ok;
 
 	case CalibrationState::failed:
 		calState = CalibrationState::idle;
 		reply.copy(calibrationFailedReason);
+		reply.lcatf("num %u mean %.1f dev %.1f", accumulator.GetNumSamples(), (double)accumulator.GetMean(), (double)accumulator.GetDeviation());
 		return GCodeResult::error;
 
 	default:
@@ -300,14 +329,97 @@ void InductiveHeaterPort::CalibrationTaskFunc() noexcept
 }
 
 static std::atomic<uint32_t> acIntflag(0);
+static std::atomic<uint32_t> count(0);
 
 // Analog comparator interrupt handler
-extern "C" void AC_Handler()
+extern "C" void AC_Handler() noexcept
 {
 	const uint32_t intFlag = AC->INTFLAG.reg;
-    acIntflag |= intFlag;
-    AC->INTFLAG.reg = intFlag;
+//	if ((intFlag & acIntflag) & AC_INTFLAG_COMP1)
+//	{
+//		// This is the first COMP1 interrupt so log its time
+//		volatile Tcc *const tccosc = Timers::TccDevices[InductiveHeaterOscTccDeviceNumber];
+//		tccosc->CTRLBSET.reg = TCC_CTRLBSET_CMD_READSYNC;
+//		while (tccosc->SYNCBUSY.bit.COUNT) { }
+//		count = tccosc->COUNT.reg;
+//	}
+	acIntflag |= intFlag;
     //TODO do we need to take any other action on overvoltage?
+	AC->INTFLAG.reg = intFlag;
+}
+
+#ifndef OSC_TCC_Handler
+# error OSC_TCC_Handler not defined
+#endif
+
+static uint32_t captureBuffer[8];
+static unsigned int captureIndex = 0;
+
+extern "C" void OSC_TCC_Handler() noexcept
+{
+	volatile Tcc *const tccosc = Timers::TccDevices[InductiveHeaterOscTccDeviceNumber];
+	const uint32_t intflag = tccosc->INTFLAG.reg;
+	// Erratum 2.21.11: "In capture operation, MC0/MC1 interrupt status flags (INTFLAG.MC0/INTFLAG.MC1) are not automatically cleared when the CC0/CC1 register is read.
+	//					 Workaround: MC0/MC1 interrupt status flags must be cleared by the software (INTFLAG.MC0 = 1/INTFLAG.MC1 = 1)."
+	if (intflag & (TCC_INTFLAG_MC0 << InductiveHeaterOscTccCaptureNumber))
+	{
+		const uint32_t capturedValue = tccosc->CC[InductiveHeaterOscTccCaptureNumber].bit.CC;
+		if (captureIndex < ARRAY_SIZE(captureBuffer))
+		{
+			captureBuffer[captureIndex++] = capturedValue;
+		}
+	}
+	tccosc->INTFLAG.reg = intflag;
+}
+
+// Set comparator 1 to interrupt when the target voltage is exceeded
+static void SetComp1Target() noexcept
+{
+	AC->COMPCTRL[1].reg = 0;										// disable comparator 1
+	while (AC->SYNCBUSY.bit.COMPCTRL1) { }
+
+	AC->SCALER[1].reg = AC_SCALER_VALUE(TargetVoltageACValue);
+	AC->COMPCTRL[1].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
+						  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING | AC_COMPCTRL_FLEN(1) |
+						  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
+						  AC_COMPCTRL_ENABLE;
+	while (AC->SYNCBUSY.bit.COMPCTRL1) { }
+	while ((AC->STATUSB.reg & AC_STATUSB_READY1) != AC_STATUSB_READY1) { }
+}
+
+// Set comparator 1 to interrupt when the voltage goes below zero
+static void SetComp1Zero() noexcept
+{
+	AC->COMPCTRL[1].reg = 0;										// disable comparator 1
+	while (AC->SYNCBUSY.bit.COMPCTRL1) { }
+
+	AC->SCALER[1].reg = AC_SCALER_VALUE(0);							// detect when voltage falls to 1/64 of VDDANA which is 1.6V at the mosfet drain
+	AC->COMPCTRL[1].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
+						  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_FALLING | AC_COMPCTRL_FLEN(1) |
+						  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
+						  AC_COMPCTRL_ENABLE;
+	while (AC->SYNCBUSY.bit.COMPCTRL1) { }
+	while ((AC->STATUSB.reg & AC_STATUSB_READY1) != AC_STATUSB_READY1) { }
+}
+
+// Start capturing the oscillator TCC count triggered by analog comparator COMP1
+static void StartCapturing() noexcept
+{
+	captureIndex = 0;
+	volatile Tcc *const tccosc = Timers::TccDevices[InductiveHeaterOscTccDeviceNumber];
+	while (tccosc->INTFLAG.reg & (TCC_INTFLAG_MC0 << InductiveHeaterOscTccCaptureNumber))
+	{
+		(void)tccosc->CC;
+		tccosc->INTFLAG.reg = (TCC_INTFLAG_MC0 << InductiveHeaterOscTccCaptureNumber);	// Erratum: reading CC does not clear the flag
+	}
+	tccosc->INTENSET.reg = (TCC_INTENSET_MC0 << InductiveHeaterOscTccCaptureNumber);
+}
+
+// Stop capturing the oscillator TCC count triggered by analog comparator COMP1
+static void StopCapturing() noexcept
+{
+	volatile Tcc *const tccosc = Timers::TccDevices[InductiveHeaterOscTccDeviceNumber];
+	tccosc->INTENCLR.reg = (TCC_INTENCLR_MC0 << InductiveHeaterOscTccCaptureNumber);
 }
 
 // This function is called by the calibration task to calibrate the heater.
@@ -319,35 +431,49 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 	// Set up the analog comparator to interrupt when the target peak voltage is reached.
 	TurnOff();														// must turn the heater off before messing with the parameters
 	firstOnTime = OscMinFirstOnTime;								// set the default parameters
-	mainOnTime = OscDefaultLaterOnTime;
+	mainOnTime = OscMinFirstOnTime;
 	offTime = OscDefaultOffTime;
+
+	SetComp1Target();												// set comparator to trigger when the target threshold was reached
+	delay(2);														// may need this to allow VSCALE to settle
+	unsigned int successCount = 0;
+	constexpr unsigned int requiredSuccess = 3;
 
 	for (;;)    													// loop increasing firstOnTime until the target is reached
 	{
 		// Set up the analog comparator channel 1 to detect when the target mosfet drain voltage is reached
 		acIntflag.store(0);
-		AC->INTENSET.reg = AC_INTENSET_COMP1;						// enable interrupt on COMP1 rising edge
+		AC->INTFLAG.reg = AC_INTENSET_COMP1;						// clear any pending COMP1 interrupt
+		AC->INTENSET.reg = AC_INTENSET_COMP1;						// enable interrupt on COMP1 edge
 
 		// Command the heater to perform single-cycle bursts using the current parameters
 		SetBurst(1);
 
 		// Delay long enough for a few bursts to happen. Each burst is about 5ms long
 		delay(25);
-		AC->INTENCLR.reg = AC_INTENSET_COMP1;						// disable interrupt on COMP1 rising edge
+		AC->INTENCLR.reg = AC_INTENSET_COMP1;						// disable interrupt on COMP1 edge
 		TurnOff();
 
 		// Check whether the target first pulse height has been reached
-		if (acIntflag.load() & AC_INTFLAG_COMP1) { break; }
-
-		if (firstOnTime >= OscMaxOnTime || (acIntflag.load() & AC_INTFLAG_COMP0))
+		if (acIntflag.load() && AC_INTFLAG_COMP1)
 		{
-			calibrationFailedReason = "exceeded maximum first pulse length";
-			calState = CalibrationState::failed;
-			return;
+			++successCount;
+			if (successCount == requiredSuccess) { break; }
 		}
+		else
+		{
+			if (firstOnTime >= OscMaxOnTime || (acIntflag.load() & AC_INTFLAG_COMP0))
+			{
+				calibrationFailedReason = "exceeded maximum first pulse length";
+				calState = CalibrationState::failed;
+				return;
+			}
 
-		// Increase the pulse length
-		firstOnTime += OscOnTimeStep;
+			// Increase the pulse length
+			firstOnTime += OscOnTimeStep;
+			mainOnTime = firstOnTime;
+			successCount = 0;
+		}
 		delay(1);													// allow time for the heater coil to stop resonating
 	}
 
@@ -359,8 +485,108 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 		return;
 	}
 
-	//TODO
-	// 2. Calibrate the subsequent cycle length.
+	// 2. Calibrate the off-time
+//	DeviationAccumulator accumulator;
+	accumulator.Clear();
+
+	acIntflag.store(0);
+	SetComp1Zero();													// set comparator to trigger on zero crossing
+	delay(2);														// may need this to allow VSCALE to settle
+	AC->INTFLAG.reg = AC_INTENSET_COMP1;							// clear any pending COMP1 interrupt (I think this is needed to prime the event output)
+	AC->INTENSET.reg = AC_INTENSET_COMP1;							// enable interrupt on COMP1 rising edge
+	StartCapturing();
+	SetBurst(1);
+	delay(25);
+	StopCapturing();
+	AC->INTENCLR.reg = AC_INTENSET_COMP1;							// disable interrupt on COMP1 rising edge
+	TurnOff();
+
+	if (captureIndex == 0)
+	{
+		calibrationFailedReason = "failed to capture zero crossings";
+		calState = CalibrationState::failed;
+		return;
+	}
+
+	debugPrintf("%u: %lu %lu", captureIndex, captureBuffer[0], captureBuffer[1]);
+	if (captureIndex < 10)
+	{
+		calibrationFailedReason = "done capture";
+		calState = CalibrationState::failed;
+		return;
+	}
+
+#if 0
+	if (accumulator.GetNumSamples() < 10)
+	{
+		calibrationFailedReason = "failed to detect zero crossings";
+		calState = CalibrationState::failed;
+		return;
+	}
+
+	if (accumulator.GetDeviation() * 20 > accumulator.GetMean())
+	{
+		calibrationFailedReason = "zero crossing deviation too high";
+		calState = CalibrationState::failed;
+		return;
+	}
+#endif
+#if 0
+	const uint32_t currentCycleTime = mainOnTime + offTime;
+	const uint32_t measuredCycleTime = (uint32_t)(accumulator.GetMean() + accumulator.GetDeviation()) + 2;
+	if (measuredCycleTime < currentCycleTime && measuredCycleTime > mainOnTime)
+	{
+		offTime = measuredCycleTime - mainOnTime;
+		mainOnTime = currentCycleTime - offTime;
+	}
+#endif
+
+	// 3. Calibrate the subsequent on-time.
+	// As we are using a long off-time, on the second and subsequent cycles the mosfet will turn on while the coil is still feeding power back to the supply.
+
+	firstOnTime -= 6;												// make sure the first pulse doesn't trigger the comparator
+	SetComp1Target();
+	successCount = 0;
+
+	for (;;)    													// loop increasing mainOnTime until the target is reached
+	{
+		// Set up the analog comparator channel 1 to detect when the target mosfet drain voltage is reached
+		acIntflag.store(0);
+		AC->INTFLAG.reg = AC_INTENSET_COMP1;						// clear any pending COMP1 interrupt
+		AC->INTENSET.reg = AC_INTENSET_COMP1;						// enable interrupt on COMP1 rising edge
+
+		// As the second pulse can have a different amplitude from the third and later, use 3-cycle bursts
+		SetBurst(3);
+
+		// Delay long enough for a few bursts to happen. Each burst is about 5ms long
+		delay(25);
+		AC->INTENCLR.reg = AC_INTENSET_COMP1;						// disable interrupt on COMP1 rising edge
+		TurnOff();
+
+		// Check whether the target subsequent pulse height has been reached
+		if (acIntflag.load() && AC_INTFLAG_COMP1)
+		{
+			++successCount;
+			if (successCount == requiredSuccess) { break; }
+		}
+		else
+		{
+			if (mainOnTime >= OscMaxOnTime || (acIntflag.load() & AC_INTFLAG_COMP0))
+			{
+				calibrationFailedReason = "exceeded maximum subsequent pulse length";
+				calState = CalibrationState::failed;
+				return;
+			}
+
+			// Increase the pulse length
+			mainOnTime += OscOnTimeStep;
+			successCount = 0;
+		}
+		delay(1);													// allow time for the heater coil to stop resonating
+	}
+
+	firstOnTime += 6;									// restore the first pulse length to the value we fond earlier
+
 	//TODO
 	// 3. Calibrate the off-time
 	//TODO
