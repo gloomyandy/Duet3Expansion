@@ -49,6 +49,10 @@
 # include "MFMHandler.h"
 #endif
 
+#if SUPPORT_LOADCELL_DIAGNOSTICS
+# include "LoadCellDiagnostics.h"
+#endif
+
 // Check a value against the specified min and max parameters returning true if the value was outside limits
 static bool CheckMinMax(CanMessageGenericParser& parser, const StringRef& reply, char c, float val, const char *text) noexcept
 {
@@ -599,6 +603,9 @@ static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& rep
 #endif
 #if SUPPORT_AS5601
 		MFMHandler::AppendDiagnostics(reply);
+#endif
+#if SUPPORT_LOADCELL_DIAGNOSTICS
+		LoadCellDiagnostics::AppendDiagnostics(reply);
 #endif
 #if NUM_I2C_CHANNELS != 0
 		for (unsigned int i = 0; i < NUM_I2C_CHANNELS; ++i)

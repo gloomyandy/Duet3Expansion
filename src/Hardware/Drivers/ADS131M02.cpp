@@ -14,6 +14,10 @@
 #include <RTOSIface/RTOSIface.h>
 #include <AppNotifyIndices.h>
 
+#if SUPPORT_LOADCELL_DIAGNOSTICS
+# include <CommandProcessing/LoadCellDiagnostics.h>
+#endif
+
 #define USE_GLOBAL_CHOP		(1)
 
 extern "C" [[noreturn]] void AdcTaskStart(void* param) noexcept
@@ -113,6 +117,10 @@ static void DataReadyCallback(CallbackParameter param) noexcept
 			{
 				compositeData = (int32_t)(((int64_t)(int32_t)channel0Data << 16)/(int32_t)channel1Data);
 			}
+
+#if SUPPORT_LOADCELL_DIAGNOSTICS
+			LoadCellDiagnostics::RecordSample(compositeData);
+#endif
 
 			// The input monitor may have been deactivated and inputMonitor set to nullptr while we were reading the data, so capture it before we test it
 			InputMonitor *const locInputMonitor = inputMonitor;
