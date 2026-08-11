@@ -455,9 +455,8 @@ constexpr IRQn StepTcIRQn = TC0_IRQn;
 // Available UART ports
 #define NUM_ASYNC_PORTS		0
 
-// Event numbers
-constexpr EventNumber AcChan0Event = 0;					// analog comparator channel 0 output event
-constexpr EventNumber AcChan1Event = 1;					// analog comparator channel 1 output event
-constexpr EventNumber NextFreeEvent = AcChan1Event + 1;
+// Eventchannel numbers
+constexpr EventNumber AcComp0EventChannel = 12;					// analog comparator channel 0 output event
+constexpr EventNumber AcComp1EventChannel = 13;					// analog comparator channel 1 output event
 
 #endif /* SRC_CONFIG_TOOLINDX_H_ */
