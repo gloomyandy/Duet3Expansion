@@ -1038,7 +1038,9 @@ static inline void CheckSpinLockAndResetIfStuck() noexcept
 
 	if (heatTaskStuck || syncedStuck || mainTaskStuck)		// if we stall, save diagnostic data and reset
 	{
-		Heat::SwitchOffAll();
+		// We are in the tick ISR, so we must not call Heat::SwitchOffAll here: it takes the heaters ReadWriteLock, which uses
+		// vTaskSuspendAll/xTaskResumeAll, and FreeRTOS asserts if those are called from an ISR.
+		Heat::SwitchOffAllLocalFromISR();
 #if SUPPORT_DRIVERS
 # if SUPPORT_TMC51xx
 		IoPort::WriteDigital(GlobalTmc51xxEnablePin, true);
