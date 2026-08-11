@@ -444,7 +444,11 @@ static GCodeResult InitiateReset(const CanMessageReset& msg, const StringRef& re
 
 static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& reply, uint8_t& extra)
 {
+#if SUPPORT_LOADCELL_DIAGNOSTICS
+	static constexpr uint8_t LastDiagnosticsPart = 8;				// the last diagnostics part is typeDiagnosticsPart0 + 8
+#else
 	static constexpr uint8_t LastDiagnosticsPart = 7;				// the last diagnostics part is typeDiagnosticsPart0 + 7
+#endif
 
 	switch (msg.type)
 	{
@@ -604,9 +608,6 @@ static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& rep
 #if SUPPORT_AS5601
 		MFMHandler::AppendDiagnostics(reply);
 #endif
-#if SUPPORT_LOADCELL_DIAGNOSTICS
-		LoadCellDiagnostics::AppendDiagnostics(reply);
-#endif
 #if NUM_I2C_CHANNELS != 0
 		for (unsigned int i = 0; i < NUM_I2C_CHANNELS; ++i)
 		{
@@ -619,6 +620,13 @@ static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& rep
 		FilamentMonitor::GetDiagnostics(reply);
 #endif
 		break;
+
+#if SUPPORT_LOADCELL_DIAGNOSTICS
+	case CanMessageReturnInfo::typeDiagnosticsPart0 + 8:
+		extra = LastDiagnosticsPart;
+		LoadCellDiagnostics::AppendDiagnostics(reply);
+		break;
+#endif
 	}
 	return GCodeResult::ok;
 }

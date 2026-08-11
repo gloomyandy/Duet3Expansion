@@ -209,8 +209,8 @@ void LoadCellDiagnostics::AppendSpectrum(const int32_t (&buffer)[NumSamples], si
 {
 	const float binWidth = rate / (float)NumSamples;
 
-	// Unwrap the ring into the workspace, oldest sample first. No lock is needed: the writer takes a full window to come
-	// round to the entries being read, and the copy takes microseconds
+	// Unwrap the ring into the workspace, oldest sample first. No lock is needed: the writer overwrites the oldest entries
+	// next, which is where this copy starts, but it advances one entry per sample period while the whole copy takes microseconds
 	for (size_t i = 0; i < NumSamples; i++)
 	{
 		re[i] = (float)buffer[(startIndex + i) % NumSamples];
@@ -227,7 +227,7 @@ void LoadCellDiagnostics::AppendSpectrum(const int32_t (&buffer)[NumSamples], si
 	// lying between bins smears across the whole spectrum and reads as a wrong notch frequency
 	for (size_t i = 0; i < NumSamples; i++)
 	{
-		re[i] = (re[i] - mean) * 0.5 * (1.0 - cosf((2.0 * Pi * (float)i) / (float)(NumSamples - 1)));
+		re[i] = (re[i] - mean) * 0.5f * (1.0f - cosf((2.0f * Pi * (float)i) / (float)(NumSamples - 1)));
 		im[i] = 0.0;
 	}
 
@@ -258,12 +258,11 @@ void LoadCellDiagnostics::AppendSpectrum(const int32_t (&buffer)[NumSamples], si
 	}
 
 	// Pick the strongest peaks, excluding the main lobe of one already picked - otherwise a single resonance fills every slot
-	float peakAmplitude[NumPeaksToReport], peakFrequency[NumPeaksToReport];
-	size_t peakBin[NumPeaksToReport];
+	float peakAmplitude[NumPeaksToReport] = { };
+	float peakFrequency[NumPeaksToReport] = { };
+	size_t peakBin[NumPeaksToReport] = { };
 	for (unsigned int p = 0; p < NumPeaksToReport; p++)
 	{
-		peakAmplitude[p] = peakFrequency[p] = 0.0;
-		peakBin[p] = 0;
 		size_t bestBin = 0;
 		float bestAmplitude = 0.0;
 		for (size_t k = 2; k < LastBin; k++)
@@ -292,7 +291,7 @@ void LoadCellDiagnostics::AppendSpectrum(const int32_t (&buffer)[NumSamples], si
 		peakBin[p] = bestBin;
 		peakAmplitude[p] = sqrtf(re[bestBin - 1] * re[bestBin - 1] + re[bestBin] * re[bestBin] + re[bestBin + 1] * re[bestBin + 1]) / sqrtf(1.5);
 		const float denominator = re[bestBin - 1] - 2 * re[bestBin] + re[bestBin + 1];
-		const float offset = (denominator == 0.0) ? 0.0 : 0.5 * (re[bestBin - 1] - re[bestBin + 1]) / denominator;
+		const float offset = (denominator == 0.0f) ? 0.0f : 0.5f * (re[bestBin - 1] - re[bestBin + 1]) / denominator;
 		peakFrequency[p] = ((float)bestBin + offset) * binWidth;
 	}
 
@@ -323,7 +322,7 @@ void LoadCellDiagnostics::AppendDiagnostics(const StringRef& reply) noexcept
 	}
 
 	const uint32_t elapsed = millis() - whenCaptureStarted;
-	const float measuredRate = (elapsed == 0) ? 0.0 : (float)samplesTaken * 1000.0 / (float)elapsed;
+	const float measuredRate = (elapsed == 0) ? 0.0f : (float)samplesTaken * 1000.0f / (float)elapsed;
 
 	reply.lcatf("Load cell: %" PRIu32 " samples at %.1fHz, baseline movement (counts):", samplesTaken, (double)measuredRate);
 	for (size_t i = 0; i < NumDriftIntervals; i++)
