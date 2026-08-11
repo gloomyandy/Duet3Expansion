@@ -36,6 +36,12 @@ InputMonitor::~InputMonitor()
 		ScanningSensorHandler::Deactivate();		// make sure that the scanning sensor doesn't retain a pointer to this object
 	}
 #endif
+#if SUPPORT_ADS131M02
+	if (port.IsAds131M02())
+	{
+		Platform::GetLoadCellAdc()->Deactivate();	// make sure that the load cell ADC doesn't retain a pointer to this object
+	}
+#endif
 }
 
 // Activate the monitor returning true if successful
@@ -135,6 +141,13 @@ void InputMonitor::Deactivate() noexcept
 				ScanningSensorHandler::Deactivate();
 			}
 			else
+#endif
+#if SUPPORT_ADS131M02
+				if (port.IsAds131M02())
+				{
+					Platform::GetLoadCellAdc()->Deactivate();
+				}
+				else
 #endif
 			{
 				port.ClearAnalogCallback();

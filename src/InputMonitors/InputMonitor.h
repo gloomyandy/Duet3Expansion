@@ -33,7 +33,10 @@ public:
 
 #if SUPPORT_LDC1612
 	void SetTriggered() noexcept;
-	void AnalogInterrupt(int32_t reading) noexcept;			// this is public if LKDC1612 support is configured
+#endif
+
+#if SUPPORT_LDC1612 || SUPPORT_ADS131M02
+	void AnalogInterrupt(int32_t reading) noexcept;			// this is public if the LDC1612 or the load cell ADC is configured
 #endif
 
 	static void Init() noexcept;
@@ -60,8 +63,10 @@ private:
 #if SUPPORT_LDC1612
 	GCodeResult SetDriveLevel(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept;
 	GCodeResult SelectTouchMode(uint32_t param, const StringRef& reply, uint8_t& extra) noexcept;
-#else
-	void AnalogInterrupt(int32_t reading) noexcept;			// this is private unless LDC1612 support is configured
+#endif
+
+#if !(SUPPORT_LDC1612 || SUPPORT_ADS131M02)
+	void AnalogInterrupt(int32_t reading) noexcept;			// this is private unless the LDC1612 or the load cell ADC is configured
 #endif
 
 	static bool Delete(uint16_t hndl) noexcept;

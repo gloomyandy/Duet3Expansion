@@ -63,9 +63,19 @@ ADS131M02::ADS131M02() noexcept : SpiDevice(Ads131M02SpiParams)
 	adcTask->Create(AdcTaskStart, "ADS131M02", (void*)this, TaskPriority::Ads131M02);
 }
 
-bool ADS131M02::Activate(const InputMonitor& monitor) noexcept
+bool ADS131M02::Activate(InputMonitor& monitor) noexcept
 {
-	return true;	//***TEMPORARY!
+	if (!initOk)
+	{
+		return false;
+	}
+	inputMonitor = &monitor;
+	return true;
+}
+
+void ADS131M02::Deactivate() noexcept
+{
+	inputMonitor = nullptr;
 }
 
 static void DataReadyCallback(CallbackParameter param) noexcept
@@ -102,6 +112,13 @@ static void DataReadyCallback(CallbackParameter param) noexcept
 			else
 			{
 				compositeData = (int32_t)(((int64_t)(int32_t)channel0Data << 16)/(int32_t)channel1Data);
+			}
+
+			// The input monitor may have been deactivated and inputMonitor set to nullptr while we were reading the data, so capture it before we test it
+			InputMonitor *const locInputMonitor = inputMonitor;
+			if (locInputMonitor != nullptr)
+			{
+				locInputMonitor->AnalogInterrupt(compositeData);
 			}
 		}
 
