@@ -104,6 +104,7 @@ private:
 	uint8_t lastErrorCode;									// the last error code received
 	uint8_t magnitude;										// the last magnitude received (sensor firmware V3)
 	uint8_t agc;											// the last agc received (sensor firmware V3)
+	bool haveAgc;											// true if we received an agc value
 	bool sensorError;										// true if received an error report (cleared by a position report)
 
 	bool wasPrintingAtStartBit;

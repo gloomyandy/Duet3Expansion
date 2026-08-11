@@ -43,6 +43,7 @@ void RotatingMagnetFilamentMonitor::Init() noexcept
 	version = 1;
 	magnitude = 0;
 	agc = 0;
+	haveAgc = false;
 	backwards = false;
 	sensorError = false;
 	InitReceiveBuffer();
@@ -296,6 +297,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 
 					case TypeMagnetV3InfoTypeAgc:
 						agc = val & 0x00FF;
+						haveAgc = true;
 						break;
 
 					default:
@@ -356,6 +358,7 @@ void RotatingMagnetFilamentMonitor::HandleDirectAS5601Data() noexcept
 	uint16_t val;
 	if (MFMHandler::GetEncoderReading(val, agc, lastErrorCode))
 	{
+		haveAgc = true;
 		dataReceived = true;
 		version = 3;																	// emulate version 3 MFM
 		sensorError = (lastErrorCode != 0);
@@ -615,6 +618,11 @@ bool RotatingMagnetFilamentMonitor::GetLocalFilamentPresent(bool& present) const
 void RotatingMagnetFilamentMonitor::GetLiveData(FilamentMonitorDataV2& data) const noexcept
 {
 	data.ClearReservedFields();
+	if (haveAgc)
+	{
+		data.extraDataValid = 1;
+		data.extraData = agc;
+	}
 	data.position = lastKnownPosition;
 	if (magneticMonitorState == MagneticMonitorState::comparing)
 	{
