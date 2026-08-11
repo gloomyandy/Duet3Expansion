@@ -456,7 +456,8 @@ constexpr IRQn StepTcIRQn = TC0_IRQn;
 #define NUM_ASYNC_PORTS		0
 
 // Event numbers
-constexpr EventNumber AcEvent = 0;					// this uses up 2 channels
-constexpr EventNumber NextFreeEvent = AcEvent + 2;
+constexpr EventNumber AcChan0Event = 0;					// analog comparator channel 0 output event
+constexpr EventNumber AcChan1Event = 1;					// analog comparator channel 1 output event
+constexpr EventNumber NextFreeEvent = AcChan1Event + 1;
 
 #endif /* SRC_CONFIG_TOOLINDX_H_ */
