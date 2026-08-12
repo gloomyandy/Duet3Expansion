@@ -20,6 +20,10 @@
 
 #define USE_GLOBAL_CHOP		(1)
 
+// The 24-bit conversion results are stored in the top 24 bits of a 32-bit word, so full scale is 2^31. Treat readings above about 97% of
+// full scale as saturated - the input is overdriven at gain 128, which means the cell is overloaded, disconnected or faulty
+constexpr int32_t SaturationThreshold = 0x7C000000;
+
 extern "C" [[noreturn]] void AdcTaskStart(void* param) noexcept
 {
 	((ADS131M02*)param)->TaskLoop();
@@ -112,6 +116,10 @@ static void DataReadyCallback(CallbackParameter param) noexcept
 			if (channel1Data < 256)
 			{
 				compositeData = 0;					// error, the reference channel should read much higher, such a low value may cause the result of the next division to exceed 32 bits
+			}
+			else if ((int32_t)channel0Data >= SaturationThreshold || (int32_t)channel0Data <= -SaturationThreshold)
+			{
+				compositeData = 0;					// the signal is at the ADC rail, so the reading is meaningless
 			}
 			else
 			{
