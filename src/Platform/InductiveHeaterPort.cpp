@@ -99,7 +99,8 @@ void InductiveHeaterPort::Init() noexcept
 		while (AC->SYNCBUSY.bit.COMPCTRL0) { }
 
 		// COMP1: tuner end-of-peak detector. Latches falling edge or the waveform on the mosfet drain, not used in normal driving
-		AC->SCALER[1].reg = AC_SCALER_VALUE(3);
+		// The available hysteresis is 25mV, 50mV, 75mV and 100mV. The resolution of SCALER is 3.3V/64 = 51mV per step at the comparator input and 1.6V at the mosfet drain.
+		AC->SCALER[1].reg = AC_SCALER_VALUE(4);
 		AC->COMPCTRL[1].reg = AC_COMPCTRL_MUXNEG_PIN2 | AC_COMPCTRL_MUXPOS_VSCALE |
 							  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING | AC_COMPCTRL_FLEN(1) |
 							  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST(3) |
@@ -124,7 +125,7 @@ void InductiveHeaterPort::Init() noexcept
 		// The user multiplexer must be configured before the channel (datasheet section 31.5.2.3)
 		// The definition of EVSYS_USER in the DFP is a 32-bit type (of which 6 bits are used) whereas the datasheet says it as an 8-bit type. This affects the indexing.
 		// Microchip has confirmed that the datasheet is wrong (case #01851667).
-		EVSYS->USER[1 + GpioPortNumber(NeopixelOutPin)].reg = AcComp1EventChannel + 1;			//DEBUG port event 0, see below
+		EVSYS->USER[1].reg = AcComp1EventChannel + 1;			//DEBUG port event 0, see below
 		EVSYS->USER[InductiveHeaterOscTccCaptureEventUserNumber].reg = AcComp1EventChannel + 1;	// route channel AcChan1Event events to oscillator TC capture 1
 		EVSYS->Channel[AcComp1EventChannel].CHANNEL.reg = EVSYS_CHANNEL_EVGEN(0) | EVSYS_CHANNEL_PATH_ASYNCHRONOUS | EVSYS_CHANNEL_EDGSEL_NO_EVT_OUTPUT;	// route comparator 1 event to event channel AcChan1Event
 
@@ -506,7 +507,11 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 		return;
 	}
 
+	//TEMP debug
 	debugPrintf("samples %u mean %.1f deviation %.1f", acc.GetNumSamples(), (double)acc.GetMean(), (double)acc.GetDeviation());
+	calibrationFailedReason = "done";
+	calState = CalibrationState::failed;
+	return;
 
 #if 0
 	const uint32_t currentCycleTime = mainOnTime + offTime;
