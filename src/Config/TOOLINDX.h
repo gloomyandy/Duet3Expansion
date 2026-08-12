@@ -281,8 +281,8 @@ constexpr unsigned int ADA131M02_GclkNumber = 2;
 
 constexpr unsigned int InductiveHeaterOscTccDeviceNumber = 3;	// number of the TC we use to generate the ~120kHz signal to excite the resonant circuit
 constexpr unsigned int InductiveHeaterOscTccOutputNumber = 0;	// which output from the TCC we are using
-constexpr unsigned int InductiveHeaterOscTccCaptureNumber = 1;	// which channel from the TCC we are using for compare operations
-constexpr unsigned int InductiveHeaterOscTccCaptureEventUserNumber = 39;	// TCC3 MC1
+constexpr unsigned int InductiveHeaterOscTccCaptureNumber = 1;	// which channel from the TCC we are using for capture operations
+constexpr unsigned int InductiveHeaterOscTccCaptureEventUserNumber = 38 + InductiveHeaterOscTccCaptureNumber;	// TCC3 MC1
 constexpr unsigned int InductiveHeaterPwmTccDeviceNumber = 0;	// number of the TCC we use to generate the PWM signal that is gated with the osc signal
 constexpr unsigned int InductiveHeaterPwmTccOutputNumber = 0;	// which output from the TCC we are using
 constexpr unsigned int InductiveHeaterCCLNumber = 3;			// number of the CCL that we use to gate the TC and TCC output together
