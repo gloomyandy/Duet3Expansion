@@ -75,7 +75,7 @@ void InductiveHeaterPort::Init() noexcept
 	}
 
 	// Set up the analog comparator to detect the peak voltage on the FET drain
-	// Analog comparator bug: writing the SCALER registers more than one DOES NOT WORK even if the comparator concerned is first disabled.
+	// Analog comparator bug: writing the SCALER registers more than once DOES NOT WORK even if the comparator concerned is first disabled.
 	// (I haven't tried doing a software reset of the entire AC before writing them a second time).
 	// Therefore we set up the comparators with the scaler registers having fixed values.
 	{
@@ -94,7 +94,7 @@ void InductiveHeaterPort::Init() noexcept
 		AC->SCALER[0].reg = AC_SCALER_VALUE(TargetVoltageACValue);
 		AC->COMPCTRL[0].reg = AC_COMPCTRL_MUXPOS_PIN2 | AC_COMPCTRL_MUXNEG_VSCALE |
 							  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING | AC_COMPCTRL_FLEN(1) |
-							  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST50 |
+							  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST(1) |
 							  AC_COMPCTRL_ENABLE;
 		while (AC->SYNCBUSY.bit.COMPCTRL0) { }
 
@@ -102,7 +102,7 @@ void InductiveHeaterPort::Init() noexcept
 		AC->SCALER[1].reg = AC_SCALER_VALUE(3);
 		AC->COMPCTRL[1].reg = AC_COMPCTRL_MUXNEG_PIN2 | AC_COMPCTRL_MUXPOS_VSCALE |
 							  AC_COMPCTRL_SPEED_HIGH | AC_COMPCTRL_INTSEL_RISING | AC_COMPCTRL_FLEN(1) |
-							  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST_HYST150 |
+							  AC_COMPCTRL_HYSTEN | AC_COMPCTRL_HYST(3) |
 							  AC_COMPCTRL_ENABLE;
 		while (AC->SYNCBUSY.bit.COMPCTRL1) { }
 
@@ -116,17 +116,18 @@ void InductiveHeaterPort::Init() noexcept
 
 		// Set up the event system to generate events on the comparators triggering
 		MCLK->APBBMASK.reg |= MCLK_APBBMASK_EVSYS;								// enable the EVSYS APB clock
-		GCLK->PCHCTRL[EVSYS_GCLK_ID_0 + AcChan1Event].reg = GCLK_PCHCTRL_GEN(GclkNum60MHz) | GCLK_PCHCTRL_CHEN;
+
+		// DEBUG set up the NP_OUT pin to show the status of the event from AC COMP1
+		SetPinMode(NeopixelOutPin, OUTPUT_LOW);
+		GpioPort(NeopixelOutPin).EVCTRL.reg |= PORT_EVCTRL_PORTEI0 | PORT_EVCTRL_EVACT0(0) | PORT_EVCTRL_PID0(GpioPinNumber(NeopixelOutPin));
 
 		// The user multiplexer must be configured before the channel (datasheet section 31.5.2.3)
 		// The definition of EVSYS_USER in the DFP is a 32-bit type (of which 6 bits are used) whereas the datasheet says it as an 8-bit type. This affects the indexing.
-#if 0	// If we assume the datasheet is correct (but this doesn't appear to work):
-		volatile uint8_t *const evsysUser = (volatile uint8_t *)(EVSYS->USER);
-		evsysUser[InductiveHeaterOscTccCaptureEventUserNumber] = AcChan1Event + 1;			// route channel AcChan1Event events to oscillator TC capture 1
-#else	// If we assume the DFP is correct (which appears to work):
-		EVSYS->USER[InductiveHeaterOscTccCaptureEventUserNumber].reg = AcChan1Event + 1;	// route channel AcChan1Event events to oscillator TC capture 1
-#endif
-		EVSYS->Channel[AcChan1Event].CHANNEL.reg = EVSYS_CHANNEL_EVGEN(0) | EVSYS_CHANNEL_PATH_ASYNCHRONOUS | EVSYS_CHANNEL_EDGSEL_NO_EVT_OUTPUT;	// route comparator 1 event to event channel AcChan1Event
+		// Microchip has confirmed that the datasheet is wrong (case #01851667).
+		EVSYS->USER[1 + GpioPortNumber(NeopixelOutPin)].reg = AcComp1EventChannel + 1;			//DEBUG port event 0, see below
+		EVSYS->USER[InductiveHeaterOscTccCaptureEventUserNumber].reg = AcComp1EventChannel + 1;	// route channel AcChan1Event events to oscillator TC capture 1
+		EVSYS->Channel[AcComp1EventChannel].CHANNEL.reg = EVSYS_CHANNEL_EVGEN(0) | EVSYS_CHANNEL_PATH_ASYNCHRONOUS | EVSYS_CHANNEL_EDGSEL_NO_EVT_OUTPUT;	// route comparator 1 event to event channel AcChan1Event
+
 		AC->INTENSET.reg = AC_INTENSET_COMP0;									// COMP0 rising edge interrupt is always enabled to detect overvoltage
 
 		NVIC_SetPriority(AC_IRQn, NvicPriorityAC);
@@ -327,21 +328,22 @@ void InductiveHeaterPort::CalibrationTaskFunc() noexcept
 	}
 }
 
-static uint32_t acIntflag(0);
+static volatile uint32_t acIntflag(0);
 
 //static uint32_t captureBuffer[10];
 //static unsigned int captureIndex = 0;
 
-static bool captured;
+static volatile bool captured = false;
 static uint32_t capturedValue;
+static volatile bool doCapture = false;
 
 // Analog comparator interrupt handler
 extern "C" void AC_Handler() noexcept
 {
 	const uint32_t intFlag = AC->INTFLAG.reg;
-	if (intFlag & AC_INTFLAG_COMP0)
+	if (/*doCapture &&*/ (intFlag & AC_INTFLAG_COMP0))
 	{
-		EVSYS->Channel[AcChan1Event].CHANNEL.reg = EVSYS_CHANNEL_EVGEN(0x6C) | EVSYS_CHANNEL_PATH_ASYNCHRONOUS | EVSYS_CHANNEL_EDGSEL_NO_EVT_OUTPUT;	// route comparator 1 event to event channel AcChan1Event
+		EVSYS->Channel[AcComp1EventChannel].CHANNEL.reg = EVSYS_CHANNEL_EVGEN(0x6C) | EVSYS_CHANNEL_PATH_ASYNCHRONOUS | EVSYS_CHANNEL_EDGSEL_NO_EVT_OUTPUT;	// route comparator 1 event to event channel AcChan1Event
 	}
 	acIntflag |= intFlag;
 
@@ -363,6 +365,11 @@ extern "C" void OSC_TCC_Handler() noexcept
 	{
 		capturedValue = tccosc->CC[InductiveHeaterOscTccCaptureNumber].bit.CC;
 		captured = true;
+//		EVSYS->Channel[AcChan1Event].CHANNEL.reg = EVSYS_CHANNEL_EVGEN(0) | EVSYS_CHANNEL_PATH_ASYNCHRONOUS | EVSYS_CHANNEL_EDGSEL_NO_EVT_OUTPUT;
+	}
+	else if (intflag & ((TCC_INTFLAG_MC0 << InductiveHeaterOscTccCaptureNumber) | TCC_INTFLAG_OVF))
+	{
+		(void)tccosc->CC[InductiveHeaterOscTccCaptureNumber].reg;
 	}
 	tccosc->INTFLAG.reg = intflag;
 }
@@ -370,12 +377,15 @@ extern "C" void OSC_TCC_Handler() noexcept
 // Start capturing the oscillator TCC count triggered by analog comparator COMP1
 static void StartCapturing() noexcept
 {
-	EVSYS->Channel[AcChan1Event].CHANNEL.reg = EVSYS_CHANNEL_EVGEN(0) | EVSYS_CHANNEL_PATH_ASYNCHRONOUS | EVSYS_CHANNEL_EDGSEL_NO_EVT_OUTPUT;
+	EVSYS->Channel[AcComp1EventChannel].CHANNEL.reg = EVSYS_CHANNEL_EVGEN(0) | EVSYS_CHANNEL_PATH_ASYNCHRONOUS | EVSYS_CHANNEL_EDGSEL_NO_EVT_OUTPUT;
+	delay(10);
 	captured = false;
+	doCapture = true;
 	volatile Tcc *const tccosc = Timers::TccDevices[InductiveHeaterOscTccDeviceNumber];
 	while (tccosc->INTFLAG.reg & ((TCC_INTFLAG_MC0 << InductiveHeaterOscTccCaptureNumber) | TCC_INTFLAG_ERR))
 	{
-		(void)tccosc->CC;
+		(void)tccosc->CC[InductiveHeaterOscTccCaptureNumber].reg;
+		(void)tccosc->CC[InductiveHeaterOscTccCaptureNumber].reg;
 		tccosc->INTFLAG.reg = (TCC_INTFLAG_MC0 << InductiveHeaterOscTccCaptureNumber) | TCC_INTFLAG_ERR;	// Erratum: reading CC does not clear the flag
 	}
 	tccosc->INTENSET.reg = (TCC_INTENSET_MC0 << InductiveHeaterOscTccCaptureNumber) | TCC_INTENSET_ERR;
@@ -384,6 +394,8 @@ static void StartCapturing() noexcept
 // Stop capturing the oscillator TCC count triggered by analog comparator COMP1
 static void StopCapturing() noexcept
 {
+	doCapture = false;
+	EVSYS->Channel[AcComp1EventChannel].CHANNEL.reg = EVSYS_CHANNEL_EVGEN(0) | EVSYS_CHANNEL_PATH_ASYNCHRONOUS | EVSYS_CHANNEL_EDGSEL_NO_EVT_OUTPUT;
 	volatile Tcc *const tccosc = Timers::TccDevices[InductiveHeaterOscTccDeviceNumber];
 	tccosc->INTENCLR.reg = (TCC_INTENCLR_MC0 << InductiveHeaterOscTccCaptureNumber) | TCC_INTENCLR_ERR;
 }
@@ -407,19 +419,19 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 	{
 		// Set up the analog comparator channel 1 to detect when the target mosfet drain voltage is reached
 		acIntflag = 0;
-		AC->INTFLAG.reg = AC_INTENSET_COMP0;						// clear any pending COMP1 interrupt
-		AC->INTENSET.reg = AC_INTENSET_COMP0;						// enable interrupt on COMP1 edge
+		AC->INTFLAG.reg = AC_INTFLAG_COMP0;							// clear any pending COMP0 interrupt
+		AC->INTENSET.reg = AC_INTENSET_COMP0;						// enable interrupt on COMP0 edge
 
 		// Command the heater to perform single-cycle bursts using the current parameters
 		SetBurst(1);
 
 		// Delay long enough for a few bursts to happen. Each burst is about 5ms long
 		delay(25);
-		AC->INTENCLR.reg = AC_INTENSET_COMP0;						// disable interrupt on COMP1 edge
+		AC->INTENCLR.reg = AC_INTENCLR_COMP0;						// disable interrupt on COMP0 edge
 		TurnOff();
 
 		// Check whether the target first pulse height has been reached
-		if (acIntflag && AC_INTFLAG_COMP0)
+		if (acIntflag & AC_INTFLAG_COMP0)
 		{
 			++successCount;
 			if (successCount == requiredSuccess) { break; }
@@ -460,20 +472,42 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 	// Instead we leave the AC even disconnected in the event system, and we get the AC comparator 0 to interrupt when we exceed the target voltage at the peak.
 	// In the ISR we reprogram the event channel to use the AC as its source, so that the TCC captures the end of the cycle.
 	// We repeat this a number of times and check for consistency and sensible values.
-	StartCapturing();
-	SetBurst(1);
-	delay(25);
-	StopCapturing();
-	TurnOff();
+	DeviationAccumulator acc;
+	for (unsigned int i = 0; i < 25; ++i)
+	{
+		StartCapturing();
+		acIntflag = 0;
+		AC->INTFLAG.reg = AC_INTFLAG_COMP0;							// clear any pending COMP0 interrupt
+		AC->INTENSET.reg = AC_INTENSET_COMP0;						// enable interrupt on COMP0 edge
+		SetBurst(1);
+		delay(25);
+		AC->INTENCLR.reg = AC_INTENCLR_COMP0;						// disable interrupt on COMP0 edge
+		StopCapturing();
+		TurnOff();
+		delay(1);
+		if (captured)
+		{
+			acc.Add((float)capturedValue);
+			debugPrintf("%lu", capturedValue);
+		}
+//		AC->INTFLAG.reg = AC_INTFLAG_COMP0;							// clear any pending COMP0 interrupt
+//		AC->INTENSET.reg = AC_INTENSET_COMP0;						// enable interrupt on COMP0 edge
+//		SetBurst(1);
+//		delay(25);
+//		AC->INTENCLR.reg = AC_INTENCLR_COMP0;						// disable interrupt on COMP0 edge
+//		TurnOff();
+//		delay(1);
+	}
 
-	if (!captured)
+	if (acc.GetNumSamples() == 0)
 	{
 		calibrationFailedReason = "failed to capture zero crossings";
 		calState = CalibrationState::failed;
 		return;
 	}
 
-	debugPrintf("captured %lu", capturedValue);
+	debugPrintf("samples %u mean %.1f deviation %.1f", acc.GetNumSamples(), (double)acc.GetMean(), (double)acc.GetDeviation());
+
 #if 0
 	const uint32_t currentCycleTime = mainOnTime + offTime;
 	const uint32_t measuredCycleTime = (uint32_t)(accumulator.GetMean() + accumulator.GetDeviation()) + 2;
@@ -494,7 +528,7 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 	{
 		// Set up the analog comparator channel 1 to detect when the target mosfet drain voltage is reached
 		acIntflag = 0;
-		AC->INTFLAG.reg = AC_INTENSET_COMP0;						// clear any pending COMP1 interrupt
+		AC->INTFLAG.reg = AC_INTFLAG_COMP0;						// clear any pending COMP1 interrupt
 		AC->INTENSET.reg = AC_INTENSET_COMP0;						// enable interrupt on COMP1 rising edge
 
 		// As the second pulse can have a different amplitude from the third and later, use 3-cycle bursts
@@ -502,7 +536,7 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 
 		// Delay long enough for a few bursts to happen. Each burst is about 5ms long
 		delay(25);
-		AC->INTENCLR.reg = AC_INTENSET_COMP0;						// disable interrupt on COMP1 rising edge
+		AC->INTENCLR.reg = AC_INTENCLR_COMP0;						// disable interrupt on COMP1 rising edge
 		TurnOff();
 
 		// Check whether the target subsequent pulse height has been reached
