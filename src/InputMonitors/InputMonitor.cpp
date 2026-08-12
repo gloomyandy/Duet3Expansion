@@ -372,6 +372,15 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	pinName.copy(msg.pinName, msg.GetMaxPinNameLength(dataLength));
 	if (newMonitor->port.AssignPort(pinName.c_str(), reply, PinUsedBy::endstop, (msg.threshold == 0) ? PinAccess::read : PinAccess::readAnalog))
 	{
+#if SUPPORT_ADS131M02
+		// The fast trigger path reads the ADC directly, so '!' would invert only the reported value; the sign of M558 V covers polarity instead
+		if (newMonitor->port.IsAds131M02() && newMonitor->port.GetTotalInvert())
+		{
+			reply.copy("Pin inversion is not supported on the load cell input, use the sign of M558 V instead");
+			delete newMonitor;
+			return GCodeResult::error;
+		}
+#endif
 		newMonitor->next = monitorsList;
 		monitorsList = newMonitor;
 		const bool ok = newMonitor->Activate();
