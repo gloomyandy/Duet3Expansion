@@ -444,7 +444,9 @@ static GCodeResult InitiateReset(const CanMessageReset& msg, const StringRef& re
 
 static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& reply, uint8_t& extra)
 {
-#if SUPPORT_LOADCELL_DIAGNOSTICS
+#if SUPPORT_LOADCELL_DIAGNOSTICS && SUPPORT_LOADCELL_FFT
+	static constexpr uint8_t LastDiagnosticsPart = 9;				// the last diagnostics part is typeDiagnosticsPart0 + 9
+#elif SUPPORT_LOADCELL_DIAGNOSTICS
 	static constexpr uint8_t LastDiagnosticsPart = 8;				// the last diagnostics part is typeDiagnosticsPart0 + 8
 #else
 	static constexpr uint8_t LastDiagnosticsPart = 7;				// the last diagnostics part is typeDiagnosticsPart0 + 7
@@ -626,6 +628,13 @@ static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& rep
 		extra = LastDiagnosticsPart;
 		LoadCellDiagnostics::AppendDiagnostics(reply);
 		break;
+
+# if SUPPORT_LOADCELL_FFT
+	case CanMessageReturnInfo::typeDiagnosticsPart0 + 9:
+		extra = LastDiagnosticsPart;
+		LoadCellDiagnostics::AppendSlowSpectrum(reply);
+		break;
+# endif
 #endif
 	}
 	return GCodeResult::ok;
@@ -856,6 +865,17 @@ void CommandProcessor::Spin()
 			InputMonitor::ReadInputs(buf);
 			CanInterface::SendAndFree(buf);
 			return;
+
+		case CanMessageType::tareInputMonitor:
+			requestId = buf->msg.tareInputMonitor.requestId;
+			if (InputMonitor::Tare(buf, replyRef))
+			{
+				// Success is reported by the custom reply message that Tare put in the buffer
+				CanInterface::SendAndFree(buf);
+				return;
+			}
+			rslt = GCodeResult::error;
+			break;
 
 		case CanMessageType::setAddressAndNormalTiming:
 			requestId = buf->msg.setAddressAndNormalTiming.requestId;

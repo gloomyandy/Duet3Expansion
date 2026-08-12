@@ -25,6 +25,10 @@
 # include <Platform/Platform.h>
 #endif
 
+// Time constant of the rolling average that a tare latches, as a power of 2 samples. At the load cell's ~1300Hz this is about 50ms,
+// which divides the +/-50 count noise by 8 without making the tare stale if the head has just moved
+constexpr unsigned int AverageShift = 6;
+
 InputMonitor * volatile InputMonitor::monitorsList = nullptr;
 ReadWriteLock InputMonitor::listLock;
 
@@ -91,7 +95,7 @@ bool InputMonitor::Activate() noexcept
 				else
 #endif
 			{
-				state = port.ReadAnalog() >= threshold;
+				state = ReachedThreshold(port.ReadAnalog());
 #ifdef ATEIO
 				// We can't set an interrupt on the extended analog channels
 				if (IsExtendedAnalogPin(port.GetPin()))
@@ -155,6 +159,14 @@ void InputMonitor::Deactivate() noexcept
 		}
 	}
 	active = false;
+}
+
+// A negative threshold means the reading falls to it on contact, which is what a load cell does unless the bridge is wired the other way round.
+// Probing towards a surface above the head produces the opposite sign again, so both directions have to work
+bool InputMonitor::ReachedThreshold(int32_t reading) const noexcept
+{
+	const int64_t tared = (int64_t)reading - baseline;		// 64-bit because a railed reading and a baseline of opposite sign overflow int32
+	return (threshold >= 0) ? tared >= threshold : tared <= threshold;
 }
 
 // Return the analog value of this input
@@ -233,7 +245,19 @@ void InputMonitor::DigitalInterrupt() noexcept
 
 void InputMonitor::AnalogInterrupt(int32_t reading) noexcept
 {
-	const bool newState = reading >= threshold;
+	// Seed the average from the first sample, because converging from zero against a large raw offset takes a visible fraction of a second
+	if (averageValid)
+	{
+		averageAccumulator += reading - (averageAccumulator >> AverageShift);
+	}
+	else
+	{
+		averageAccumulator = (int64_t)reading << AverageShift;
+	}
+	averageReading = (int32_t)(averageAccumulator >> AverageShift);
+	averageValid = true;							// set after publishing averageReading so that a concurrent tare cannot latch a stale value
+
+	const bool newState = ReachedThreshold(reading);
 	if (newState != state)
 	{
 		state = newState;
@@ -336,6 +360,10 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	newMonitor->state = false;
 	newMonitor->minInterval = msg.minInterval;
 	newMonitor->threshold = msg.threshold;
+	newMonitor->baseline = 0;
+	newMonitor->averageAccumulator = 0;
+	newMonitor->averageReading = 0;
+	newMonitor->averageValid = false;
 	newMonitor->sendDue = false;
 #if SUPPORT_LDC1612
 	newMonitor->isLdcInTouchMode = false;
@@ -408,7 +436,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 
 	case CanMessageChangeInputMonitorV1::actionChangeThreshold:
 		m->threshold = (int32_t)msg.param;
-		m->state = m->port.ReadAnalog() >= m->threshold;
+		m->state = m->ReachedThreshold(m->port.ReadAnalog());
 #if SUPPORT_LDC1612
 		if (m->port.IsLdc1612())
 		{
@@ -526,6 +554,41 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	reply->numReported = count;
 	reply->resultCode = (uint32_t)((count == 0) ? GCodeResult::error : GCodeResult::ok);
 	buf->dataLength = reply->GetActualDataLength();
+}
+
+// Latch the current averaged reading of an analog handle as its baseline. On success, replace the message in the buffer by the reply and return true.
+// On failure, return the error text instead and leave the buffer alone, because the main board only propagates errors from a standard reply
+/*static*/ bool InputMonitor::Tare(CanMessageBuffer *buf, const StringRef& reply) noexcept
+{
+	// Extract data before we overwrite the message
+	const CanAddress srcAddress = buf->id.Src();
+	const uint16_t rid = buf->msg.tareInputMonitor.requestId;
+	const uint16_t hndl = buf->msg.tareInputMonitor.handle.all;
+
+	int32_t newBaseline;
+	{
+		auto m = Find(hndl);
+		if (m.IsNull())
+		{
+			reply.printf("Board %u does not have input handle %04x", CanInterface::GetCanAddress(), hndl);
+			return false;
+		}
+		if (m->IsDigital())
+		{
+			reply.printf("Board %u cannot tare digital input handle %04x", CanInterface::GetCanAddress(), hndl);
+			return false;
+		}
+		newBaseline = (m->averageValid) ? m->averageReading : m->port.ReadAnalog();
+		m->baseline = newBaseline;
+		m->state = m->ReachedThreshold(m->port.ReadAnalog());
+	}
+
+	// Construct the new message in the same buffer
+	auto resp = buf->SetupResponseMessage<CanMessageTareInputMonitorReply>(rid, CanInterface::GetCanAddress(), srcAddress);
+	resp->baseline = newBaseline;
+	resp->resultCode = (uint32_t)GCodeResult::ok;
+	buf->dataLength = resp->GetActualDataLength();
+	return true;
 }
 
 // Append analog handle data to the supplied buffer

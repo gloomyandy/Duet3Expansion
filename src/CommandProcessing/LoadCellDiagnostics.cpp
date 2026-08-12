@@ -257,7 +257,8 @@ void LoadCellDiagnostics::AppendSpectrum(const int32_t (&buffer)[NumSamples], si
 		bandSumSquares[band] += re[k] * re[k];
 	}
 
-	// Pick the strongest peaks, excluding the main lobe of one already picked - otherwise a single resonance fills every slot
+	// Pick the strongest peaks, excluding the main lobe of one already picked - otherwise a single resonance fills every slot.
+	// A peak must be a local maximum, otherwise the monotone skirt of the DC drift leakage fills the slots and the interpolation diverges
 	float peakAmplitude[NumPeaksToReport] = { };
 	float peakFrequency[NumPeaksToReport] = { };
 	size_t peakBin[NumPeaksToReport] = { };
@@ -275,7 +276,7 @@ void LoadCellDiagnostics::AppendSpectrum(const int32_t (&buffer)[NumSamples], si
 					excluded = true;
 				}
 			}
-			if (!excluded && re[k] > bestAmplitude)
+			if (!excluded && re[k] > bestAmplitude && re[k] >= re[k - 1] && re[k] >= re[k + 1])
 			{
 				bestAmplitude = re[k];
 				bestBin = k;
@@ -291,7 +292,7 @@ void LoadCellDiagnostics::AppendSpectrum(const int32_t (&buffer)[NumSamples], si
 		peakBin[p] = bestBin;
 		peakAmplitude[p] = sqrtf(re[bestBin - 1] * re[bestBin - 1] + re[bestBin] * re[bestBin] + re[bestBin + 1] * re[bestBin + 1]) / sqrtf(1.5);
 		const float denominator = re[bestBin - 1] - 2 * re[bestBin] + re[bestBin + 1];
-		const float offset = (denominator == 0.0f) ? 0.0f : 0.5f * (re[bestBin - 1] - re[bestBin + 1]) / denominator;
+		const float offset = (denominator == 0.0f) ? 0.0f : constrain<float>(0.5f * (re[bestBin - 1] - re[bestBin + 1]) / denominator, -0.5f, 0.5f);
 		peakFrequency[p] = ((float)bestBin + offset) * binWidth;
 	}
 
@@ -348,6 +349,21 @@ void LoadCellDiagnostics::AppendDiagnostics(const StringRef& reply) noexcept
 	{
 		AppendSpectrum(fastSamples, fastWriteIndex, measuredRate, FastBandLimits, ARRAY_SIZE(FastBandLimits), "fast", reply);
 	}
+#endif
+}
+
+#if SUPPORT_LOADCELL_FFT
+
+// Append the slow spectrum. It gets its own diagnostics part because both spectra together overflow one reply string
+void LoadCellDiagnostics::AppendSlowSpectrum(const StringRef& reply) noexcept
+{
+	if (!initialised || samplesTaken == 0)
+	{
+		return;
+	}
+
+	const uint32_t elapsed = millis() - whenCaptureStarted;
+	const float measuredRate = (elapsed == 0) ? 0.0f : (float)samplesTaken * 1000.0f / (float)elapsed;
 
 	if (slowSamplesTaken < NumSamples)
 	{
@@ -359,8 +375,9 @@ void LoadCellDiagnostics::AppendDiagnostics(const StringRef& reply) noexcept
 	{
 		AppendSpectrum(slowSamples, slowWriteIndex, measuredRate / (float)SlowDecimation, SlowBandLimits, ARRAY_SIZE(SlowBandLimits), "slow", reply);
 	}
-#endif
 }
+
+#endif
 
 #endif
 

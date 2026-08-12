@@ -17,7 +17,10 @@
 namespace LoadCellDiagnostics
 {
 	void RecordSample(int32_t reading) noexcept;				// called from the ADC task for every sample
-	void AppendDiagnostics(const StringRef& reply) noexcept;	// append the drift figures and, if configured, the spectra
+	void AppendDiagnostics(const StringRef& reply) noexcept;	// append the drift figures and, if configured, the fast spectrum
+#if SUPPORT_LOADCELL_FFT
+	void AppendSlowSpectrum(const StringRef& reply) noexcept;	// append the slow spectrum, which is a separate diagnostics part
+#endif
 }
 
 #endif

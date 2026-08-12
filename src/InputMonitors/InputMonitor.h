@@ -47,6 +47,7 @@ public:
 
 	static uint32_t AddStateChanges(CanMessageInputChangedV2 *msg) noexcept;
 	static void ReadInputs(CanMessageBuffer *buf) noexcept;
+	static bool Tare(CanMessageBuffer *buf, const StringRef& reply) noexcept;
 
 	static unsigned int AddAnalogHandleDataV1(uint8_t *buffer, size_t spaceLeft) noexcept;
 
@@ -55,6 +56,7 @@ public:
 
 private:
 	bool IsDigital() const noexcept { return threshold == 0; }
+	bool ReachedThreshold(int32_t reading) const noexcept;
 	bool Activate() noexcept;
 	void Deactivate() noexcept;
 	void DigitalInterrupt() noexcept;
@@ -76,10 +78,14 @@ private:
 	IoPort port;
 	uint32_t whenLastSent;
 	uint32_t whenStateChanged;
-	int32_t threshold;
+	int32_t threshold;								// compared against the reading with the baseline subtracted
+	int32_t baseline;								// zero until the handle is tared, so an untared handle behaves as it always did
+	int64_t averageAccumulator;						// the rolling average scaled by 2^AverageShift, only touched by the sampling task
+	volatile int32_t averageReading;				// the rolling average, published by the sampling task for the CAN task to latch
 	uint16_t handle;
 	uint16_t minInterval;
 	bool active;
+	bool averageValid;
 	volatile bool state;
 	volatile bool sendDue;
 #if SUPPORT_LDC1612
