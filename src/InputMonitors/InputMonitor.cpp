@@ -29,6 +29,10 @@
 // which divides the +/-50 count noise by 8 without making the tare stale if the head has just moved
 constexpr unsigned int AverageShift = 6;
 
+// Time constant of the baseline tracker, as a power of 2 samples. At ~1300Hz this is a first-order corner of ~0.4Hz,
+// which follows thermal drift (all below 0.1Hz on the INDX) while a step such as locking a tool decays within ~1.5s
+constexpr unsigned int TrackShift = 9;
+
 InputMonitor * volatile InputMonitor::monitorsList = nullptr;
 ReadWriteLock InputMonitor::listLock;
 
@@ -169,10 +173,11 @@ bool InputMonitor::ReachedThreshold(int32_t reading) const noexcept
 	return (threshold >= 0) ? tared >= threshold : tared <= threshold;
 }
 
-// Return the analog value of this input
+// Return the analog value of this input, relative to the baseline so that a tared handle reports what the threshold is compared against.
+// The baseline is zero unless the handle has been tared, so most handles still report the raw reading
 int32_t InputMonitor::GetAnalogValue() const noexcept
 {
-	return (!IsDigital()) ? port.ReadAnalog()
+	return (!IsDigital()) ? (int32_t)constrain<int64_t>((int64_t)port.ReadAnalog() - baseline, std::numeric_limits<int32_t>::min(), std::numeric_limits<int32_t>::max())
 #if SAME5x
 			: port.ReadDebouncedDigital()
 #else
@@ -256,6 +261,18 @@ void InputMonitor::AnalogInterrupt(int32_t reading) noexcept
 	}
 	averageReading = (int32_t)(averageAccumulator >> AverageShift);
 	averageValid = true;							// set after publishing averageReading so that a concurrent tare cannot latch a stale value
+
+	if (tracking)
+	{
+		// The tracker accumulator is touched by this task only; a tare re-points it via the reseed flag so the two tasks never share the 64-bit value
+		if (trackerReseedPending)
+		{
+			trackerAccumulator = (int64_t)baseline << TrackShift;
+			trackerReseedPending = false;
+		}
+		trackerAccumulator += reading - (trackerAccumulator >> TrackShift);
+		baseline = (int32_t)(trackerAccumulator >> TrackShift);
+	}
 
 	const bool newState = ReachedThreshold(reading);
 	if (newState != state)
@@ -362,8 +379,11 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	newMonitor->threshold = msg.threshold;
 	newMonitor->baseline = 0;
 	newMonitor->averageAccumulator = 0;
+	newMonitor->trackerAccumulator = 0;
 	newMonitor->averageReading = 0;
 	newMonitor->averageValid = false;
+	newMonitor->tracking = false;
+	newMonitor->trackerReseedPending = false;
 	newMonitor->sendDue = false;
 #if SUPPORT_LDC1612
 	newMonitor->isLdcInTouchMode = false;
@@ -565,7 +585,8 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	buf->dataLength = reply->GetActualDataLength();
 }
 
-// Latch the current averaged reading of an analog handle as its baseline. On success, replace the message in the buffer by the reply and return true.
+// Latch the current averaged reading of an analog handle as its baseline and start or stop the baseline tracking, depending on the mode.
+// On success, replace the message in the buffer by the reply and return true.
 // On failure, return the error text instead and leave the buffer alone, because the main board only propagates errors from a standard reply
 /*static*/ bool InputMonitor::Tare(CanMessageBuffer *buf, const StringRef& reply) noexcept
 {
@@ -573,6 +594,7 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	const CanAddress srcAddress = buf->id.Src();
 	const uint16_t rid = buf->msg.tareInputMonitor.requestId;
 	const uint16_t hndl = buf->msg.tareInputMonitor.handle.all;
+	const uint8_t mode = (buf->dataLength >= sizeof(CanMessageTareInputMonitor)) ? buf->msg.tareInputMonitor.mode : CanMessageTareInputMonitor::modeTareAndHold;
 
 	int32_t newBaseline;
 	{
@@ -587,9 +609,22 @@ void InputMonitor::UpdateState(bool newState) noexcept
 			reply.printf("Board %u cannot tare digital input handle %04x", CanInterface::GetCanAddress(), hndl);
 			return false;
 		}
-		newBaseline = (m->averageValid) ? m->averageReading : m->port.ReadAnalog();
-		m->baseline = newBaseline;
-		m->state = m->ReachedThreshold(m->port.ReadAnalog());
+		if (mode == CanMessageTareInputMonitor::modeTrackOnly)
+		{
+			newBaseline = m->baseline;
+		}
+		else
+		{
+			m->tracking = false;					// stop the sampling task moving the baseline before latching it; it preempts us, so once this is visible the baseline is ours
+			newBaseline = (m->averageValid) ? m->averageReading : m->port.ReadAnalog();
+			m->baseline = newBaseline;
+			m->state = m->ReachedThreshold(m->port.ReadAnalog());
+		}
+		if (mode == CanMessageTareInputMonitor::modeTareAndTrack || mode == CanMessageTareInputMonitor::modeTrackOnly)
+		{
+			m->trackerReseedPending = true;
+			m->tracking = true;
+		}
 	}
 
 	// Construct the new message in the same buffer

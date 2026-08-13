@@ -79,13 +79,16 @@ private:
 	uint32_t whenLastSent;
 	uint32_t whenStateChanged;
 	int32_t threshold;								// compared against the reading with the baseline subtracted
-	int32_t baseline;								// zero until the handle is tared, so an untared handle behaves as it always did
+	volatile int32_t baseline;						// zero until the handle is tared, so an untared handle behaves as it always did; the sampling task moves it while tracking
 	int64_t averageAccumulator;						// the rolling average scaled by 2^AverageShift, only touched by the sampling task
+	int64_t trackerAccumulator;						// the slow average that tracks the baseline scaled by 2^TrackShift, only touched by the sampling task
 	volatile int32_t averageReading;				// the rolling average, published by the sampling task for the CAN task to latch
 	uint16_t handle;
 	uint16_t minInterval;
 	bool active;
 	bool averageValid;
+	volatile bool tracking;							// whether the sampling task updates the baseline continuously, off while probing and for handles that were never tared
+	volatile bool trackerReseedPending;				// tells the sampling task to restart the tracker from the current baseline
 	volatile bool state;
 	volatile bool sendDue;
 #if SUPPORT_LDC1612
