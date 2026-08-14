@@ -12,6 +12,7 @@
 
 #if SUPPORT_INDUCTIVE_HEATER
 
+#include <Platform/InductiveHeaterCalibrationParameters.h>
 #include <RTOSIface/RTOSIface.h>
 
 class InductiveHeaterPort
@@ -21,6 +22,7 @@ public:
 	void Init() noexcept;
 	void SetPwm(float pwm) noexcept;											// pwm is a fraction in [0,1]
 	GCodeResult Calibrate(bool start, const StringRef& reply) noexcept;			// start calibrating the heater or check whether calibration has completed
+	bool IsCalibrated() const noexcept { return isCalibrated; }
 
 private:
 	enum class CalibrationState : uint8_t
@@ -29,12 +31,12 @@ private:
 	};
 
 	// Constants to define the oscillator parameters
-	static constexpr uint32_t OscMinFirstOnTime = 180;
+	static constexpr uint32_t OscMinOnTime = 180;
 	static constexpr uint32_t OscDefaultLaterOnTime = 300;
 	static constexpr uint32_t OscMaxOnTime = 500;
-	static constexpr uint32_t OscDefaultOffTime = 500;
+	static constexpr uint32_t OscMinOffTime = (uint32_t)(3.0 * 120);			// the flyback time is usually about 3.5us so set a minimum of 3.0us
+	static constexpr uint32_t OscMaxOffTime = 550;								// long enough to always contain a full half cycle, not so long that the drain voltage goes backup to +24V
 	static constexpr uint32_t OscOnTimeStep = 2;
-	static constexpr uint32_t StartingOffTime = 840;							// long enough to always contain a full half cycle
 
 	static constexpr uint32_t PwmFrequencyDivisor = 512;						// high enough for good resolution, low enough for fast response (PWM frequency = 120000/512 = 234Hz)
 
@@ -50,15 +52,12 @@ private:
 	void SetBurst(uint32_t burstLength) noexcept;
 	void TurnOff() noexcept;
 
-	// Parameters to set the oscillator on- and off-times
-	uint32_t firstOnTime = OscMinFirstOnTime;
-	uint32_t mainOnTime = OscDefaultLaterOnTime;
-	uint32_t offTime = OscDefaultOffTime;
-	uint32_t pwmTimerPeriod;
-
 	// Calibration variables
-	volatile CalibrationState calState = CalibrationState::idle;
+	InductiveHeaterCalibrationParameters calibrationParams;
+	uint32_t pwmTimerPeriod;
 	const char *volatile calibrationFailedReason = "calibration not run";
+	bool isCalibrated = false;
+	volatile CalibrationState calState = CalibrationState::idle;
 };
 
 #endif

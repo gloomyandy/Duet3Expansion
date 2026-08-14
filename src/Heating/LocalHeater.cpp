@@ -214,6 +214,15 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 		// Set up a default monitor
 		monitors[0].Set(sn, DefaultHotEndTemperatureLimit, HeaterMonitorAction::GenerateFault, HeaterMonitorTrigger::TemperatureExceeded);
 	}
+
+#if SUPPORT_INDUCTIVE_HEATER
+	if (IsInductiveHeater() && !Platform::GetInductiveHeater().IsCalibrated())
+	{
+		reply.copy("heater has not been calibrated");
+		return GCodeResult::warning;
+	}
+#endif
+
 	return GCodeResult::ok;
 }
 
@@ -289,6 +298,14 @@ GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 		reply.printf("Failed to turn on heater %u because its model is disabled", GetHeaterNumber());
 		return GCodeResult::error;
 	}
+
+#if SUPPORT_INDUCTIVE_HEATER
+	if (IsInductiveHeater() && !Platform::GetInductiveHeater().IsCalibrated())
+	{
+		reply.printf("Failed to turn on heater %u because it needs calibrating", GetHeaterNumber());
+		return GCodeResult::error;
+	}
+#endif
 
 	if (mode == HeaterMode::fault)
 	{
