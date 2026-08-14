@@ -62,8 +62,9 @@ void InductiveHeaterPort::Init() noexcept
 		   )
 		{
 			// Heater calibration parameters are not valid, so set defaults and leave isCalibrated false
+			// These should not actually get used because we don't allow the heater to be turned of if it has not been calibrated; but just in case...
 			calibrationParams.firstOnTime = OscMinOnTime;
-			calibrationParams.mainOnTime = OscDefaultLaterOnTime;
+			calibrationParams.mainOnTime = OscDefaultMainOnTime;
 			calibrationParams.offTime = OscMaxOffTime;
 			calibrationParams.spare = 0xFFFF;
 		}
