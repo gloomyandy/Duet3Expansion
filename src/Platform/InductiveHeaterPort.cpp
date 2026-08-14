@@ -294,14 +294,11 @@ GCodeResult InductiveHeaterPort::Calibrate(bool start, const StringRef& reply) n
 	case CalibrationState::success:
 		calState = CalibrationState::idle;
 		reply.printf("Calibration succeeded, first on/main on/off times %lu, %lu, %lu", firstOnTime, mainOnTime, offTime);
-//		reply.lcatf("num %u mean %.1f dev %.1f", accumulator.GetNumSamples(), (double)accumulator.GetMean(), (double)accumulator.GetDeviation());
-		return GCodeResult::error;	//TEMP
-		//return GCodeResult::ok;
+		return GCodeResult::ok;
 
 	case CalibrationState::failed:
 		calState = CalibrationState::idle;
 		reply.copy(calibrationFailedReason);
-//		reply.lcatf("num %u mean %.1f dev %.1f", accumulator.GetNumSamples(), (double)accumulator.GetMean(), (double)accumulator.GetDeviation());
 		return GCodeResult::error;
 
 	default:
@@ -478,14 +475,13 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 			acc.Add((float)captureBuffer[0]);
 		}
 //		debugPrintf("%u %u: %lu %lu %lu %lu", *const_cast<volatile unsigned int *>(&captureIndex), *const_cast<volatile unsigned int *>(&errorCount), captureBuffer[0], captureBuffer[1], captureBuffer[2], captureBuffer[3]);
-		delay(1);
+		delay(1);													// allow time for the heater coil to stop resonating
 	}
 
-	//TEMP debug
-	debugPrintf("samples %u mean %.1f deviation %.1f", acc.GetNumSamples(), (double)acc.GetMean(), (double)acc.GetDeviation());
+//	debugPrintf("samples %u mean %.1f deviation %.1f", acc.GetNumSamples(), (double)acc.GetMean(), (double)acc.GetDeviation());
 
 	const uint32_t currentCycleTime = mainOnTime + offTime;
-	constexpr uint32_t minOffTime = (uint32_t)(3.0 * 120);			// the flyback time is usually about 3.5us so set a minimm of 3.0us
+	constexpr uint32_t minOffTime = (uint32_t)(3.0 * 120);			// the flyback time is usually about 3.5us so set a minimum of 3.0us
 	const uint32_t newCycleTime = (uint32_t)(acc.GetMean() + acc.GetDeviation()) + 2;
 	if (acc.GetDeviation() < 2.0 && newCycleTime < currentCycleTime && newCycleTime >= mainOnTime + minOffTime)
 	{
