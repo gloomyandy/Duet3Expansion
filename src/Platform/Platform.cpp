@@ -353,10 +353,13 @@ namespace Platform
 # endif
 		moveInstance->DisableAllDrives();
 #endif
-#if SUPPORT_I2C_SENSORS
-		if (sharedI2C != nullptr)
+#if NUM_I2C_CHANNELS != 0
+		for (SharedI2CMaster *_ecv_null p : sharedI2C)
 		{
-			sharedI2C->End();
+			if (p != nullptr)
+			{
+				p->End();
+			}
 		}
 #endif
 		CanInterface::Shutdown();
