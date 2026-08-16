@@ -40,6 +40,8 @@ constexpr uint32_t OverVoltageACValue =  (uint32_t)(64.0 * OverVoltage/Inductive
 static_assert(OverVoltageACValue <= 63);
 static_assert(TargetVoltageACValue < OverVoltageACValue);
 
+bool InductiveHeaterPort::hasFaulted = false;
+
 Task<InductiveHeaterPort::CalibrationTaskStackWords> *_ecv_null InductiveHeaterPort::calibrationTask = nullptr;
 
 InductiveHeaterPort::InductiveHeaterPort()
@@ -164,7 +166,7 @@ void InductiveHeaterPort::Init() noexcept
 	{
 		EnableTccClock(InductiveHeaterPwmTccDeviceNumber, GclkNum120MHz);
 		EnableTccClock(InductiveHeaterOscTccDeviceNumber, GclkNum120MHz);		// use the 120MHz GCLK to get the best timing resolution
-		SetupOscillator(0x00FFFFFF);											// this finishes by setting the FET to be driven from the CCL output
+		SetupOscillator();														// this finishes by setting the FET to be driven from the CCL output
 	}
 }
 
@@ -228,6 +230,10 @@ void InductiveHeaterPort::SetupOscillator(uint32_t pwmOnCount) noexcept
 	// Set the FET drive pin to be the CCL3 output
 	SetPinFunction(InductiveHeaterCCLOutPin, InductiveHeaterCCLOutPinPeriphMode);
 
+	// Enable the over-voltage interrupt
+	AC->INTFLAG.reg = AC_INTFLAG_COMP0;							// clear any pending COMP0 interrupt
+	AC->INTENSET.reg = AC_INTENSET_COMP0;						// enable interrupt on COMP0 edge
+
 	// Enable the oscillator TCC capture interrupt
 	NVIC_SetPriority(OSC_TCC_IRQn, NvicPriorityOscTcc);
 	NVIC_EnableIRQ(OSC_TCC_IRQn);
@@ -243,8 +249,25 @@ void InductiveHeaterPort::SetPwm(float pwm) noexcept
 						: (actualOnClocks == pwmTimerPeriod) ? 0								// heater is fully on
 							: pwmTimerPeriod - actualOnClocks + (calibrationParams.mainOnTime - calibrationParams.firstOnTime);		// delay comparison to make the first cycle shorter than the rest
 	volatile Tcc *const tccdev = Timers::TccDevices[InductiveHeaterPwmTccDeviceNumber];
-	tccdev->CC[InductiveHeaterPwmTccOutputNumber].bit.CC = cc;
-	tccdev->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = cc;
+	if (cc == 0)
+	{
+		// If the heater is currently off, we can't set cc to zero because that will cause the first pulse firstOnTime to equal mainOnTime, causing voltage overshoot
+		if (tccdev->CC[InductiveHeaterPwmTccOutputNumber].bit.CC < pwmTimerPeriod)
+		{
+			tccdev->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = cc;					// heater is at least partly on so set it fully on at the next refresh
+		}
+		else
+		{
+			const uint32_t newCc = oscTimerPeriod + (calibrationParams.mainOnTime - calibrationParams.firstOnTime);
+			tccdev->CC[InductiveHeaterPwmTccOutputNumber].bit.CC = newCc;						// set it slightly less than fully on
+			tccdev->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = newCc;
+		}
+	}
+	else
+	{
+		tccdev->CC[InductiveHeaterPwmTccOutputNumber].bit.CC = cc;
+		tccdev->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = cc;
+	}
 }
 
 // Reset the heater cycle parameters to the latest stored values and set a specified burst length.
@@ -261,6 +284,22 @@ void InductiveHeaterPort::TurnOff() noexcept
 {
 	SetPinMode(InductiveHeaterCCLOutPin, OUTPUT_LOW);
 }
+
+// Clear a heater fault
+void InductiveHeaterPort::ClearFault() noexcept
+{
+	hasFaulted = false;
+	SetupOscillator(0x00FFFFFF);
+}
+
+//********************** Heater calibration data and functions **********************
+
+enum class CalibrationState : uint8_t
+{
+	idle = 0, start, calibrating, failed, success
+};
+
+static volatile CalibrationState calState = CalibrationState::idle;
 
 // Start calibrating the heater, or check whether heater calibration is complete. Called from LocalHeater::TuningCommand.
 // Returns GCodeResult::notFinished if we started
@@ -328,26 +367,31 @@ void InductiveHeaterPort::CalibrationTaskFunc() noexcept
 		if (calState == CalibrationState::start)
 		{
 			CalibrateHeater();
-			SetupOscillator(0x00FFFFFF);
 		}
 		TaskBase::TakeIndexed(NotifyIndices::InductiveHeaterCalibration);
 	}
 }
 
 static std::atomic<uint32_t> acIntflag(0);
-
 static uint32_t captureBuffer[10];
 static std::atomic<unsigned int> captureIndex(0);
 static std::atomic<unsigned int> errorCount(0);
 
-// Analog comparator interrupt handler
+// Analog comparator interrupt handler. We use it to detect that the drain voltage threshold has been exceeded. This happens in two situations:
+// 1. When tuning we increase the pulse length until the threshold is reached, then back off a little
+// 2. During normal operation if the threshold is breached then this is an over-voltage condition so we shut down the heater and raise a heater fault.
+//    This happens if we try to heat without a tool present.
 extern "C" void AC_Handler() noexcept
 {
 	const uint32_t intFlag = AC->INTFLAG.reg;
 	acIntflag |= intFlag;
-
-    //TODO do we need to take any other action on overvoltage?
 	AC->INTFLAG.reg = intFlag;
+
+	if (calState == CalibrationState ::idle || calState == CalibrationState::success)
+	{
+		InductiveHeaterPort::TurnOff();
+		InductiveHeaterPort::hasFaulted = true;
+	}
 }
 
 #ifndef OSC_TCC_Handler
@@ -504,7 +548,7 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 	// 3. Calibrate the subsequent on-time.
 	// As we are using a long off-time, on the second and subsequent cycles the mosfet will turn on while the coil is still feeding power back to the supply.
 
-	calibrationParams.firstOnTime -= 6;								// make sure the first pulse doesn't trigger the comparator
+	calibrationParams.firstOnTime -= 10;							// make sure the first pulse doesn't trigger the comparator
 	successCount = 0;
 
 	for (;;)    													// loop increasing mainOnTime until the target is reached
@@ -544,8 +588,9 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 		delay(1);													// allow time for the heater coil to stop resonating
 	}
 
-	calibrationParams.mainOnTime -= 6;												// reduce the on time to avoid exceeding the target
+	calibrationParams.mainOnTime -= 10;								// reduce the on time to avoid exceeding the target
 	calState = CalibrationState::success;
+	ClearFault();													// clear any heater fault and reset the oscillator
 }
 
 #endif

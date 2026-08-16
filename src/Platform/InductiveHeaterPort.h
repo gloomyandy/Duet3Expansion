@@ -15,6 +15,7 @@
 #include <Platform/InductiveHeaterCalibrationParameters.h>
 #include <RTOSIface/RTOSIface.h>
 
+// Note that this class relies on static variables, so we should not create more than one instance of it!
 class InductiveHeaterPort
 {
 public:
@@ -23,15 +24,16 @@ public:
 	void SetPwm(float pwm) noexcept;													// pwm is a fraction in [0,1]
 	GCodeResult Calibrate(bool start, const StringRef& reply) noexcept;					// start calibrating the heater or check whether calibration has completed
 	bool IsCalibrated() const noexcept { return isCalibrated; }
+	bool HasFaulted() const noexcept { return hasFaulted; }
+	void ClearFault() noexcept;
+
+	static void TurnOff() noexcept;														// this is called by the ISR - NOTE FOR_GENERAL USE
+	static bool hasFaulted;																// set if we have detected over-voltage and turned the heater off NOT FOR GENERAL USE OUTSIDE THIS MODULE
 
 private:
-	enum class CalibrationState : uint8_t
-	{
-		idle = 0, start, calibrating, failed, success
-	};
-
 	// Constants to define the oscillator parameters
 	static constexpr uint32_t OscClockFrequencyMHz = 120;								// the frequency at which the oscillator timer is clocked
+	static constexpr uint32_t PwmOnCountOff = 0x00FFFFFF;								// value to pass to SetupOscillator to ensure heater is off
 
 	// The following values are expressed in microseconds converted to clocks. Typical values after calibration are:
 	// firstOnTime 290 (2.42us), mainOnTime 450 (3.75us), offTime 437 (3.64us)
@@ -51,17 +53,16 @@ private:
 	[[noreturn]] static void CalibrationTaskEntry(void *pv) noexcept;
 	[[noreturn]] void CalibrationTaskFunc() noexcept;									// function executed by the calibration task
 
-	void SetupOscillator(uint32_t pwmOnCount) noexcept;									// set up the timing parameters from firstCycleLength, laterCycleLength and offTime
+	void SetupOscillator(uint32_t pwmOnCount = PwmOnCountOff) noexcept;					// set up the timing parameters from firstCycleLength, laterCycleLength and offTime; pwmOnCount defaults to heater off
 	void CalibrateHeater() noexcept;
 	void SetBurst(uint32_t burstLength) noexcept;
-	void TurnOff() noexcept;
 
 	// Calibration variables
 	InductiveHeaterCalibrationParameters calibrationParams;
 	uint32_t pwmTimerPeriod;
+	uint32_t lastCc = 0;
 	const char *volatile calibrationFailedReason = "calibration not run";
-	bool isCalibrated = false;
-	volatile CalibrationState calState = CalibrationState::idle;
+	bool isCalibrated = false;															// set if calibration has been run or valid parameters have been read from NVM
 };
 
 #endif

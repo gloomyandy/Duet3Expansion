@@ -302,7 +302,7 @@ GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 #if SUPPORT_INDUCTIVE_HEATER
 	if (IsInductiveHeater() && !Platform::GetInductiveHeater().IsCalibrated())
 	{
-		reply.printf("Failed to turn on heater %u because it needs calibrating", GetHeaterNumber());
+		reply.printf("Failed to turn on heater %u because it has not been calibrated", GetHeaterNumber());
 		return GCodeResult::error;
 	}
 #endif
@@ -372,6 +372,14 @@ void LocalHeater::Spin() noexcept
 	// Read the temperature even if the heater is suspended or the model is not enabled
 	const TemperatureError err = ReadTemperature();
 
+#if SUPPORT_INDUCTIVE_HEATER
+	// Check for inductive heater fault
+	if (IsInductiveHeater() && Platform::GetInductiveHeater().HasFaulted())
+	{
+		RaiseHeaterFault(HeaterFaultType::inductiveHeaterError, "is a tool loaded?", "");
+	}
+	else
+#endif
 	// Handle any temperature reading error and calculate the temperature rate of change, if possible
 	if (err != TemperatureError::ok)
 	{
@@ -660,6 +668,14 @@ void LocalHeater::Spin() noexcept
 void LocalHeater::ResetFault() noexcept
 {
 	badTemperatureCount = 0;
+
+#if SUPPORT_INDUCTIVE_HEATER
+	if (IsInductiveHeater())
+	{
+		Platform::GetInductiveHeater().ClearFault();
+	}
+#endif
+
 	if (mode == HeaterMode::fault)
 	{
 #if SUPPORT_LP5817
