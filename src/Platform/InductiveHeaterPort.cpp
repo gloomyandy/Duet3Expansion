@@ -240,14 +240,18 @@ void InductiveHeaterPort::SetupOscillator(uint32_t pwmOnCount) noexcept
 }
 
 // Set the PWM value in the range 0..1. Used in normal operation.
+// Caution! we must take care not to set up a situation in which one or more overvoltage cycles occur. In particular:
+// 1. We must not change the power from 0 to full in one go, because if we do then the first pulse will not be the shorter firstOnTime but will be mainOnTime instead, causing the first cycle to be overvoltage.
+// 2. If we set the PWM to omit just one oscillator cycle, then the ringing that is still going on when that cycle ends causes the subsequent first cycle to be overvoltage.
 void InductiveHeaterPort::SetPwm(float pwm) noexcept
 {
 	const uint32_t idealOnClocks = (uint32_t)(pwm * (float)pwmTimerPeriod);						// range is 0..pwmTimerPeriod
 	const uint32_t oscTimerPeriod = calibrationParams.mainOnTime + calibrationParams.offTime;
 	const uint32_t actualOnClocks = idealOnClocks - (idealOnClocks % oscTimerPeriod);			// range is still 0..pwmTimerPeriod
-	const uint32_t cc = (actualOnClocks == 0) ? 0x00FFFFFF										// heater is off
-						: (actualOnClocks == pwmTimerPeriod) ? 0								// heater is fully on
-							: pwmTimerPeriod - actualOnClocks + (calibrationParams.mainOnTime - calibrationParams.firstOnTime);		// delay comparison to make the first cycle shorter than the rest
+	uint32_t cc = (actualOnClocks == 0) ? 0x00FFFFFF											// heater is off
+					: (actualOnClocks == pwmTimerPeriod) ? 0									// heater is fully on
+						: pwmTimerPeriod - actualOnClocks + (calibrationParams.mainOnTime - calibrationParams.firstOnTime);		// delay comparison to make the first cycle shorter than the rest
+	const uint32_t MinAllowedCc = 3 * oscTimerPeriod + (calibrationParams.mainOnTime - calibrationParams.firstOnTime);			// the minimum allowed CC value, except when zero is allowed
 	volatile Tcc *const tccdev = Timers::TccDevices[InductiveHeaterPwmTccDeviceNumber];
 	if (cc == 0)
 	{
@@ -258,13 +262,17 @@ void InductiveHeaterPort::SetPwm(float pwm) noexcept
 		}
 		else
 		{
-			const uint32_t newCc = oscTimerPeriod + (calibrationParams.mainOnTime - calibrationParams.firstOnTime);
-			tccdev->CC[InductiveHeaterPwmTccOutputNumber].bit.CC = newCc;						// set it slightly less than fully on
-			tccdev->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = newCc;
+			tccdev->CC[InductiveHeaterPwmTccOutputNumber].bit.CC = MinAllowedCc;				// set it slightly less than fully on
+			tccdev->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = MinAllowedCc;
 		}
 	}
 	else
 	{
+		// Ensure a minimum off-time of 3 oscillator cycles to prevent overvoltage on the subsequent first cycle
+		if (cc < MinAllowedCc)
+		{
+			cc = MinAllowedCc;
+		}
 		tccdev->CC[InductiveHeaterPwmTccOutputNumber].bit.CC = cc;
 		tccdev->CCBUF[InductiveHeaterPwmTccOutputNumber].bit.CCBUF = cc;
 	}
