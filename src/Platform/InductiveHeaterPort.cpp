@@ -548,7 +548,7 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 	// 3. Calibrate the subsequent on-time.
 	// As we are using a long off-time, on the second and subsequent cycles the mosfet will turn on while the coil is still feeding power back to the supply.
 
-	calibrationParams.firstOnTime -= 10;							// make sure the first pulse doesn't trigger the comparator
+	calibrationParams.firstOnTime -= OnTimeBackoff;					// make sure the first pulse doesn't trigger the overvoltage comparator
 	successCount = 0;
 
 	for (;;)    													// loop increasing mainOnTime until the target is reached
@@ -588,7 +588,7 @@ void InductiveHeaterPort::CalibrateHeater() noexcept
 		delay(1);													// allow time for the heater coil to stop resonating
 	}
 
-	calibrationParams.mainOnTime -= 10;								// reduce the on time to avoid exceeding the target
+	calibrationParams.mainOnTime -= OnTimeBackoff;					// reduce the on time to avoid exceeding the target
 	calState = CalibrationState::success;
 	ClearFault();													// clear any heater fault and reset the oscillator
 }
