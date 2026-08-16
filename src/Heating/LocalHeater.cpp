@@ -214,6 +214,15 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 		// Set up a default monitor
 		monitors[0].Set(sn, DefaultHotEndTemperatureLimit, HeaterMonitorAction::GenerateFault, HeaterMonitorTrigger::TemperatureExceeded);
 	}
+
+#if SUPPORT_INDUCTIVE_HEATER
+	if (IsInductiveHeater() && !Platform::GetInductiveHeater().IsCalibrated())
+	{
+		reply.copy("heater has not been calibrated");
+		return GCodeResult::warning;
+	}
+#endif
+
 	return GCodeResult::ok;
 }
 
@@ -290,6 +299,14 @@ GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 		return GCodeResult::error;
 	}
 
+#if SUPPORT_INDUCTIVE_HEATER
+	if (IsInductiveHeater() && !Platform::GetInductiveHeater().IsCalibrated())
+	{
+		reply.printf("Failed to turn on heater %u because it has not been calibrated", GetHeaterNumber());
+		return GCodeResult::error;
+	}
+#endif
+
 	if (mode == HeaterMode::fault)
 	{
 		reply.printf("Failed to turn on heater %u because it is in a fault state", GetHeaterNumber());
@@ -355,6 +372,14 @@ void LocalHeater::Spin() noexcept
 	// Read the temperature even if the heater is suspended or the model is not enabled
 	const TemperatureError err = ReadTemperature();
 
+#if SUPPORT_INDUCTIVE_HEATER
+	// Check for inductive heater fault
+	if (IsInductiveHeater() && Platform::GetInductiveHeater().HasFaulted())
+	{
+		RaiseHeaterFault(HeaterFaultType::inductiveHeaterError, "is a tool loaded?", "");
+	}
+	else
+#endif
 	// Handle any temperature reading error and calculate the temperature rate of change, if possible
 	if (err != TemperatureError::ok)
 	{
@@ -643,6 +668,14 @@ void LocalHeater::Spin() noexcept
 void LocalHeater::ResetFault() noexcept
 {
 	badTemperatureCount = 0;
+
+#if SUPPORT_INDUCTIVE_HEATER
+	if (IsInductiveHeater())
+	{
+		Platform::GetInductiveHeater().ClearFault();
+	}
+#endif
+
 	if (mode == HeaterMode::fault)
 	{
 #if SUPPORT_LP5817
