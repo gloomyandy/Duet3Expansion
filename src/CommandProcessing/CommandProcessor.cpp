@@ -859,7 +859,7 @@ void CommandProcessor::Spin()
 
 		case CanMessageType::changeInputMonitorV1:
 			requestId = buf->msg.changeInputMonitorV1.requestId;
-			rslt = InputMonitor::Change(buf->msg.changeInputMonitorV1, replyRef, extra);
+			rslt = InputMonitor::Change(buf->msg.changeInputMonitorV1, replyRef, extra, words, numWords);
 			break;
 
 		case CanMessageType::readInputsRequest:
@@ -867,19 +867,6 @@ void CommandProcessor::Spin()
 			InputMonitor::ReadInputs(buf);
 			CanInterface::SendAndFree(buf);
 			return;
-
-		case CanMessageType::tareInputMonitor:
-			requestId = buf->msg.tareInputMonitor.requestId;
-			{
-				int32_t baseline;
-				rslt = InputMonitor::Tare(buf->msg.tareInputMonitor, buf->dataLength, replyRef, baseline);
-				if (rslt == GCodeResult::ok)
-				{
-					words[0] = (uint32_t)baseline;
-					numWords = 1;
-				}
-			}
-			break;
 
 		case CanMessageType::setAddressAndNormalTiming:
 			requestId = buf->msg.setAddressAndNormalTiming.requestId;

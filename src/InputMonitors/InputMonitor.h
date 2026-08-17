@@ -16,7 +16,6 @@
 
 struct CanMessageCreateInputMonitorV1;
 struct CanMessageChangeInputMonitorV1;
-struct CanMessageTareInputMonitor;
 struct CanMessageInputChangedV2;
 class CanMessageBuffer;
 
@@ -44,11 +43,10 @@ public:
 	static void Spin() noexcept;
 
 	static GCodeResult Create(const CanMessageCreateInputMonitorV1& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept;
-	static GCodeResult Change(const CanMessageChangeInputMonitorV1& msg, const StringRef& reply, uint8_t& extra) noexcept;
+	static GCodeResult Change(const CanMessageChangeInputMonitorV1& msg, const StringRef& reply, uint8_t& extra, uint32_t *words, size_t& numWords) noexcept;
 
 	static uint32_t AddStateChanges(CanMessageInputChangedV2 *msg) noexcept;
 	static void ReadInputs(CanMessageBuffer *buf) noexcept;
-	static GCodeResult Tare(const CanMessageTareInputMonitor& msg, size_t dataLength, const StringRef& reply, int32_t& baseline) noexcept;
 
 	static unsigned int AddAnalogHandleDataV1(uint8_t *buffer, size_t spaceLeft) noexcept;
 
