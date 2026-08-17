@@ -655,6 +655,8 @@ void CommandProcessor::Spin()
 		GCodeResult rslt;
 		CanRequestId requestId;
 		uint8_t extra = 0;
+		uint32_t words[CanMessageStandardReply::MaxNumWords];
+		size_t numWords = 0;
 		const bool requestUsedBrs = buf->useBrs;
 
 		switch (id)
@@ -868,13 +870,15 @@ void CommandProcessor::Spin()
 
 		case CanMessageType::tareInputMonitor:
 			requestId = buf->msg.tareInputMonitor.requestId;
-			if (InputMonitor::Tare(buf, replyRef))
 			{
-				// Success is reported by the custom reply message that Tare put in the buffer
-				CanInterface::SendAndFree(buf);
-				return;
+				int32_t baseline;
+				rslt = InputMonitor::Tare(buf->msg.tareInputMonitor, buf->dataLength, replyRef, baseline);
+				if (rslt == GCodeResult::ok)
+				{
+					words[0] = (uint32_t)baseline;
+					numWords = 1;
+				}
 			}
-			rslt = GCodeResult::error;
 			break;
 
 		case CanMessageType::setAddressAndNormalTiming:
@@ -974,13 +978,14 @@ void CommandProcessor::Spin()
 			buf->useBrs = requestUsedBrs;
 			msg->resultCode = (uint16_t)rslt;
 			msg->extra = extra;
+			msg->SetWords(words, numWords);
 			const size_t totalLength = reply.strlen();
 			size_t lengthDone = 0;
 			uint8_t fragmentNumber = 0;
 			for (;;)
 			{
-				const size_t fragmentLength = min<size_t>(totalLength - lengthDone, CanMessageStandardReply::MaxTextLength);
-				memcpy(msg->text, reply.c_str() + lengthDone, fragmentLength);
+				const size_t fragmentLength = min<size_t>(totalLength - lengthDone, msg->GetMaxTextLength());
+				memcpy(msg->GetText(), reply.c_str() + lengthDone, fragmentLength);
 				lengthDone += fragmentLength;
 				buf->dataLength = msg->GetActualDataLength(fragmentLength);
 				msg->fragmentNumber = fragmentNumber;
@@ -993,6 +998,7 @@ void CommandProcessor::Spin()
 				msg->moreFollows = true;
 				CanInterface::Send(buf);
 				++fragmentNumber;
+				msg->numWords = 0;							// data words go in fragment 0 only
 			}
 		}
 	}

@@ -585,54 +585,40 @@ void InputMonitor::UpdateState(bool newState) noexcept
 	buf->dataLength = reply->GetActualDataLength();
 }
 
-// Latch the current averaged reading of an analog handle as its baseline and start or stop the baseline tracking, depending on the mode.
-// On success, replace the message in the buffer by the reply and return true.
-// On failure, return the error text instead and leave the buffer alone, because the main board only propagates errors from a standard reply
-/*static*/ bool InputMonitor::Tare(CanMessageBuffer *buf, const StringRef& reply) noexcept
+// Latch the current averaged reading of an analog handle as its baseline and start or stop the baseline tracking, depending on the mode
+/*static*/ GCodeResult InputMonitor::Tare(const CanMessageTareInputMonitor& msg, size_t dataLength, const StringRef& reply, int32_t& baseline) noexcept
 {
-	// Extract data before we overwrite the message
-	const CanAddress srcAddress = buf->id.Src();
-	const uint16_t rid = buf->msg.tareInputMonitor.requestId;
-	const uint16_t hndl = buf->msg.tareInputMonitor.handle.all;
-	const uint8_t mode = (buf->dataLength >= sizeof(CanMessageTareInputMonitor)) ? buf->msg.tareInputMonitor.mode : CanMessageTareInputMonitor::modeTareAndHold;
+	const uint16_t hndl = msg.handle.all;
+	const uint8_t mode = (dataLength >= sizeof(CanMessageTareInputMonitor)) ? msg.mode : CanMessageTareInputMonitor::modeTareAndHold;
 
-	int32_t newBaseline;
+	auto m = Find(hndl);
+	if (m.IsNull())
 	{
-		auto m = Find(hndl);
-		if (m.IsNull())
-		{
-			reply.printf("Board %u does not have input handle %04x", CanInterface::GetCanAddress(), hndl);
-			return false;
-		}
-		if (m->IsDigital())
-		{
-			reply.printf("Board %u cannot tare digital input handle %04x", CanInterface::GetCanAddress(), hndl);
-			return false;
-		}
-		if (mode == CanMessageTareInputMonitor::modeTrackOnly)
-		{
-			newBaseline = m->baseline;
-		}
-		else
-		{
-			m->tracking = false;					// stop the sampling task moving the baseline before latching it; it preempts us, so once this is visible the baseline is ours
-			newBaseline = (m->averageValid) ? m->averageReading : m->port.ReadAnalog();
-			m->baseline = newBaseline;
-			m->state = m->ReachedThreshold(m->port.ReadAnalog());
-		}
-		if (mode == CanMessageTareInputMonitor::modeTareAndTrack || mode == CanMessageTareInputMonitor::modeTrackOnly)
-		{
-			m->trackerReseedPending = true;
-			m->tracking = true;
-		}
+		reply.printf("Board %u does not have input handle %04x", CanInterface::GetCanAddress(), hndl);
+		return GCodeResult::error;
 	}
-
-	// Construct the new message in the same buffer
-	auto resp = buf->SetupResponseMessage<CanMessageTareInputMonitorReply>(rid, CanInterface::GetCanAddress(), srcAddress);
-	resp->baseline = newBaseline;
-	resp->resultCode = (uint32_t)GCodeResult::ok;
-	buf->dataLength = resp->GetActualDataLength();
-	return true;
+	if (m->IsDigital())
+	{
+		reply.printf("Board %u cannot tare digital input handle %04x", CanInterface::GetCanAddress(), hndl);
+		return GCodeResult::error;
+	}
+	if (mode == CanMessageTareInputMonitor::modeTrackOnly)
+	{
+		baseline = m->baseline;
+	}
+	else
+	{
+		m->tracking = false;					// stop the sampling task moving the baseline before latching it; it preempts us, so once this is visible the baseline is ours
+		baseline = (m->averageValid) ? m->averageReading : m->port.ReadAnalog();
+		m->baseline = baseline;
+		m->state = m->ReachedThreshold(m->port.ReadAnalog());
+	}
+	if (mode == CanMessageTareInputMonitor::modeTareAndTrack || mode == CanMessageTareInputMonitor::modeTrackOnly)
+	{
+		m->trackerReseedPending = true;
+		m->tracking = true;
+	}
+	return GCodeResult::ok;
 }
 
 // Append analog handle data to the supplied buffer
