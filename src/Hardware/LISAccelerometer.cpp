@@ -258,6 +258,7 @@ bool LISAccelerometer:: StartCollecting(uint8_t axes) noexcept
 {
 	uint8_t ctrlRegValue = ctrlReg_0x20;
 
+	StopCollecting();
 	// Clear the fifo
 	switch (accelerometerType.RawValue())
 	{
@@ -265,12 +266,14 @@ bool LISAccelerometer:: StartCollecting(uint8_t axes) noexcept
 	case AccelerometerType::LIS3DSH:
 		{
 			uint8_t val;
-			while (ReadRegister(LisRegister::FifoSource, val) && (val & (1u << 5)) == 0)	// while fifo not empty
+			size_t count = 0;
+			while (count++ < 32 && ReadRegister(LisRegister::FifoSource, val) && (val & (1u << 5)) == 0)	// while fifo not empty
 			{
 				if (!ReadRegisters(LisRegister::OutXL, 6))
 				{
 					return false;
 				}
+				delay(1);
 			}
 		}
 		ctrlRegValue |= (axes & 7);
@@ -279,12 +282,14 @@ bool LISAccelerometer:: StartCollecting(uint8_t axes) noexcept
 	case AccelerometerType::LIS2DW:
 		{
 			uint8_t val;
-			while (ReadRegister(LisRegister::FifoSource, val) && (val & 0x3F) != 0)			// while fifo not empty
+			size_t count = 0;
+			while (count++ < 32 && ReadRegister(LisRegister::FifoSource, val) && (val & 0x3F) != 0)			// while fifo not empty
 			{
 				if (!ReadRegisters(LisRegister::OutXL, 6))
 				{
 					return false;
 				}
+				delay(1);
 			}
 		}
 		break;
