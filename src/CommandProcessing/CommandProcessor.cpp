@@ -49,6 +49,10 @@
 # include "MFMHandler.h"
 #endif
 
+#if SUPPORT_LOADCELL_DIAGNOSTICS
+# include "LoadCellDiagnostics.h"
+#endif
+
 // Check a value against the specified min and max parameters returning true if the value was outside limits
 static bool CheckMinMax(CanMessageGenericParser& parser, const StringRef& reply, char c, float val, const char *text) noexcept
 {
@@ -440,7 +444,13 @@ static GCodeResult InitiateReset(const CanMessageReset& msg, const StringRef& re
 
 static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& reply, uint8_t& extra)
 {
+#if SUPPORT_LOADCELL_DIAGNOSTICS && SUPPORT_LOADCELL_FFT
+	static constexpr uint8_t LastDiagnosticsPart = 9;				// the last diagnostics part is typeDiagnosticsPart0 + 9
+#elif SUPPORT_LOADCELL_DIAGNOSTICS
+	static constexpr uint8_t LastDiagnosticsPart = 8;				// the last diagnostics part is typeDiagnosticsPart0 + 8
+#else
 	static constexpr uint8_t LastDiagnosticsPart = 7;				// the last diagnostics part is typeDiagnosticsPart0 + 7
+#endif
 
 	switch (msg.type)
 	{
@@ -618,6 +628,20 @@ static GCodeResult GetInfo(const CanMessageReturnInfo& msg, const StringRef& rep
 		FilamentMonitor::GetDiagnostics(reply);
 #endif
 		break;
+
+#if SUPPORT_LOADCELL_DIAGNOSTICS
+	case CanMessageReturnInfo::typeDiagnosticsPart0 + 8:
+		extra = LastDiagnosticsPart;
+		LoadCellDiagnostics::AppendDiagnostics(reply);
+		break;
+
+# if SUPPORT_LOADCELL_FFT
+	case CanMessageReturnInfo::typeDiagnosticsPart0 + 9:
+		extra = LastDiagnosticsPart;
+		LoadCellDiagnostics::AppendSlowSpectrum(reply);
+		break;
+# endif
+#endif
 	}
 	return GCodeResult::ok;
 }
@@ -637,6 +661,8 @@ void CommandProcessor::Spin()
 		GCodeResult rslt;
 		CanRequestId requestId;
 		uint8_t extra = 0;
+		uint32_t words[CanMessageStandardReply::MaxNumWords];
+		size_t numWords = 0;
 		const bool requestUsedBrs = buf->useBrs;
 
 		switch (id)
@@ -839,7 +865,7 @@ void CommandProcessor::Spin()
 
 		case CanMessageType::changeInputMonitorV1:
 			requestId = buf->msg.changeInputMonitorV1.requestId;
-			rslt = InputMonitor::Change(buf->msg.changeInputMonitorV1, replyRef, extra);
+			rslt = InputMonitor::Change(buf->msg.changeInputMonitorV1, replyRef, extra, words, numWords);
 			break;
 
 		case CanMessageType::readInputsRequest:
@@ -945,13 +971,14 @@ void CommandProcessor::Spin()
 			buf->useBrs = requestUsedBrs;
 			msg->resultCode = (uint16_t)rslt;
 			msg->extra = extra;
+			msg->SetWords(words, numWords);
 			const size_t totalLength = reply.strlen();
 			size_t lengthDone = 0;
 			uint8_t fragmentNumber = 0;
 			for (;;)
 			{
-				const size_t fragmentLength = min<size_t>(totalLength - lengthDone, CanMessageStandardReply::MaxTextLength);
-				memcpy(msg->text, reply.c_str() + lengthDone, fragmentLength);
+				const size_t fragmentLength = min<size_t>(totalLength - lengthDone, msg->GetMaxTextLength());
+				memcpy(msg->GetText(), reply.c_str() + lengthDone, fragmentLength);
 				lengthDone += fragmentLength;
 				buf->dataLength = msg->GetActualDataLength(fragmentLength);
 				msg->fragmentNumber = fragmentNumber;
@@ -964,6 +991,7 @@ void CommandProcessor::Spin()
 				msg->moreFollows = true;
 				CanInterface::Send(buf);
 				++fragmentNumber;
+				msg->numWords = 0;							// data words go in fragment 0 only
 			}
 		}
 	}

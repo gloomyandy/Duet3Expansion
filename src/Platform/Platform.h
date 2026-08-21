@@ -31,6 +31,10 @@
 # include <Hardware/Drivers/ADS131M02.h>
 #endif
 
+#if SUPPORT_INDUCTIVE_HEATER
+class InductiveHeaterPort;
+#endif
+
 #if RPXXXX
 # include <hardware/structs/sio.h>
 #endif
@@ -169,7 +173,7 @@ namespace Platform
 #endif
 
 #if SUPPORT_INDUCTIVE_HEATER
-	void SetInductiveHeaterPwm(float pwm) noexcept;
+	InductiveHeaterPort& GetInductiveHeater() noexcept;
 #endif
 
 	const MinCurMax& GetMcuTemperatures() noexcept;

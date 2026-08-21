@@ -369,6 +369,15 @@ namespace Platform
 # endif
 		moveInstance->DisableAllDrives();
 #endif
+#if NUM_I2C_CHANNELS != 0
+		for (SharedI2CMaster *_ecv_null p : sharedI2C)
+		{
+			if (p != nullptr)
+			{
+				p->End();
+			}
+		}
+#endif
 		CanInterface::Shutdown();
 		WriteLed(0, false);
 		WriteLed(1, false);
@@ -1678,9 +1687,9 @@ float Platform::GetCurrentV12Voltage() noexcept
 
 #if SUPPORT_INDUCTIVE_HEATER
 
-void Platform::SetInductiveHeaterPwm(float pwm) noexcept
+InductiveHeaterPort& Platform::GetInductiveHeater() noexcept
 {
-	inductiveHeaterPort.SetPwm(pwm);
+	return inductiveHeaterPort;
 }
 
 #endif

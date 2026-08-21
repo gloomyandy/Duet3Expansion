@@ -10,6 +10,7 @@
 #define SRC_HARDWARE_NONVOLATILEMEMORY_H_
 
 #include <Hardware/SoftwareReset.h>
+#include <Platform/InductiveHeaterCalibrationParameters.h>
 
 #if RPXXXX
 # include <CanSettings.h>
@@ -55,6 +56,12 @@ public:
 
 	bool GetClosedLoopQuadratureDirection(bool& backwards) noexcept pre(page == NvmPage::closedLoop);
 	void SetClosedLoopQuadratureDirection(bool backwards) noexcept pre(page == NvmPage::closedLoop);
+
+#if SUPPORT_INDUCTIVE_HEATER
+	void GetInductiveHeaterParams(InductiveHeaterCalibrationParameters& params) noexcept;
+	void SetInductiveHeaterParams(const InductiveHeaterCalibrationParameters& params) noexcept;
+#endif
+
 #if RPXXXX
 	bool GetCanSettings(CanUserAreaData& canSettings) noexcept pre(page == NvmPage::common);
 	void SetCanSettings(CanUserAreaData& canSettings) noexcept pre(page == NvmPage::common);
@@ -77,13 +84,17 @@ private:
 		uint8_t thermistorHighCalibration[MaxCalibratedThermistors];
 #if RPXXXX
 		CanUserAreaData canSettings;
-		uint8_t spare[38-16];
+		uint8_t spare[30-16];
 #else
-		uint8_t spare[38];
+		uint8_t spare[30];
 #endif
+		InductiveHeaterCalibrationParameters inductiveHeaterParams;
+
 		// 56 bytes up to here
 		SoftwareResetData resetData[NumberOfResetDataSlots];			// 3 slots of 152 bytes each
 	};
+
+	static_assert(sizeof(CommonPage) == 512);
 
 	struct ClosedLoopPage
 	{
