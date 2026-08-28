@@ -24,7 +24,13 @@ namespace TaskPriority
 	constexpr unsigned int MovePriority = 3;
 	constexpr unsigned int Accelerometer = 3;
 	constexpr unsigned int ClosedLoopDataTransmission = 3;
+#if USE_SPICAN
+	// When using an SPI based CAN-FD interface the CAN clock task takes longer to run and this screws up the
+	// close loop timing, so we use a higher priority
+	constexpr unsigned int TmcClosedLoop = 6;						// priority of the TMC task when in closed loop mode
+#else
 	constexpr unsigned int TmcClosedLoop = 4;						// priority of the TMC task when in closed loop mode
+#endif
 	constexpr unsigned int MfmHigh = 5;								// priority of the MFM task if we have an embedded AS5601 while it is simulating an interrupt
 	constexpr unsigned int CanAsyncSenderPriority = 5;
 	constexpr unsigned int CanClockPriority = 5;

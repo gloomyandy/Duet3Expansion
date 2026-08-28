@@ -101,6 +101,8 @@ constexpr float MaxStandstillCurrent = MaxMotorCurrent * 0.707;
 #if SUPPORT_CLOSED_LOOP || SUPPORT_PHASE_STEPPING
 # if defined(EXP1HCL) || defined(M23CL)
 constexpr uint32_t DriversSpiClockFrequency = 6000000;		// 6MHz SPI clock (max is half the TMC clock; TMC clock is currently 15MHz)
+# elif TMC_TYPE == 2240
+constexpr uint32_t DriversSpiClockFrequency = 10000000;		// 10MHz SPI clock 2240 allows higher spi clock rates
 # else
 constexpr uint32_t DriversSpiClockFrequency = 4000000;		// 4MHz SPI clock (max when using the internal TMC clock)
 # endif
@@ -1642,7 +1644,11 @@ static void TmcTimerCallback(CallbackParameter) noexcept
 }
 #endif
 
+#if RP2350
+extern "C" [[noreturn]] void __time_critical_func(TmcLoop(void *)) noexcept
+#else
 extern "C" [[noreturn]] void TmcLoop(void *) noexcept
+#endif
 {
 #if !TMC_USES_SHARED_SPI
 	InitialiseDMA();

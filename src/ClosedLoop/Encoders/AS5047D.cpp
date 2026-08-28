@@ -125,7 +125,11 @@ void AS5047D::Disable() noexcept
 }
 
 // This must set rawReading to a value between 0 and GetMaxValue()-1. Return true if successful, false if error.
+#if RP2350
+bool __time_critical_func(AS5047D::GetRawReading()) noexcept
+#else
 bool AS5047D::GetRawReading() noexcept
+#endif
 {
 	if (spi.Select(0))			// get the mutex and set the clock rate
 	{
@@ -277,7 +281,11 @@ void AS5047D::AppendStatus(const StringRef& reply) noexcept
 
 // Perform an SPI transaction. Caller must get ownership of the SPI device first and release it afterwards, possibly after doing multiple transactions.
 // Leave at least 350ns between multiple calls to this function.
+#if RP2350
+bool __time_critical_func(AS5047D::DoSpiTransaction)(uint16_t command, uint16_t &response) noexcept
+#else
 bool AS5047D::DoSpiTransaction(uint16_t command, uint16_t &response) noexcept
+#endif
 {
 	// This runs in the control loop at the loop rate, so use the fast pin accessors for CS
 	fastDigitalWriteLow(csPin);

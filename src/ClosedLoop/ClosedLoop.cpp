@@ -784,7 +784,11 @@ void ClosedLoop::AdjustTargetMotorSteps(float amount) noexcept
 	moveInstance->SetCurrentMotorSteps(driverNumber, lrintf(mParams.position));
 }
 
+#if RP2350
+void __time_critical_func(ClosedLoop::InstanceControlLoop)(StepTimer::Ticks now, StepTimer::Ticks timeElapsed) noexcept
+#else
 void ClosedLoop::InstanceControlLoop(StepTimer::Ticks now, StepTimer::Ticks timeElapsed) noexcept
+#endif
 {
 	// Encoder reconfiguration handshake: if M569.1 has asked us to stand down, acknowledge by moving to 'paused'
 	// (it will then delete/recreate the encoder).
@@ -1000,7 +1004,11 @@ void ClosedLoop::CollectSample() noexcept
 }
 
 // Control the motor phase currents, returning the fraction of maximum current that we commanded
+#if RP2350
+inline float __time_critical_func(ClosedLoop::ControlMotorCurrents)(StepTimer::Ticks ticksSinceLastCall) noexcept
+#else
 inline float ClosedLoop::ControlMotorCurrents(StepTimer::Ticks ticksSinceLastCall) noexcept
+#endif
 {
 	uint16_t commandedStepPhase;
 	float currentFraction;

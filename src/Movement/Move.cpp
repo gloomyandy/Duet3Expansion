@@ -2348,7 +2348,11 @@ GCodeResult Move::ProcessM569Point6(const CanMessageGeneric &msg, const StringRe
 	return dms[drive].closedLoopControl.ProcessM569Point6(parser, reply);
 }
 
+#if RP2350
+void __time_critical_func(Move::PhaseStepControlLoop()) noexcept
+#else
 void Move::PhaseStepControlLoop() noexcept
+#endif
 {
 	// Record the control loop call interval
 	const StepTimer::Ticks loopCallTime = StepTimer::GetTimerTicks();
