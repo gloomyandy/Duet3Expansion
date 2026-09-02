@@ -241,6 +241,7 @@ void Heat::Exit() noexcept
 		// Check whether we have any urgent messages to send
 		if (newDriverFaultState == 1)
 		{
+			Platform::KickHeatTaskWatchdog();				// tell Platform that we are alive
 			newDriverFaultState = 2;
 			moveInstance->SendDriversStatus(buf);
 		}
@@ -249,6 +250,7 @@ void Heat::Exit() noexcept
 		// Check whether we have new heater fault status messages to send
 		if (newHeaterFaultState == 1)
 		{
+			Platform::KickHeatTaskWatchdog();				// tell Platform that we are alive
 			newHeaterFaultState = 2;
 			SendHeatersStatus(buf);
 		}
@@ -316,6 +318,7 @@ void Heat::Exit() noexcept
 				// Broadcast our sensor temperatures
 				if (doSend)
 				{
+					Platform::KickHeatTaskWatchdog();				// tell Platform that we are alive
 					lastSensorsBroadcastWhich = sensorTempsMsg->whichSensors;	// for diagnostics
 					lastSensorsBroadcastWhen = millis();						// for diagnostics
 					lastSensorsFound = sensorsFound;
@@ -329,6 +332,7 @@ void Heat::Exit() noexcept
 
 			if (doSend)
 			{
+				Platform::KickHeatTaskWatchdog();				// tell Platform that we are alive
 				// See if we are tuning a heater, or have finished tuning one
 				if (heaterBeingTuned != -1)
 				{
@@ -350,6 +354,7 @@ void Heat::Exit() noexcept
 
 				if (newHeaterFaultState == 0)
 				{
+					Platform::KickHeatTaskWatchdog();				// tell Platform that we are alive
 					SendHeatersStatus(buf);						// send the status of our heaters
 				}
 				else
@@ -363,6 +368,7 @@ void Heat::Exit() noexcept
 					const unsigned int numReported = FansManager::PopulateFansReport(*msg);
 					if (numReported != 0)
 					{
+						Platform::KickHeatTaskWatchdog();				// tell Platform that we are alive
 						buf.dataLength = msg->GetActualDataLength(numReported);
 						CanInterface::Send(&buf);
 					}
@@ -371,6 +377,7 @@ void Heat::Exit() noexcept
 #if SUPPORT_DRIVERS
 				if (newDriverFaultState == 0)
 				{
+					Platform::KickHeatTaskWatchdog();				// tell Platform that we are alive
 					moveInstance->SendDriversStatus(buf);		// send the status of our drivers
 				}
 				else
@@ -382,6 +389,7 @@ void Heat::Exit() noexcept
 				// Announce ourselves to the main board, if it hasn't acknowledged us already
 				if (!CanInterface::SendAnnounce(&buf))
 				{
+					Platform::KickHeatTaskWatchdog();				// tell Platform that we are alive
 					// We didn't need to send an announcement so send a board health message instead
 					CanMessageBoardStatusV1 * const boardStatusMsg = buf.SetupRequestMessageNoRid<CanMessageBoardStatusV1>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 					boardStatusMsg->Clear();
