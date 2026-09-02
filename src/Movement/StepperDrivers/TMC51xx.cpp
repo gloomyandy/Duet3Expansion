@@ -1087,6 +1087,7 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 	return rslt;
 }
 
+uint32_t clNoWait = 0;
 // Append any additional driver status to a string, and reset the min/max load values
 void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobalStats) noexcept
 {
@@ -1103,6 +1104,8 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 	reply.catf(", mspos %u, reads %u, writes %u timeouts %u", (unsigned int)(readRegisters[ReadMsCnt] & 1023), numReads, numWrites, numTimeouts);
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	reply.catf(", cl cycles %" PRIu32 " (%" PRIu32 " late)", clCycleCount.load(), clCycleOverruns.load());
+	clCycleOverruns = 0;
+	clCycleCount = 0;
 #endif
 #if TMC_TYPE == 2240
 	reply.catf(", temp %.1fC", (double)GetDriverTemperature());
@@ -1606,6 +1609,16 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 			AtomicCriticalSectionLocker lock;
 			if (tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime))
 			{
+#if 1
+					// reverted to match Duet code, this seems to provide more consistant sample times
+					const uint32_t lateness = StepTimer::GetTimerTicksWhenInterruptsDisabled() - lastWakeupTime;
+					if (lateness >= DriversDirectSleepClocks/2)
+					{
+						++clCycleOverruns;
+					}
+					lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled();
+					tmcTask.GiveFromISR(NotifyIndices::Tmc);
+#else
 				// The deadline has already passed. If only slightly late (interrupt/preemption jitter), wake
 				// immediately and keep the deadline sequence so that jitter does not cost loop rate. If
 				// grossly late the loop is genuinely overrunning: skip forward and schedule one full period
@@ -1628,6 +1641,7 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 						tmcTask.GiveFromISR(NotifyIndices::Tmc);
 					}
 				}
+#endif
 			}
 		}
 	}
@@ -1900,6 +1914,16 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 				runNow = tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime);			// true if that wake time has already passed
 				if (runNow)
 				{
+#if 1
+					// reverted to match Duet code, this seems to provide more consistant sample times
+					const uint32_t lateness = StepTimer::GetTimerTicksWhenInterruptsDisabled() - lastWakeupTime;
+					if (lateness >= DriversDirectSleepClocks/2)
+					{
+						++clCycleOverruns;
+					}
+					lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled();
+#else
+
 					// The deadline has already passed. If we are only slightly late (interrupt/preemption
 					// jitter), run immediately and keep the deadline sequence, so that jitter does not cost
 					// loop rate. If we are grossly late the loop is genuinely overrunning: skip forward and
@@ -1918,6 +1942,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 							lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled();	// should not happen; give up and run now
 						}
 					}
+#endif
 				}
 			}
 			if (!runNow)
@@ -2100,6 +2125,8 @@ void SmartDrivers::Exit() noexcept
 // controller balance and must not go unnoticed. Called regularly from the main loop; cheap when the check interval has not expired.
 void SmartDrivers::PollClosedLoopCycleRate() noexcept
 {
+	// This code messes with m122 output figures, disable for now
+#if 0
 	constexpr uint32_t CheckIntervalMillis = 5000;
 	static uint32_t lastCheckMillis = 0;
 	static bool wasDegraded = false;
@@ -2120,6 +2147,7 @@ void SmartDrivers::PollClosedLoopCycleRate() noexcept
 		}
 		wasDegraded = degraded;
 	}
+#endif
 }
 #endif
 
