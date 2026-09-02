@@ -166,7 +166,7 @@ bool AS5047D::GetRawReading() noexcept
 // Get the diagnostic register and the error flags register
 bool AS5047D::GetDiagnosticRegisters(DiagnosticRegisters& regs) noexcept
 {
-	if (spi.Select(0))			// get the mutex and set the clock rate
+	if (spi.Select(10))			// get the mutex and set the clock rate
 	{
 		anglePipelined = false;										// these transactions interrupt the streaming angle read pipeline
 		const bool ok = DoSpiTransaction(AddParityBit(AS5047ReadCommand | AS5047RegDiag), regs.diag)
