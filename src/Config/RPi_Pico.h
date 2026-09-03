@@ -151,6 +151,8 @@ constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
 	.mosiPin = 15,
 	.misoPin = 12,
 	.sclkPin = 14,
+	.dmaChanTx = NoChan,
+	.dmaChanRx = NoChan
 }
 };
 

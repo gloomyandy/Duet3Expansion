@@ -136,12 +136,16 @@ constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
 	.mosiPin = 20,
 	.misoPin = 23,
 	.sclkPin = 22,
+	.dmaChanTx = NoChan,
+	.dmaChanRx = NoChan
 },
 {
 	.instanceNumber = 1,
 	.mosiPin = 11,
 	.misoPin = 12,
 	.sclkPin = 10,
+	.dmaChanTx = NoChan,
+	.dmaChanRx = NoChan
 }
 };
 #endif

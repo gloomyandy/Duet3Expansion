@@ -80,24 +80,45 @@ constexpr Pin ConfigureDriverIOPin = GpioPin(29);	// GPIO29 DRV_UART_ENA - pull 
 
 constexpr unsigned int Tmc5160_SpiChannel = 0;					// TMC2240 on shared SPI channel 0
 
+// Should we use DMA for SPI - at the moment it is faster if we don't
+#define SPI0_DMA 0
+#define SPI1_DMA 0
+#define SPI2_DMA 0
+
 constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
 	{
 		.instanceNumber = 0,										// RP2350 SPI0
 		.mosiPin = 7,												// GPIO7  DRV_MOSI
 		.misoPin = 4,												// GPIO4  DRV_MISO
 		.sclkPin = 6,												// GPIO6  DRV_SCK
+#if SPI0_DMA
+		.dmaChanTx = 6,
+		.dmaChanRx = 7
+#else
+		.dmaChanTx = NoChan,
+		.dmaChanRx = NoChan
+#endif
 	},
 	{
 		.instanceNumber = 1,										// RP2350 SPI1: MCP251863 CAN-FD controller
 		.mosiPin = 11,												// GPIO11 CAN_MOSI
 		.misoPin = 8,												// GPIO8  CAN_MISO
 		.sclkPin = 10,												// GPIO10 CAN_SCK
+		.dmaChanTx = NoChan,
+		.dmaChanRx = NoChan
 	},
 	{
 		.instanceNumber = 2,										// PIO SPI0
 		.mosiPin = 22,												// GPIO22 EXT4 -> MOSI
 		.misoPin = 21,												// GPIO21 EXT3 -> MISO
 		.sclkPin = 20,												// GPIO20 EXT2 -> SCK
+#if SPI2_DMA
+		.dmaChanTx = 8,
+		.dmaChanRx = 9
+#else
+		.dmaChanTx = NoChan,
+		.dmaChanRx = NoChan
+#endif
 	},
 };
 
@@ -218,7 +239,11 @@ constexpr DmaChannel DmacChanTmcTx = 2;
 constexpr DmaChannel DmacChanTmcRx = 3;					// this must be one higher than DmacChanTmcTx for RP2040 build configurations
 constexpr DmaChannel DmacChanCRC   = 4;
 constexpr DmaChannel DmaChanWS2812 = 5;
-constexpr unsigned int NumDmaChannelsUsed = 6;			// must be at least the number of channels used, may be larger. Max 12 on the RP2040.
+constexpr DmaChannel DmacChanSpi0Tx = 6;
+constexpr DmaChannel DmacChanSpi0Rx = 7;
+constexpr DmaChannel DmacChanSpi2Tx = 8;
+constexpr DmaChannel DmacChanSpi2Rx = 9;
+constexpr unsigned int NumDmaChannelsUsed = 10;			// must be at least the number of channels used, may be larger. Max 12 on the RP2040.
 
 // DMA priorities, higher is better. RP2040 has only 0 and 1.
 constexpr DmaPriority DmacPrioTmcTx = 0;
