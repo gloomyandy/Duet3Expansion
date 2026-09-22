@@ -38,6 +38,7 @@
 #define SUPPORT_TMC51xx			1
 #define SUPPORT_TMC2660			0
 #define SUPPORT_TMC22xx			0
+#define SUPPORT_TMC2240_SPI		0
 #define SUPPORT_INPUT_SHAPING	1
 #define SUPPORT_CLOSED_LOOP		1
 #define SUPPORT_BRAKE_PWM		1
@@ -156,7 +157,8 @@ constexpr I2cParameters I2C0Params =
 	.sclPin = PortAPin(13),
 	.sdaPin = PortAPin(12),
 	.pinFunction = GpioPinFunction::C,
-	.irqPriority = NvicPriorityI2C
+	.irqPriority = NvicPriorityI2C,
+	.rxDmaChannel = NoDmaChannel
 };
 
 #endif

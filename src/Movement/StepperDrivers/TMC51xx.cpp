@@ -107,11 +107,13 @@ constexpr uint32_t DriversSpiClockFrequency = 10000000;		// 10MHz SPI clock 2240
 constexpr uint32_t DriversSpiClockFrequency = 4000000;		// 4MHz SPI clock (max when using the internal TMC clock)
 # endif
 
-constexpr uint32_t DriversDirectSleepMicroseconds = 80;		// how long the closed loop task sleeps for in each cycle
+constexpr uint32_t DriversDirectSleepMicroseconds = 80;		// how long the closed loop task sleeps for in each cycle while a driver is in direct mode
 constexpr uint32_t DriversDirectSleepClocks = (StepTimer::StepClockRate * DriversDirectSleepMicroseconds)/1000000;
 
 static std::atomic<uint32_t> clCycleCount = 0;				// closed-loop/phase-step cycles completed since last read
 static std::atomic<uint32_t>  clCycleOverruns = 0;			// of those, cycles that missed their wakeup deadline by at least half a period
+constexpr uint32_t DriversNormalSleepMicroseconds = 220;	// the longer sleep used while no driver is in direct mode, giving about the same poll rate as boards without direct mode support
+constexpr uint32_t DriversNormalSleepClocks = (StepTimer::StepClockRate * DriversNormalSleepMicroseconds)/1000000;
 #else
 // With a 2MHz SPI clock, on the 3HC the TMC task takes about 25% of the CPU time. So we now use 500kHz. This means the SPI transfer will complete in a little over 240us.
 constexpr uint32_t DriversSpiClockFrequency = 500000;		// 500kHz SPI clock
@@ -266,6 +268,20 @@ const uint32_t DefaultThighReg = DefaultThigh;
 
 constexpr uint8_t REGNUM_VACTUAL = 0x22;
 
+#if TMC_TYPE == 2240
+constexpr uint8_t REGNUM_2240_ADC_TEMP = 0x51;
+constexpr uint32_t ADC_TEMP_SHIFT = 0;
+constexpr uint32_t ADC_TEMP_MASK = 0x01FFF << ADC_TEMP_SHIFT;	// ADC temperature reading
+constexpr uint8_t REGNUM_2240_ADC_VSUPPLY = 0x50;					// ADC_VSUPPLY_AIN register: supply voltage (and AIN) ADC readings
+constexpr uint32_t ADC_VSUPPLY_MASK = 0x1FFF;					// supply-voltage ADC reading is in bits 12:0
+constexpr float ADC_VSUPPLY_TO_VOLTS = 0.009732f;				// VS = ADC_VSUPPLY * 9.732mV (TMC2240 datasheet)
+#endif
+
+// Microstep table registers
+constexpr uint8_t REGNUM_MSLUT0 = 0x60;						// MSLUT0-MSLUT7 hold the 256 difference bits of the quarter-wave microstep table
+constexpr uint8_t REGNUM_MSLUTSEL = 0x68;					// difference decoding: segment start positions X1-X3 and per-segment base increments W0-W3
+constexpr uint8_t REGNUM_MSLUTSTART = 0x69;					// absolute table values at positions 0 (START_SIN) and 256 (START_SIN90)
+
 // Sequencer registers (read only)
 constexpr uint8_t REGNUM_MSCNT = 0x6A;
 constexpr uint8_t REGNUM_MSCURACT = 0x6B;
@@ -340,21 +356,22 @@ constexpr uint32_t DefaultPwmConfReg = 0xC40C001E;			// this is the reset defaul
 constexpr uint8_t REGNUM_PWM_SCALE = 0x71;
 constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
 
-#if TMC_TYPE == 2240
-// ADC registers (TMC2240-specific)
-constexpr uint8_t REGNUM_ADC_VSUPPLY = 0x50;					// ADC_VSUPPLY_AIN register: supply voltage (and AIN) ADC readings
-constexpr uint32_t ADC_VSUPPLY_MASK = 0x1FFF;					// supply-voltage ADC reading is in bits 12:0
-constexpr float ADC_VSUPPLY_TO_VOLTS = 0.009732f;				// VS = ADC_VSUPPLY * 9.732mV (TMC2240 datasheet)
-constexpr uint8_t REGNUM_ADC_TEMP = 0x51;
-constexpr uint32_t ADC_TEMP_SHIFT = 0;
-constexpr uint32_t ADC_TEMP_MASK = 0x01FFF << ADC_TEMP_SHIFT;	// ADC temperature reading
-#endif
-
 // Common data
 static constexpr size_t numTmcDrivers = MaxSmartDrivers;
 
 static constexpr uint32_t MaxValidSgLoadRegister = 1023;
 static constexpr uint32_t InvalidSgLoadRegister = 1024;
+
+// Sine table phase correction of one harmonic, see M569.2. The microstep table is a quarter wave mirrored at 90 deg and shared by both coils,
+// so only harmonics that are multiples of 4 with a phase of 0 or 180 deg are representable
+struct LutCorrection
+{
+	float magnitude;										// modulation amplitude in radians
+	uint8_t harmonic;										// harmonic of the electrical cycle, 0 = unused entry
+	bool inverted;											// true if the phase is 180 deg
+};
+
+static constexpr size_t MaxLutCorrections = 4;
 
 #if defined(EXP1HCL) || defined(M23CL) || (defined(TOOLINDX) && SUPPORT_CLOSED_LOOP)
 
@@ -431,6 +448,9 @@ enum class DriversState : uint8_t
 
 static DriversState driversState = DriversState::shutDown;
 static LocalDriversBitmap stallEndstopsEnabled;
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+static LocalDriversBitmap directModeDrivers;				// drivers whose coil currents are controlled directly, needing the fast TMC task cadence
+#endif
 std::atomic<uint16_t> SmartDrivers::driverStallsToNotify(0);
 
 #ifdef EXP3HC
@@ -479,6 +499,9 @@ public:
 	GCodeResult GetAnyRegister(const StringRef& reply, uint8_t regNum) noexcept;
 	GCodeResult SetAnyRegister(const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
 
+	GCodeResult ConfigureLutCorrection(unsigned int harmonic, bool seenMagnitude, float magnitudeDegrees, bool seenPhase, bool phaseInverted, const StringRef& reply) noexcept;
+	void AppendLutCorrections(const StringRef& reply) const noexcept;
+
 	float GetStandstillCurrentPercent() const noexcept;
 	void SetStandstillCurrentPercent(float percent) noexcept;
 
@@ -504,10 +527,13 @@ public:
 	void TransferFailed() noexcept;
 
 private:
+	enum class LutBuildResult { ok, valueOutOfRange, diffTooLarge, tooManySegments };
+
 	bool SetChopConf(uint32_t newVal) noexcept;
 	void UpdateRegister(size_t regIndex, uint32_t regVal) noexcept;
 	void UpdateChopConfRegister() noexcept;					// calculate the chopper control register and flag it for sending
 	void UpdateCurrent() noexcept;
+	LutBuildResult BuildSineTable() noexcept;				// compute the microstep table from lutCorrections and queue the register writes
 
 	void ResetLoadRegisters() noexcept
 	{
@@ -528,22 +554,21 @@ private:
 	static constexpr unsigned int Write5160ShortConf = 9;	// short circuit detection configuration
 	static constexpr unsigned int WriteDrvConf = 10;		// driver timing
 	static constexpr unsigned int WriteGlobalScaler = 11;	// motor current scaling
-	static constexpr unsigned int NumWriteRegisters = 12;	// the number of registers that we write to
+	static constexpr unsigned int WriteMslut0 = 12;			// microstep table difference bits, 8 registers
+	static constexpr unsigned int WriteMslutSel = 20;		// microstep table difference decoding
+	static constexpr unsigned int WriteMslutStart = 21;		// microstep table start values
+	static constexpr unsigned int NumWriteRegisters = 22;	// the number of registers that we write to
 #elif TMC_TYPE == 2240
 	static constexpr unsigned int WriteDrvConf = 9;			// driver timing
 	static constexpr unsigned int WriteGlobalScaler = 10;	// motor current scaling
-	static constexpr unsigned int NumWriteRegisters = 11;	// the number of registers that we write to
+	static constexpr unsigned int WriteMslut0 = 11;			// microstep table difference bits, 8 registers
+	static constexpr unsigned int WriteMslutSel = 19;		// microstep table difference decoding
+	static constexpr unsigned int WriteMslutStart = 20;		// microstep table start values
+	static constexpr unsigned int NumWriteRegisters = 21;	// the number of registers that we write to
 #endif
 	static constexpr unsigned int WriteSpecial = NumWriteRegisters;
 
 	static const uint8_t WriteRegNumbers[NumWriteRegisters];	// the register numbers that we write to
-
-#if TMC_TYPE == 2240
-	static constexpr unsigned int NumReadRegisters = 7;		// the number of registers that we read from (includes ADC_TEMP and ADC_VSUPPLY)
-#else
-	static constexpr unsigned int NumReadRegisters = 5;		// the number of registers that we read from
-#endif
-	static const uint8_t ReadRegNumbers[NumReadRegisters];	// the register numbers that we read from
 
 	// Read register numbers, in same order as ReadRegNumbers
 	static constexpr unsigned int ReadGStat = 0;
@@ -554,8 +579,13 @@ private:
 #if TMC_TYPE == 2240
 	static constexpr unsigned int ReadAdcTemp = 5;			// ADC_TEMP register for TMC2240
 	static constexpr unsigned int ReadAdcVsupply = 6;		// ADC_VSUPPLY register for TMC2240
+	static constexpr unsigned int NumReadRegisters = 7;		// the number of registers that we read from
+#else
+	static constexpr unsigned int NumReadRegisters = 5;		// the number of registers that we read from
 #endif
 	static constexpr unsigned int ReadSpecial = NumReadRegisters;
+
+	static const uint8_t ReadRegNumbers[NumReadRegisters];	// the register numbers that we read from
 
 	static constexpr uint8_t NoRegIndex = 0xFF;				// this means no register updated, or no register requested
 
@@ -565,6 +595,8 @@ private:
 
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state, without the microstepping bits
 	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection
+	LutCorrection lutCorrections[MaxLutCorrections];		// the sine table phase corrections, see M569.2
+	bool lutConfigured;										// true once M569.2 built a table, until then the power-up table is kept
 
 	std::atomic<uint32_t> newRegistersToUpdate;				// bitmap of register indices whose values need to be sent to the driver chip
 	std::atomic<uint32_t> registersToUpdate;				// bitmap of register indices whose values need to be sent to the driver chip
@@ -613,6 +645,16 @@ const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 #endif
 	REGNUM_DRVCONF,
 	REGNUM_GLOBAL_SCALER,
+	REGNUM_MSLUT0,
+	REGNUM_MSLUT0 + 1,
+	REGNUM_MSLUT0 + 2,
+	REGNUM_MSLUT0 + 3,
+	REGNUM_MSLUT0 + 4,
+	REGNUM_MSLUT0 + 5,
+	REGNUM_MSLUT0 + 6,
+	REGNUM_MSLUT0 + 7,
+	REGNUM_MSLUTSEL,
+	REGNUM_MSLUTSTART,
 };
 
 const uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
@@ -623,8 +665,8 @@ const uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 	REGNUM_PWM_SCALE,
 	REGNUM_PWM_AUTO,
 #if TMC_TYPE == 2240
-	REGNUM_ADC_TEMP,
-	REGNUM_ADC_VSUPPLY
+	REGNUM_2240_ADC_TEMP,
+	REGNUM_2240_ADC_VSUPPLY
 #endif
 };
 
@@ -662,6 +704,11 @@ pre(!driversPowered)
 	SetStallDetectThreshold(DefaultStallDetectThreshold);				// this also updates the CoolConf register
 	SetStallMinimumStepsPerSecond(DefaultMinimumStepsPerSecond);
 	UpdateRegister(WritePwmConf, DefaultPwmConfReg);
+	for (LutCorrection& correction : lutCorrections)
+	{
+		correction.harmonic = 0;
+	}
+	lutConfigured = false;
 
 	for (size_t i = 0; i < NumReadRegisters; ++i)
 	{
@@ -697,7 +744,9 @@ void TmcDriverState::SetStallDetectThreshold(int sgThreshold) noexcept
 // Write all registers. This is called when the drivers are known to be powered up.
 inline void TmcDriverState::WriteAll() noexcept
 {
-	newRegistersToUpdate.store((1u << NumWriteRegisters) - 1);
+	// Skip the microstep table registers unless M569.2 configured them, so that drivers normally keep their power-up table
+	constexpr uint32_t MslutRegistersMask = ((1u << 10) - 1) << WriteMslut0;
+	newRegistersToUpdate.store(((1u << NumWriteRegisters) - 1) & ~((lutConfigured) ? 0 : MslutRegistersMask));
 }
 
 float TmcDriverState::GetStandstillCurrentPercent() const noexcept
@@ -758,7 +807,7 @@ const char *_ecv_array _ecv_null  TmcDriverState::CheckStallDetectionEnabled(flo
 	}
 	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor))
 	{
-		return "move is too slow for driver %u.%u to detect stall (increase speed or reduce M915 V parameter)";
+		return "move is too slow for driver %u.%u to detect stall (increase speed or reduce M915 H parameter)";
 	}
 #if 0	// the Tpwmthrs setting affects the DIAG pin output but not the stall detection that we read over SPI, so we must not check the following
 	if (speed * (float)StepTimer::StepClockRate * (float)writeRegisters[WriteTpwmthrs] > (float)((GetLowestTmcClockSpeed()/256) << microstepShiftFactor))
@@ -913,6 +962,9 @@ bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 		UpdateRegister(WriteGConf, writeRegisters[WriteGConf] & ~(GCONF_DIRECT_MODE | GCONF_STEALTHCHOP));
 		configuredChopConfReg &= ~CHOPCONF_CHM;
 		UpdateChopConfRegister();
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		directModeDrivers.ClearBit(driverNumber);
+#endif
 #if SUPPORT_CLOSED_LOOP
 		UpdateCurrent();		// if we are leaving closed loop mode then we need to update the standstill current
 #endif
@@ -922,6 +974,9 @@ bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 		UpdateRegister(WriteGConf, (writeRegisters[WriteGConf] & ~GCONF_DIRECT_MODE) | GCONF_STEALTHCHOP);
 		configuredChopConfReg &= ~CHOPCONF_CHM;
 		UpdateChopConfRegister();
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		directModeDrivers.ClearBit(driverNumber);
+#endif
 #if SUPPORT_CLOSED_LOOP
 		UpdateCurrent();		// if we are leaving closed loop mode then we need to update the standstill current
 #endif
@@ -931,15 +986,19 @@ bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 		UpdateRegister(WriteGConf, writeRegisters[WriteGConf] & ~(GCONF_DIRECT_MODE | GCONF_STEALTHCHOP));
 		configuredChopConfReg |= CHOPCONF_CHM;
 		UpdateChopConfRegister();
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		directModeDrivers.ClearBit(driverNumber);
+#endif
 #if SUPPORT_CLOSED_LOOP
 		UpdateCurrent();		// if we are leaving closed loop mode then we need to update the standstill current
 #endif
 		return true;
 
-#if SUPPORT_CLOSED_LOOP
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	case (unsigned int)DriverMode::direct:
 	case (unsigned int)DriverMode::direct + 1:
 		UpdateRegister(WriteGConf, (writeRegisters[WriteGConf] & ~GCONF_STEALTHCHOP) | GCONF_DIRECT_MODE);
+		directModeDrivers.SetBit(driverNumber);
 		UpdateCurrent();		// when entering closed loop mode we need to update the standstill current
 		return true;
 #endif
@@ -959,6 +1018,203 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 		  ((writeRegisters[WriteGConf] & GCONF_STEALTHCHOP) != 0) ? DriverMode::stealthChop
 		: ((configuredChopConfReg & CHOPCONF_CHM) == 0) ? DriverMode::spreadCycle
 				: DriverMode::constantOffTime;
+}
+
+// Compute the quarter-wave microstep table with the configured phase corrections applied and queue the new register values.
+// Entries are sampled at half-position offsets and rounded down, which reproduces the power-up table exactly when no corrections are configured
+TmcDriverState::LutBuildResult TmcDriverState::BuildSineTable() noexcept
+{
+	int16_t values[257];
+	for (size_t i = 0; i < ARRAY_SIZE(values); i++)
+	{
+		const float angle = (TwoPi * (float)i + Pi) * (1.0f / 1024.0f);
+		float distortedAngle = angle;
+		for (const LutCorrection& correction : lutCorrections)
+		{
+			if (correction.harmonic != 0)
+			{
+				distortedAngle += ((correction.inverted) ? -correction.magnitude : correction.magnitude) * sinf((float)correction.harmonic * angle);
+			}
+		}
+		values[i] = (int16_t)(248.0f * sinf(distortedAngle) - 0.5f);
+		if (values[i] < 0 || values[i] > 255)
+		{
+			return LutBuildResult::valueOutOfRange;
+		}
+	}
+
+	int8_t diffs[256];
+	for (size_t i = 0; i < ARRAY_SIZE(diffs); i++)
+	{
+		const int16_t diff = values[i + 1] - values[i];
+		if (diff < -1 || diff > 3)
+		{
+			return LutBuildResult::diffTooLarge;
+		}
+		diffs[i] = (int8_t)diff;
+	}
+
+	// Split the differences into at most 4 segments that each use only two adjacent difference values
+	size_t segmentStarts[5];
+	int8_t segmentMinDiffs[4];
+	size_t numSegments = 0;
+	segmentStarts[0] = 0;
+	int8_t currentMin = diffs[0], currentMax = diffs[0];
+	for (size_t i = 1; i < ARRAY_SIZE(diffs); i++)
+	{
+		const int8_t newMin = min<int8_t>(currentMin, diffs[i]), newMax = max<int8_t>(currentMax, diffs[i]);
+		if (newMax - newMin > 1)
+		{
+			if (numSegments == 3)
+			{
+				return LutBuildResult::tooManySegments;
+			}
+			segmentMinDiffs[numSegments] = currentMin;
+			numSegments++;
+			segmentStarts[numSegments] = i;
+			currentMin = currentMax = diffs[i];
+		}
+		else
+		{
+			currentMin = newMin;
+			currentMax = newMax;
+		}
+	}
+	segmentMinDiffs[numSegments] = currentMin;
+	numSegments++;
+	segmentStarts[numSegments] = ARRAY_SIZE(diffs);
+
+	// A segment with base increment W covers the differences W-1 and W, so a segment holding only the difference 3 must still be encoded with W = 3.
+	// Unused segments start at position 255 and therefore decode the last difference bit, so give them the same W as the last real segment
+	uint8_t w[4];
+	for (size_t seg = 0; seg < ARRAY_SIZE(w); seg++)
+	{
+		w[seg] = (uint8_t)min<int>(segmentMinDiffs[min<size_t>(seg, numSegments - 1)] + 1, 3);
+	}
+	uint32_t mslut[8] = { 0 };
+	for (size_t seg = 0; seg < numSegments; seg++)
+	{
+		for (size_t i = segmentStarts[seg]; i < segmentStarts[seg + 1]; i++)
+		{
+			if (diffs[i] != (int8_t)w[seg] - 1)
+			{
+				mslut[i / 32] |= 1u << (i % 32);
+			}
+		}
+	}
+	uint8_t x[3];
+	for (size_t i = 0; i < ARRAY_SIZE(x); i++)
+	{
+		x[i] = (uint8_t)((i + 1 < numSegments) ? segmentStarts[i + 1] : 255);
+	}
+
+	for (size_t i = 0; i < ARRAY_SIZE(mslut); i++)
+	{
+		UpdateRegister(WriteMslut0 + i, mslut[i]);
+	}
+	UpdateRegister(WriteMslutSel, (uint32_t)w[0] | ((uint32_t)w[1] << 2) | ((uint32_t)w[2] << 4) | ((uint32_t)w[3] << 6) | ((uint32_t)x[0] << 8) | ((uint32_t)x[1] << 16) | ((uint32_t)x[2] << 24));
+	UpdateRegister(WriteMslutStart, (uint32_t)values[0] | ((uint32_t)values[256] << 16));
+	return LutBuildResult::ok;
+}
+
+// Configure the sine table phase correction of one harmonic, see M569.2. Same semantics as M970.3: J0 removes the harmonic, O defaults to 0 for a new one
+GCodeResult TmcDriverState::ConfigureLutCorrection(unsigned int harmonic, bool seenMagnitude, float magnitudeDegrees, bool seenPhase, bool phaseInverted, const StringRef& reply) noexcept
+{
+	LutCorrection *_ecv_null entry = nullptr;
+	for (LutCorrection& correction : lutCorrections)
+	{
+		if (correction.harmonic == harmonic)
+		{
+			entry = &correction;
+			break;
+		}
+	}
+
+	LutCorrection savedCorrections[MaxLutCorrections];
+	for (size_t i = 0; i < MaxLutCorrections; i++)
+	{
+		savedCorrections[i] = lutCorrections[i];
+	}
+
+	if (seenMagnitude && magnitudeDegrees == 0.0)
+	{
+		if (entry == nullptr)
+		{
+			return GCodeResult::ok;
+		}
+		entry->harmonic = 0;
+	}
+	else
+	{
+		if (entry == nullptr)
+		{
+			if (!seenMagnitude)
+			{
+				reply.printf("Driver %u has no waveform correction for harmonic %u", driverNumber, harmonic);
+				return GCodeResult::error;
+			}
+			for (LutCorrection& correction : lutCorrections)
+			{
+				if (correction.harmonic == 0)
+				{
+					entry = &correction;
+					entry->inverted = false;
+					break;
+				}
+			}
+			if (entry == nullptr)
+			{
+				reply.printf("Driver %u already has %u waveform correction harmonics", driverNumber, MaxLutCorrections);
+				return GCodeResult::error;
+			}
+			entry->harmonic = (uint8_t)harmonic;
+		}
+		if (seenMagnitude)
+		{
+			entry->magnitude = magnitudeDegrees * DegreesToRadians;
+		}
+		if (seenPhase)
+		{
+			entry->inverted = phaseInverted;
+		}
+	}
+
+	const LutBuildResult rslt = BuildSineTable();
+	if (rslt != LutBuildResult::ok)
+	{
+		for (size_t i = 0; i < MaxLutCorrections; i++)
+		{
+			lutCorrections[i] = savedCorrections[i];
+		}
+		if (lutConfigured)
+		{
+			(void)BuildSineTable();									// restore the previous table, a failed build queues no register writes
+		}
+		reply.printf("Cannot apply correction to driver %u: %s", driverNumber,
+						(rslt == LutBuildResult::valueOutOfRange) ? "corrected waveform is out of range"
+							: (rslt == LutBuildResult::diffTooLarge) ? "corrected waveform is too steep for the sine table"
+								: "corrected waveform needs too many sine table segments");
+		return GCodeResult::error;
+	}
+	lutConfigured = true;
+	return GCodeResult::ok;
+}
+
+void TmcDriverState::AppendLutCorrections(const StringRef& reply) const noexcept
+{
+	bool any = false;
+	for (const LutCorrection& correction : lutCorrections)
+	{
+		if (correction.harmonic != 0)
+		{
+			reply.catf("%s S%u J%.3f O%.1f", (any) ? "," : "", correction.harmonic, (double)(correction.magnitude * RadiansToDegrees), (double)((correction.inverted) ? 180.0 : 0.0));
+			any = true;
+		}
+	}
+	if (!any)
+	{
+		reply.cat(" none");
+	}
 }
 
 // Set the motor current
@@ -1101,6 +1357,9 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 	}
 	ResetLoadRegisters();
 
+#if TMC_TYPE == 2240
+	reply.catf(", temp %.1f" DEGREE_SYMBOL "C", (double)GetDriverTemperature());
+#endif
 	reply.catf(", mspos %u, reads %u, writes %u timeouts %u", (unsigned int)(readRegisters[ReadMsCnt] & 1023), numReads, numWrites, numTimeouts);
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	reply.catf(", cl cycles %" PRIu32 " (%" PRIu32 " late)", clCycleCount.load(), clCycleOverruns.load());
@@ -1602,7 +1861,7 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 		// We run the SPI bus at high speeds so that motor currents get updated as quickly as possible.
 		// If we wake up as soon as the transfer has completed then we will use too much of the available CPU time.
 		// So schedule a wakeup call instead. Try to make the wakeup interval regular.
-		lastWakeupTime += DriversDirectSleepClocks;
+		lastWakeupTime += directModeDrivers.IsEmpty() ? DriversNormalSleepClocks : DriversDirectSleepClocks;
 
 		{
 			// If the DMA interrupt priority is better (lower number) than the step interrupt priority then we must disable interrupts here
@@ -2159,6 +2418,11 @@ void SmartDrivers::SetCurrent(size_t driver, float current) noexcept
 	}
 }
 
+float SmartDrivers::GetMaxMotorCurrent(size_t driver) noexcept
+{
+	return MaxMotorCurrent;										// in this module, all drivers support the same maximum current
+}
+
 void SmartDrivers::EnableDrive(size_t driver, bool en) noexcept
 {
 	if (driver < numTmcDrivers)
@@ -2413,6 +2677,26 @@ GCodeResult SmartDrivers::SetAnyRegister(size_t driver, const StringRef& reply, 
 	return GCodeResult::error;
 }
 
+// Configure the sine table phase correction of one harmonic, see M569.2
+GCodeResult SmartDrivers::ConfigureLutCorrection(size_t driver, unsigned int harmonic, bool seenMagnitude, float magnitudeDegrees, bool seenPhase, bool phaseInverted, const StringRef& reply) noexcept
+{
+	if (driver < numTmcDrivers)
+	{
+		return driverStates[driver].ConfigureLutCorrection(harmonic, seenMagnitude, magnitudeDegrees, seenPhase, phaseInverted, reply);
+	}
+	reply.copy("Invalid smart driver number");
+	return GCodeResult::error;
+}
+
+// Append the configured sine table phase corrections of a driver to the reply
+void SmartDrivers::AppendLutCorrections(size_t driver, const StringRef& reply) noexcept
+{
+	if (driver < numTmcDrivers)
+	{
+		driverStates[driver].AppendLutCorrections(reply);
+	}
+}
+
 StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept
 {
 	if (driver < numTmcDrivers)
@@ -2443,7 +2727,8 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 	}
 }
 
-#if SUPPORT_TMC2240_SPI
+#if TMC_TYPE == 2240
+
 float SmartDrivers::GetDriverTemperature(size_t driver) noexcept
 {
 	return (driver < numTmcDrivers) ? driverStates[driver].GetDriverTemperature() : 0.0;

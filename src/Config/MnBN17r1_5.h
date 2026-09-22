@@ -95,8 +95,8 @@ constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
 		.dmaChanTx = 6,
 		.dmaChanRx = 7
 #else
-		.dmaChanTx = NoChan,
-		.dmaChanRx = NoChan
+		.dmaChanTx = NoDmaChannel,
+		.dmaChanRx = NoDmaChannel
 #endif
 	},
 	{
@@ -104,8 +104,8 @@ constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
 		.mosiPin = 11,												// GPIO11 CAN_MOSI
 		.misoPin = 8,												// GPIO8  CAN_MISO
 		.sclkPin = 10,												// GPIO10 CAN_SCK
-		.dmaChanTx = NoChan,
-		.dmaChanRx = NoChan
+		.dmaChanTx = NoDmaChannel,
+		.dmaChanRx = NoDmaChannel
 	},
 	{
 		.instanceNumber = 2,										// PIO SPI0
@@ -116,8 +116,8 @@ constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
 		.dmaChanTx = 8,
 		.dmaChanRx = 9
 #else
-		.dmaChanTx = NoChan,
-		.dmaChanRx = NoChan
+		.dmaChanTx = NoDmaChannel,
+		.dmaChanRx = NoDmaChannel
 #endif
 	},
 };

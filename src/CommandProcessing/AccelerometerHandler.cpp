@@ -23,8 +23,9 @@
 #define TEST_PACKING	0
 
 constexpr uint16_t DefaultSamplingRate = 1000;
+constexpr uint32_t StartTimeoutMillis = 800;				// must be less than the main board's response timeout (1000ms) or a slow start turns into a CAN response timeout
 
-constexpr size_t AccelerometerTaskStackWords = 150;			// chrishamm needed at least 150 to avoid stack overflows on SZP
+constexpr size_t AccelerometerTaskStackWords = 200;			// 150 was enough to stop overflowing but left only 13 words free when collecting at 5.4kHz on the SZP
 static Task<AccelerometerTaskStackWords> *accelerometerTask;
 
 static LISAccelerometer *accelerometer = nullptr;
@@ -252,6 +253,22 @@ bool AccelerometerHandler::IsPresent() noexcept
 	return present;
 }
 
+bool AccelerometerHandler::IsCollecting() noexcept
+{
+	return running;
+}
+
+// The rate and resolution the accelerometer was actually programmed for, which may be lower than the ones requested
+uint16_t AccelerometerHandler::GetSamplingRate() noexcept
+{
+	return samplingRate;
+}
+
+uint8_t AccelerometerHandler::GetResolution() noexcept
+{
+	return resolution;
+}
+
 // Translate the orientation from a 2-digit number to translation tables, returning true if successful, false if bad orientation
 GCodeResult AccelerometerHandler::ProcessConfigRequest(const CanMessageGeneric& msg, const StringRef &reply) noexcept
 {
@@ -337,9 +354,9 @@ GCodeResult AccelerometerHandler::ProcessStartRequest(const CanMessageStartAccel
 		{
 			return GCodeResult::ok;
 		}
-	} while (!failedStart && millis() - startTime < 1000);
+	} while (!failedStart && millis() - startTime < StartTimeoutMillis);
 
-	reply.copy("Failed to start accelerometer data collection");
+	reply.copy((failedStart) ? "Failed to start accelerometer data collection" : "Timed out waiting for accelerometer data collection to start");
 	if (accelerometer->HasInterruptError())
 	{
 		reply.cat(": INT1 error");

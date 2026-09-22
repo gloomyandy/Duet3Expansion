@@ -155,16 +155,16 @@ constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
 	.mosiPin = 3,
 	.misoPin = 4,
 	.sclkPin = 2,
-	.dmaChanTx = NoChan,
-	.dmaChanRx = NoChan
+	.dmaChanTx = NoDmaChannel,
+	.dmaChanRx = NoDmaChannel
 },
 {
 	.instanceNumber = 1,
 	.mosiPin = 11,
 	.misoPin = 8,
 	.sclkPin = 10,
-	.dmaChanTx = NoChan,
-	.dmaChanRx = NoChan
+	.dmaChanTx = NoDmaChannel,
+	.dmaChanRx = NoDmaChannel
 }
 };
 # else
@@ -175,16 +175,16 @@ constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
 	.mosiPin = 19,
 	.misoPin = 16,
 	.sclkPin = 18,
-	.dmaChanTx = NoChan,
-	.dmaChanRx = NoChan
+	.dmaChanTx = NoDmaChannel,
+	.dmaChanRx = NoDmaChannel
 },
 {
 	.instanceNumber = 1,
 	.mosiPin = 11,
 	.misoPin = 12,
 	.sclkPin = 10,
-	.dmaChanTx = NoChan,
-	.dmaChanRx = NoChan
+	.dmaChanTx = NoDmaChannel,
+	.dmaChanRx = NoDmaChannel
 }
 };
 # endif
