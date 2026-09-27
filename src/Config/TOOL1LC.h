@@ -8,10 +8,6 @@
 #ifndef SRC_CONFIG_TOOL1_V01_H_
 #define SRC_CONFIG_TOOL1_V01_H_
 
-#include <Hardware/PinDescription.h>
-#include <I2C/I2cParameters.h>
-#include <UART/UartParameters.h>
-
 #define BOARD_TYPE_NAME		"TOOL1LC"
 #define BOOTLOADER_NAME		"SAMC21"
 
@@ -125,8 +121,13 @@ constexpr Pin DriverDiagPins[NumDrivers] = { PortBPin(3) };
 
 #define DIAG_SERCOM_NUMBER		4		// which SERCOM device we use for debugging output
 
-constexpr unsigned int CANInstanceNumber = 0;
-constexpr bool UseLaterCanPins = false;
+constexpr CanParameters CanParams =
+{
+	.instanceNumber = 0,
+	.txPin = PortAPin(24),
+	.rxPin = PortAPin(25),
+	.pinsFunction = GpioPinFunction::G
+};
 
 constexpr size_t MaxPortsPerHeater = 1;
 
@@ -253,7 +254,7 @@ constexpr PinDescription PinTable[] =
 
 	// Virtual pins
 #if SUPPORT_LIS3DH
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"i2c.lis3dh,i2c.lis2dw"	},	// LIS3DH sensor connected via I2C
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"i2c.lis,i2c.lis3dh,i2c.lis3dsh,i2c.lis2dw"	},	// LIS sensor connected via I2C
 #endif
 #if SUPPORT_LDC1612
 	{ TcOutput::none,	TccOutput::none,	AdcInput::ldc1612,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"i2c.ldc1612"	},	// LDC1612 sensor connected via I2C
@@ -263,6 +264,13 @@ constexpr PinDescription PinTable[] =
 constexpr size_t NumPins = ARRAY_SIZE(PinTable);
 constexpr size_t NumRealPins = 32 + 24;					// 32 pins on port A (some missing), 24 on port B
 constexpr size_t NumVirtualPins = SUPPORT_LIS3DH + SUPPORT_LDC1612;
+
+#if SUPPORT_LIS3DH
+constexpr Pin LisPinNumber = NumRealPins;
+#endif
+#if SUPPORT_LDC1612
+constexpr Pin LdcPinNumber = NumRealPins + SUPPORT_LIS3DH;
+#endif
 
 static_assert(NumPins == NumRealPins + NumVirtualPins);
 

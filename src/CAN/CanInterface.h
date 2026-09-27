@@ -17,7 +17,7 @@ class CanMessageBuffer;
 
 namespace CanInterface
 {
-	void Init(CanAddress defaultBoardAddress, unsigned int whichPort, bool useLaterPins, bool full) noexcept;
+	void Init(CanAddress defaultBoardAddress, const CanParameters& params, bool full) noexcept;
 	void Shutdown() noexcept;
 	void Diagnostics(const StringRef& reply) noexcept;
 
@@ -37,7 +37,9 @@ namespace CanInterface
 	bool DebugPutc(char c) noexcept;
 #endif
 
-#if (!SAME70 && !RPXXXX) || USE_SPICAN
+#if SAME70 || STM32 || (RPXXXX && !USE_SPICAN)
+// The following functions are not needed because we use the step clock as the time stamp counter
+#else
 #if USE_SPICAN
 	void GetTimeStampCounters(uint16_t& canTimeStamp, uint32_t& stepTimeStamp) noexcept;
 #else

@@ -137,19 +137,30 @@ private:
 	static constexpr unsigned int MaxSyncCount = 10;
 };
 
-#if RPXXXX
+#if STM32
 
-// On the RP2040 reading the timer is simple so we inline it
+// Reading the timer is simple so we inline it
 inline StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
 {
-
-	return TIMER_INSTANCE(0)->timerawl;													// read lower 32 bits of hardware timer
+	return StepTimerHw->CNT;													// read hardware timer
 }
 
 inline StepTimer::Ticks StepTimer::GetTimerTicksWhenInterruptsDisabled() noexcept
 {
+	return StepTimerHw->CNT;													// read hardware timer
+}
 
-	return TIMER_INSTANCE(0)->timerawl;													// read lower 32 bits of hardware timer
+#elif RPXXXX
+
+// On the RXXXX reading the timer is simple so we inline it
+inline StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
+{
+	return timer_hw->timerawl;													// read lower 32 bits of hardware timer
+}
+
+inline StepTimer::Ticks StepTimer::GetTimerTicksWhenInterruptsDisabled() noexcept
+{
+	return timer_hw->timerawl;													// read lower 32 bits of hardware timer
 }
 
 #endif

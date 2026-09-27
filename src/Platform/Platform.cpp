@@ -58,33 +58,28 @@
 # include "LedStatusControl.h"
 #endif
 
+#if HAS_BOARD_THERMISTOR
+# include <AnalogIn.h>
+#endif
+
 #ifdef ATEIO
 # include <Hardware/ATEIO/ExtendedAnalog.h>
 #endif
 
-#if SAME5x || SAMC21
+#if SAME5x
 # include <hpl_user_area.h>
-#endif
-
-#if RPXXXX
+# include <hri_nvmctrl_e54.h>
+#elif SAMC21
+# include <hpl_user_area.h>
+# include <hri_nvmctrl_c21.h>
+#elif RPXXXX
 # include <hardware/structs/watchdog.h>
 # include <hardware/structs/sysinfo.h>
 # if NUM_SHARED_SPI > 0
 #  include<SPI.h>
 # endif
-#endif
-
-#if SAME5x
-# include <hri_nvmctrl_e54.h>
-#elif SAMC21
-# include <hri_nvmctrl_c21.h>
-constexpr uint32_t FlashBlockSize = 0x00004000;							// the block size we assume for flash
-constexpr uint32_t FirmwareFlashStart = FLASH_ADDR + FlashBlockSize;	// we reserve 16K for the bootloader
-
 #elif STM32
 // TODO
-#elif RPXXXX
-// Nothing
 #else
 # error Unsupported processor
 #endif
@@ -143,7 +138,6 @@ namespace Platform
 
 #if HAS_VOLTAGE_MONITOR
 	static volatile uint16_t currentVin, highestVin, lowestVin;
-//	static uint16_t lastUnderVoltageValue, lastOverVoltageValue;
 	static uint32_t numUnderVoltageEvents, previousUnderVoltageEvents;
 	static volatile uint32_t numOverVoltageEvents, previousOverVoltageEvents;
 #endif
@@ -152,8 +146,10 @@ namespace Platform
 	static volatile uint16_t currentV12, highestV12, lowestV12;
 #endif
 
+#if HAS_CPU_TEMP_SENSOR
 	static MinCurMax mcuTemperature;
 	static float mcuTemperatureAdjust = 0.0;
+#endif
 
 	static uint32_t lastPollTime;
 	static uint32_t lastFanCheckTime = 0;
@@ -194,6 +190,68 @@ namespace Platform
 	static AveragingFilter<McuTempReadingsAveraged> tcFilter;
 #elif SAMC21 || RPXXXX
 	static AveragingFilter<McuTempReadingsAveraged> tsensFilter;
+#endif
+
+#if HAS_BOARD_THERMISTOR
+	float boardTemperature = ABS_ZERO;
+	TemperatureError boardTemperatureResult = TemperatureError::notReady;
+
+	// Init the board temperature sensor. We don't use a filter.
+	static void InitBoardThermistor() noexcept
+	{
+		const AnalogChannelNumber chan = PinToAdcChannel(BoardThermistorPin);
+		if (chan != AdcInput::none)
+		{
+			::SetPinMode(BoardThermistorPin, AIN);
+			AnalogInEnableChannel(chan, true);
+		}
+	}
+
+	// Read the board temperature thermistor. We don't use a filter.
+	static void ReadBoardThermistor() noexcept
+	{
+		constexpr int32_t AdcRange = 1u << AnalogIn::AdcBits;	// The readings we pass in should be in range 0..(AdcRange - 1)
+		constexpr float shB = 1.0/BoardThermistorBeta;
+		constexpr float lnR25 = logf(BoardThermistorR25);
+		constexpr float shA = 1.0/(ConvertDegCToDegK(25.0)) - (shB + BoardThermistorShC * fsquare(lnR25)) * lnR25;
+
+		const AdcInput chan = PinTable[BoardThermistorPin].adc;
+		if (chan != AdcInput::none)
+		{
+			const uint32_t val = AnalogIn::ReadChannel(chan);
+			if (AdcRange > val)
+			{
+				const float denom = (float)(AdcRange - val) - 0.5;
+				float resistance = BoardThermistorSeriesR * ((float)val + 0.5)/denom;
+				const float logResistance = logf(resistance);
+				const float recipT = shA + (shB + BoardThermistorShC * fsquare(logResistance)) * logResistance;
+				if (recipT > 0.0)
+				{
+					boardTemperature = ConvertDegKToDegC(1.0/recipT);
+					boardTemperatureResult = TemperatureError::ok;
+				}
+				else
+				{
+					boardTemperature = BadErrorTemperature;
+					boardTemperatureResult = TemperatureError::unknownError;
+				}
+				return;
+			}
+		}
+
+		boardTemperature = ABS_ZERO;
+		boardTemperatureResult = TemperatureError::openCircuit;
+	}
+
+	float GetBoardTemperature() noexcept
+	{
+		return boardTemperature;
+	}
+
+	std::pair<float, TemperatureError> GetBoardTemperatureAndResult() noexcept
+	{
+		return std::pair<float, TemperatureError>(boardTemperature, boardTemperatureResult);
+	}
 #endif
 
 #if HAS_VOLTAGE_MONITOR
@@ -282,7 +340,7 @@ namespace Platform
 		// Note, I2C interrupt priority is set up in the I2C driver
 
 #if SAME5x || SAMC21
-		if constexpr(CANInstanceNumber == 1)
+		if constexpr(CanParams.instanceNumber == 1)
 		{
 # if defined(ID_CAN1)
 			NVIC_SetPriority(CAN1_IRQn, NvicPriorityCan);
@@ -291,6 +349,15 @@ namespace Platform
 		else
 		{
 			NVIC_SetPriority(CAN0_IRQn, NvicPriorityCan);
+		}
+#elif STM32
+		switch (CanParams.instanceNumber)
+		{
+		case 1:	NVIC_SetPriority(FDCAN1_IT0_IRQn, NvicPriorityCan); break;
+		case 2:	NVIC_SetPriority(FDCAN2_IT0_IRQn, NvicPriorityCan); break;
+# ifdef FDCAN3_IT0_IRQn
+		case 3:	NVIC_SetPriority(FDCAN3_IT0_IRQn, NvicPriorityCan); break;
+# endif
 		}
 #endif
 
@@ -305,12 +372,23 @@ namespace Platform
 #elif RPXXXX
 		NVIC_SetPriority((IRQn_Type)StepTcIRQn, NvicPriorityStep);
 		NVIC_SetPriority(IO_IRQ_BANK0_IRQn, NvicPriorityPins);
+#elif STM32H5
+		NVIC_SetPriority(StepTimerIRQn, NvicPriorityStep);
+		SetInterruptPriority(GPDMA1_Channel0_IRQn, 8, NvicPriorityDmac);	// I am assuming we only use the first DMAC
+		SetInterruptPriority(EXTI0_IRQn, 16, NvicPriorityPins);
+#elif STM32H7
+		NVIC_SetPriority(StepTimerIRQn, NvicPriorityStep);
+		SetInterruptPriority(DMA_STR0_IRQn, 7, NvicPriorityDmac);			// I am assuming we only use the first DMAC
+		NVIC_SetPriority(DMA1_STR7, NvicPriorityDmac);
+		SetInterruptPriority(EXTI0_IRQn, 6, NvicPriorityPins);
+	    NVIC_SetPriority(EXTI9_5_IRQn, NvicPriorityPins);
+	    NVIC_SetPriority(EXTI15_10_IRQn, NvicPriorityPins);
 #else
 # error Undefined processor
 #endif
 	}
 
-#if !RPXXXX
+#if !RP2040 && !STM32
 	// Erase the firmware (but not the bootloader) and reset the processor
 	[[noreturn]] RAMFUNC static void EraseAndReset()
 	{
@@ -399,7 +477,7 @@ namespace Platform
 		__disable_irq();
 		SysTick->CTRL = (1 << SysTick_CTRL_CLKSOURCE_Pos);	// disable the system tick exception
 
-#if SAME5x
+#if SAME5x || STM32H5 || STM32H7
 		for (size_t i = 0; i < 8; i++)
 		{
 			NVIC->ICER[i] = 0xFFFFFFFF;					// Disable IRQs
@@ -416,11 +494,16 @@ namespace Platform
 # error Unsupported processor
 #endif
 
-#if !RPXXXX
+#if STM32
+		ResetProcessor();	//TODO firmware update not supported yet
+#elif !RPXXXX
 		EraseAndReset();
 #endif
 	}
 
+#if STM32
+	//TODO not implemented yet
+#else
 	// Update the CAN bootloader
 	[[noreturn]] static void DoBootloadereUpdate()
 	{
@@ -454,6 +537,7 @@ namespace Platform
 
 		ResetProcessor();
 	}
+#endif
 
 #if SUPPORT_THERMISTORS && HAS_VREF_MONITOR
 	static void SetupThermistorFilter(Pin pin, size_t filterIndex, bool useAlternateAdc) noexcept
@@ -474,7 +558,7 @@ namespace Platform
 #if defined(EXP3HC)
 		const CanAddress switches = ReadBoardAddress();
 		return (switches == 0) ? CanId::Exp3HCFirmwareUpdateAddress : switches;
-#elif defined(TOOL1LC) || defined(TOOL1RR) || defined(F3PTB) || defined(TOOLINDX)
+#elif defined(TOOL1LC) || defined(TOOL1RR) || defined(F3PTB) || defined(TOOLINDX) || defined(NODETRIX)
 		return CanId::ToolBoardDefaultAddress;
 #elif defined(SAMMYC21) || RPXXXX
 		return CanId::SammyC21DefaultAddress;
@@ -560,7 +644,12 @@ static void Platform::InitLeds()
 			IoPort::SetPinMode(pin, (LedActiveHigh_v102) ? OUTPUT_LOW : OUTPUT_HIGH);
 		}
 	}
-#elif !((defined(EXP1HCL) || defined(M23CL) || defined(SZP) || defined(TOOL1RR) || defined(F3PTB)) && defined(DEBUG))		// EXP1HCL has the LEDs connected to the SWD pins
+#elif defined(SAMMYC21)
+	for (Pin pin : LedPins)
+	{
+		IoPort::SetPinMode(pin, (LedActiveHigh) ? OUTPUT_LOW : OUTPUT_HIGH);
+	}
+#elif !defined(DEBUG)								// most Duet3D boards have the LEDs connected to the SWD pins
 	for (Pin pin : LedPins)
 	{
 		IoPort::SetPinMode(pin, (LedActiveHigh) ? OUTPUT_LOW : OUTPUT_HIGH);
@@ -772,6 +861,11 @@ void Platform::Init()
 # endif
 #endif
 
+#if HAS_BOARD_THERMISTOR
+	InitBoardThermistor();
+#endif
+
+#if HAS_CPU_TEMP_SENSOR
 	// Set up the MCU temperature sensors
 	mcuTemperature.current = 0.0;
 	mcuTemperature.maximum = -273.16;
@@ -779,7 +873,7 @@ void Platform::Init()
 	mcuTemperatureAdjust = 0.0;
 
 	// Set up the MCU temperature sense filters
-#if SAME5x
+# if SAME5x
 	tpFilter.Init(0);
 	AnalogIn::EnableTemperatureSensor(0, tpFilter.CallbackFeedIntoFilter, CallbackParameter(&tpFilter), 1, 0);
 	tcFilter.Init(0);
@@ -787,8 +881,9 @@ void Platform::Init()
 #elif SAMC21 || RPXXXX
 	tsensFilter.Init(0);
 	AnalogIn::EnableTemperatureSensor(tsensFilter.CallbackFeedIntoFilter, CallbackParameter(&tsensFilter), 1);
-#else
-# error Unsupported processor
+# else
+#  error Unsupported processor
+# endif
 #endif
 
 #if HAS_BUTTONS
@@ -836,16 +931,14 @@ void Platform::Init()
 
 	uniqueId.SetFromCurrentBoard();
 
-#if SUPPORT_LIS3DH
+	// For now we assume that I2C accelerometers are integrated into the tool board, so we always initialise them
+	// SPI-connected accelerometers are optional and need to have pins configured, so we don't initialise them until the M955 command is used.
+#if SUPPORT_LIS3DH && !ACCELEROMETER_USES_SPI
 # ifdef TOOL1LC
 	if (boardVariant != 0)
 # endif
 	{
-# if ACCELEROMETER_USES_SPI
-		AccelerometerHandler::Init(GetSharedSpi(Lis_SpiChannel));
-# else
 		AccelerometerHandler::Init(GetSharedI2C(Lis_I2CChannel));
-# endif
 	}
 #endif
 
@@ -862,7 +955,7 @@ void Platform::Init()
 	MFMHandler::Init(GetSharedI2C(0));
 #endif
 
-	CanInterface::Init(GetCanAddress(), CANInstanceNumber, UseLaterCanPins, true);
+	CanInterface::Init(GetCanAddress(), CanParams, true);
 	lastPollTime = millis();
 }
 
@@ -882,7 +975,7 @@ void Platform::InitMinimal()
 # endif
 	serialUSB.Start(NoPin);
 #endif
-	CanInterface::Init(GetCanAddress(), CANInstanceNumber, UseLaterCanPins, false);
+	CanInterface::Init(GetCanAddress(), CanParams, false);
 }
 
 void Platform::Spin()
@@ -899,10 +992,11 @@ void Platform::Spin()
 			DoFirmwareUpdate();
 			break;
 
+#if !STM32		//TODO not implemented yet
 		case DeferredCommand::bootloaderUpdate:
 			DoBootloadereUpdate();
 			break;
-
+#endif
 		case DeferredCommand::reset:
 			ShutdownAndReset();
 			break;
@@ -924,6 +1018,8 @@ void Platform::Spin()
 			(void)Tasks::DoMemoryRead(reinterpret_cast<const uint32_t*>(
 #if RPXXXX
 										SRAM_BASE
+#elif STM32
+										SRAM1_BASE
 #else
 										HSRAM_ADDR
 #endif
@@ -954,6 +1050,7 @@ void Platform::Spin()
 		default:
 			break;
 		}
+		deferredCommand = DeferredCommand::none;
 	}
 
 	SpinMinimal();				// update the activity LED and currentVin
@@ -998,6 +1095,10 @@ void Platform::Spin()
 	}
 #endif
 
+#if HAS_BOARD_THERMISTOR
+	ReadBoardThermistor();
+#endif
+
 #if SUPPORT_DRIVERS
 	moveInstance->Spin(
 # if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
@@ -1028,8 +1129,10 @@ void Platform::Spin()
 	{
 		lastPollTime = now;
 
+#if HAS_CPU_TEMP_SENSOR
 		// Get the chip temperature
-#if SAME5x
+
+# if SAME5x
 		if (tcFilter.IsValid() && tpFilter.IsValid())
 		{
 			// From the datasheet:
@@ -1041,19 +1144,21 @@ void Platform::Spin()
 			const int32_t divisor = (tempCalF3 * tp_result - tempCalF4 * tc_result);
 			result = (divisor == 0) ? 0 : result/divisor;
 			mcuTemperature.current = (float)result/16 + mcuTemperatureAdjust;
-#elif SAMC21
+# elif SAMC21
 		if (tsensFilter.IsValid())
 		{
 			const int16_t temperatureTimes100 = (int16_t)((uint16_t)(tsensFilter.GetSum()/tsensFilter.NumAveraged()) ^ (1u << 15));
 			mcuTemperature.current = (float)temperatureTimes100 * 0.01;
-#elif RPXXXX
-		if (tsensFilter.IsValid())
-		{
-			const float tempSensorAdcVoltage = (tsensFilter.GetSum()/tsensFilter.NumAveraged()) * (3.3/(float)(1u << AnalogIn::AdcBits));
-			mcuTemperature.current = 27.0 - ((tempSensorAdcVoltage - 0.706) * (1.0/0.001721));
-#else
-# error Unsupported processor
-#endif
+# elif RPXXXX
+			if (tsensFilter.IsValid())
+			{
+				const float tempSensorAdcVoltage = (tsensFilter.GetSum()/tsensFilter.NumAveraged()) * (3.3/(float)(1u << AnalogIn::AdcBits));
+				mcuTemperature.current = 27.0 - ((tempSensorAdcVoltage - 0.706) * (1.0/0.001721));
+# elif STM32
+			//TODO
+# else
+#  error Unsupported processor
+# endif
 			if (mcuTemperature.current < mcuTemperature.minimum)
 			{
 				mcuTemperature.minimum = mcuTemperature.current;
@@ -1063,17 +1168,18 @@ void Platform::Spin()
 				mcuTemperature.maximum = mcuTemperature.current;
 			}
 		}
+#endif	// HAS_CPU_TEMP_SENSOR
 
 		static unsigned int nextSensor = 0;
 
 		const auto ts = Heat::FindSensorAtOrAbove(nextSensor);
 		if (ts.IsNotNull())
 		{
-#if 0
+# if 0
 			float temp;
 			const TemperatureError err = ts->GetLatestTemperature(temp);
 			debugPrintf("Sensor %u err %u temp %.1f", ts->GetSensorNumber(), (unsigned int)err, (double)temp);
-#endif
+# endif
 			nextSensor = ts->GetSensorNumber() + 1;
 		}
 		else
@@ -1174,7 +1280,7 @@ void Platform::Spin()
 # endif
 		}
 	}
-#endif
+# endif
 }
 
 void Platform::SpinMinimal()
@@ -1290,10 +1396,12 @@ void Platform::CurrentSensorAinCallback(CallbackParameter cp, int32_t val) noexc
 
 #endif
 
+#if HAS_CPU_TEMP_SENSOR
 const MinCurMax& Platform::GetMcuTemperatures()
 {
 	return mcuTemperature;
 }
+#endif
 
 void Platform::KickHeatTaskWatchdog()
 {
@@ -1524,7 +1632,9 @@ GCodeResult Platform::DoDiagnosticTest(const CanMessageDiagnosticTest& msg, cons
 			reply.printf("Reading step timer 100 times took %.2fus", (double)((1'000'000.0f * (float)tim1)/(float)SystemCoreClock));
 		}
 
-#if !RPXXXX || USE_SPICAN
+#if SAME70 || STM32 || (RPXXXX && !USE_SPICAN)
+		// The following code is not needed because we use the step clock as the time stamp counter
+#else
 		// Also check the correspondence between the CAN timestamp timer and the step clock
 		{
 			uint32_t startClocks, endClocks;
@@ -1697,7 +1807,7 @@ bool Platform::WasDeliberateError() noexcept
 	return deliberateError;
 }
 
-#if SAME5x
+#if SAME5x || STM32
 
 // Set a contiguous range of interrupts to the specified priority
 void Platform::SetInterruptPriority(IRQn base, unsigned int num, uint32_t prio)

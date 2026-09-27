@@ -8,9 +8,6 @@
 #ifndef SRC_CONFIG_TOOL1RR_H_
 #define SRC_CONFIG_TOOL1RR_H_
 
-#include <Hardware/PinDescription.h>
-#include <I2C/I2cParameters.h>
-
 #define BOARD_TYPE_NAME		"F3PTB"
 #define BOOTLOADER_NAME		"SAME5x"
 
@@ -138,8 +135,13 @@ constexpr Pin DriverDiagPins[NumDrivers] = { PortAPin(21) };
 #define USE_MPU					0
 #define USE_CACHE				1
 
-constexpr unsigned int CANInstanceNumber = 0;
-constexpr bool UseLaterCanPins = false;
+constexpr CanParameters CanParams =
+{
+	.instanceNumber = 0,
+	.txPin = PortAPin(22),
+	.rxPin = PortAPin(23),
+	.pinsFunction = GpioPinFunction::I
+};
 
 constexpr size_t MaxPortsPerHeater = 1;
 
@@ -280,6 +282,14 @@ constexpr size_t NumRealPins = 32 + 24;			// 32 pins on port A (some missing), 2
 constexpr size_t NumVirtualPins = SUPPORT_LIS3DH + SUPPORT_LDC1612 + SUPPORT_AS5601 + SUPPORT_TCA6408A;
 
 static_assert(NumPins == NumRealPins + NumVirtualPins);
+
+#if SUPPORT_LIS3DH
+constexpr Pin LisPinNumber = NumRealPins;
+#endif
+
+#if SUPPORT_LDC1612
+constexpr Pin LdcPinNumber = NumRealPins + SUPPORT_LIS3DH;
+#endif
 
 #if SUPPORT_AS5601
 constexpr Pin MfmPin = NumRealPins + SUPPORT_LIS3DH + SUPPORT_LDC1612;				// pin number when the user selects magnetic filament monitor on I2C bus

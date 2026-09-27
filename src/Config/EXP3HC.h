@@ -8,10 +8,6 @@
 #ifndef SRC_CONFIG_EXP3HC_H_
 #define SRC_CONFIG_EXP3HC_H_
 
-#include <Hardware/PinDescription.h>
-#include <SPI/SpiParameters.h>
-#include <UART/UartParameters.h>
-
 #define BOARD_TYPE_NAME		"EXP3HC"
 #define BOOTLOADER_NAME		"SAME5x"
 
@@ -45,6 +41,8 @@
 #define SUPPORT_THERMISTORS		1
 #define SUPPORT_SPI_SENSORS		1
 #define SUPPORT_DMA_NEOPIXEL	1
+#define SUPPORT_LIS3DH			1
+#define ACCELEROMETER_USES_SPI	1
 
 #define NUM_I2C_CHANNELS		0
 #define NUM_SHARED_SPI			1
@@ -52,8 +50,13 @@
 #define USE_MPU					0
 #define USE_CACHE				1
 
-constexpr unsigned int CANInstanceNumber = 1;
-constexpr bool UseLaterCanPins = false;
+constexpr CanParameters CanParams =
+{
+	.instanceNumber = 1,
+	.txPin = PortBPin(12),
+	.rxPin = PortBPin(13),
+	.pinsFunction = GpioPinFunction::H
+};
 
 constexpr size_t NumDrivers = 3;
 constexpr size_t MaxSmartDrivers = 3;

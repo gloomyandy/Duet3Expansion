@@ -8,11 +8,6 @@
 #ifndef SRC_CONFIG_SAMMYC21_H_
 #define SRC_CONFIG_SAMMYC21_H_
 
-#include <Hardware/PinDescription.h>
-#include <SPI/SpiParameters.h>
-#include <I2C/I2cParameters.h>
-#include <UART/UartParameters.h>
-
 #define BOARD_TYPE_NAME		"SAMMYC21"
 #define BOOTLOADER_NAME		"SAMMYC21"
 
@@ -109,8 +104,13 @@ constexpr Pin DirectionPins[NumDrivers] = { PortAPin(10) };
 
 #define DIAG_SERCOM_NUMBER		5		// which SERCOM device we use for debugging output
 
-constexpr unsigned int CANInstanceNumber = 0;
-constexpr bool UseLaterCanPins = true;
+constexpr CanParameters CanParams =
+{
+	.instanceNumber = 0,
+	.txPin = PortBPin(22),
+	.rxPin = PortBPin(23),
+	.pinsFunction = GpioPinFunction::G
+};
 
 constexpr size_t MaxPortsPerHeater = 1;
 
@@ -254,6 +254,14 @@ constexpr size_t NumRealPins = 32 + 10;			// 32 pins on port A (some missing), o
 constexpr size_t NumVirtualPins = SUPPORT_LIS3DH + SUPPORT_LDC1612;
 
 static_assert(NumPins == NumRealPins + NumVirtualPins);
+
+#if SUPPORT_LIS3DH
+constexpr Pin LisPinNumber = NumRealPins;
+#endif
+
+#if SUPPORT_LDC1612
+constexpr Pin LdcPinNumber = NumRealPins + SUPPORT_LIS3DH;
+#endif
 
 // Timer/counter used to generate step pulses and other sub-millisecond timings
 TcCount32 * const StepTc = &(TC2->COUNT32);
