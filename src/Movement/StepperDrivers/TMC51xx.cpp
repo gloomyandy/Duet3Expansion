@@ -1891,7 +1891,6 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 			AtomicCriticalSectionLocker lock;
 			if (tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime))
 			{
-#if 1
 					// reverted to match Duet code, this seems to provide more consistant sample times
 					const uint32_t lateness = StepTimer::GetTimerTicksWhenInterruptsDisabled() - lastWakeupTime;
 					if (lateness >= DriversDirectSleepClocks/2)
@@ -1900,30 +1899,7 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 					}
 					lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled();
 					tmcTask.GiveFromISR(NotifyIndices::Tmc);
-#else
-				// The deadline has already passed. If only slightly late (interrupt/preemption jitter), wake
-				// immediately and keep the deadline sequence so that jitter does not cost loop rate. If
-				// grossly late the loop is genuinely overrunning: skip forward and schedule one full period
-				// from now instead of running back-to-back, so that overload degrades the loop rate
-				// gracefully instead of making the task CPU-bound. A saturated TMC task starves every
-				// lower-priority task (in closed loop mode it runs above the CAN receive task), which ends
-				// in CAN buffer exhaustion and an unresponsive board.
-				const uint32_t lateness = StepTimer::GetTimerTicksWhenInterruptsDisabled() - lastWakeupTime;
-				if (lateness < DriversDirectSleepClocks/2)
-				{
-					tmcTask.GiveFromISR(NotifyIndices::Tmc);
-				}
-				else
-				{
-					++clCycleOverruns;
-					lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled() + DriversDirectSleepClocks;
-					if (tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime))
-					{
-						lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled();	// should not happen; give up and wake now
-						tmcTask.GiveFromISR(NotifyIndices::Tmc);
-					}
-				}
-#endif
+
 			}
 		}
 	}
@@ -1933,7 +1909,6 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 }
 #endif
 
-#endif
 
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 static void TmcTimerCallback(CallbackParameter) noexcept
@@ -1951,9 +1926,6 @@ extern "C" [[noreturn]] void __time_critical_func(TmcLoop(void *)) noexcept
 extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 #endif
 {
-#if !TMC_USES_SHARED_SPI
-	InitialiseDMA();
-#endif
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	tmcTimer.SetCallback(TmcTimerCallback, (CallbackParameter)0);
 #endif
@@ -1979,7 +1951,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		{
 			// Handle the read response - data comes out of the drivers in reverse driver order
 #if SINGLE_DRIVER
-# if TMC_USES_SHARED_SPI && (SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP)
+# if (SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP)
 			// Each TMC datagram returns the data requested by the previous datagram, so the response to a
 			// register request is captured by the first frame of the following transfer, and is available
 			// here one cycle after that transfer. If that transfer began with an XDIRECT coil-current frame
@@ -2079,7 +2051,6 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 #endif
 
 		// Kick off a transfer.
-#if TMC_USES_SHARED_SPI
 		if (!spiDevice->Select(TransferTimeout))
 		{
 			debugPrintf("timeout\n");
@@ -2112,8 +2083,6 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			spiDevice->TransceivePacket(const_cast<uint8_t*>(tmcPhaseSendData), const_cast<uint8_t*>(tmcAltRcvData), sizeof(tmcPhaseSendData));
 			fastDigitalWriteHigh(GlobalTmcCSPin);
 		}
-#  endif
-#  if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		// A register request goes out in every transfer; its response is captured by the following
 		// transfer's first frame and harvested one iteration later
 		tmcHarvestReady = tmcRegRequestOutstanding;
@@ -2126,69 +2095,6 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		spiDevice->Deselect();
 # if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		++clCycleCount;
-		// Do not reset lastWakeupTime here: the wakeup deadline sequence must advance by a fixed period per
-		// cycle (absolute pacing) so that the loop rate is work-independent. Resetting to "now" makes the
-		// period work+sleep; on boards where the iteration work is significant (about 75us on the RP2350
-		// shared-SPI boards) that halves the loop rate, which changes the balance of the closed-loop V and A
-		// feedforward terms (scaled by ticksSinceLastCall) against the P term clamp and causes large
-		// transient position errors at direction reversals. The overrun handling below deals with
-		// iterations that miss their deadline.
-# else
-		delay(1);
-# endif
-#else
-		// On the SAME5x the only way I have found to get reliable transfers and no timeouts is to disable SPI, enable DMA, and then enable SPI.
-		// Enabling SPI before DMA sometimes results in timeouts.
-		// Unfortunately, when we disable SPI the SCLK line floats. Therefore we disable SPI for as little time as possible.
-		{
-			TaskCriticalSectionLocker lock;
-
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-			SetupDMA((setCoilCurrents) ? tmcPhaseSendData : tmcSendData, tmcRcvData);	// set up the PDC or DMAC
-#else
-			SetupDMA(tmcSendData, tmcRcvData);											// set up the PDC or DMAC
-#endif
-			dmaFinishedReason = DmaCallbackReason::none;
-
-			AtomicCriticalSectionLocker lock2;
-
-			fastDigitalWriteLow(GlobalTmcCSPin);				// set CS low
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-			tmcTimer.CancelCallbackFromIsr();					// in case the timer is still running from a previous timed-out transfer
-#endif
-			TaskBase::ClearCurrentTaskNotifyCount(NotifyIndices::Tmc);
-			EnableEndOfTransferInterrupt();
-			ResetSpi();
-			EnableDma();
-			EnableSpi();
-		}
-
-		// Wait for the end-of-transfer interrupt
-		(void)TaskBase::TakeIndexed(NotifyIndices::Tmc, TransferTimeout);
-		DisableEndOfTransferInterrupt();
-		DisableDma();
-
-		// We don't care if the TakeIndexed call returned timeout, if the DMA completed then the transfer is OK
-		timedOut = (dmaFinishedReason != DmaCallbackReason::complete);
-		if (timedOut)
-		{
-			TmcDriverState::TransferTimedOut();
-			// If the transfer was interrupted then we will have written dud data to the drivers. So we should re-initialise them all.
-			// Unfortunately registers that we don't normally write to may have changed too.
-			fastDigitalWriteHigh(GlobalTmcEnablePin);
-			fastDigitalWriteHigh(GlobalTmcCSPin);				// set CS high
-			driversState = DriversState::notInitialised;
-			for (size_t drive = 0; drive < numTmcDrivers; ++drive)
-			{
-				driverStates[drive].TransferFailed();
-			}
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-			lastWakeupTime = StepTimer::GetTimerTicks();
-#endif
-		}
-#endif
-# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-#  if TMC_USES_SHARED_SPI
 		// Blocking shared-SPI transport (RP): the transfer above completed synchronously, so we pace the
 		// closed-loop / phase-stepping iterations here at a regular interval (DriversDirectSleepMicroseconds).
 		// On the DMA (SAME5x) transport this inter-cycle pacing is done in RxDmaCompleteCallback instead.
@@ -2201,7 +2107,6 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 				runNow = tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime);			// true if that wake time has already passed
 				if (runNow)
 				{
-#if 1
 					// reverted to match Duet code, this seems to provide more consistant sample times
 					const uint32_t lateness = StepTimer::GetTimerTicksWhenInterruptsDisabled() - lastWakeupTime;
 					if (lateness >= DriversDirectSleepClocks/2)
@@ -2209,27 +2114,6 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 						++clCycleOverruns;
 					}
 					lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled();
-#else
-
-					// The deadline has already passed. If we are only slightly late (interrupt/preemption
-					// jitter), run immediately and keep the deadline sequence, so that jitter does not cost
-					// loop rate. If we are grossly late the loop is genuinely overrunning: skip forward and
-					// schedule one full period from now instead of running back-to-back, so that overload
-					// degrades the loop rate gracefully instead of making the task CPU-bound. A saturated
-					// TMC task starves every lower-priority task (in closed loop mode it runs above the CAN
-					// receive task), which ends in CAN buffer exhaustion and an unresponsive board.
-					const uint32_t lateness = StepTimer::GetTimerTicksWhenInterruptsDisabled() - lastWakeupTime;
-					if (lateness >= DriversDirectSleepClocks/2)
-					{
-						++clCycleOverruns;
-						lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled() + DriversDirectSleepClocks;
-						runNow = tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime);
-						if (runNow)
-						{
-							lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled();	// should not happen; give up and run now
-						}
-					}
-#endif
 				}
 			}
 			if (!runNow)
@@ -2237,7 +2121,6 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 				(void)TaskBase::TakeIndexed(NotifyIndices::Tmc, TransferTimeout);	// wait for the timer callback
 			}
 		}
-#  endif
 # else
 		delay(1);
 # endif
@@ -2435,7 +2318,9 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		}
 	}
 }
+
 #endif
+
 // Members of namespace SmartDrivers
 
 // Initialise the driver interface and the drivers, leaving each drive disabled.

@@ -245,7 +245,9 @@ void CanInterface::Init(CanAddress defaultBoardAddress, const CanParameters& par
 	// Initialise the CAN hardware, using the timing data if it was valid
 	can0dev = CanDevice::Init(
 #if RPXXXX
+# if !USE_SPICAN
 								params.txPin, params.rxPin,				// which pins we use for CAN transmit and receive
+# endif
 #else
 								0,
 # if STM32

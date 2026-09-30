@@ -88,6 +88,14 @@ constexpr Pin TempSensePins[NumThermistorInputs] = { GpioPin(26), GpioPin(27), G
 
 constexpr Pin CanTxPin = GpioPin(NoPin);
 constexpr Pin CanRxPin = GpioPin(NoPin);
+// we don't currently use CanParams, but it makes things easier to have one!
+constexpr CanParameters CanParams =
+{
+	.instanceNumber = 0,
+	.txPin = NoPin,
+	.rxPin = NoPin,
+	.pinsFunction = GpioPinFunction::None
+};
 
 constexpr Pin ButtonPins[] = { PIN_TODO };
 

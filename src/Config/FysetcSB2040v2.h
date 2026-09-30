@@ -111,6 +111,14 @@ constexpr Pin TempSensePins[NumThermistorInputs] = { GpioPin(27), GpioPin(28) };
 
 constexpr Pin CanTxPin = GpioPin(0);
 constexpr Pin CanRxPin = GpioPin(1);
+// we don't currently use CanParams, but it makes things easier to have one!
+constexpr CanParameters CanParams =
+{
+	.instanceNumber = 0,
+	.txPin = NoPin,
+	.rxPin = NoPin,
+	.pinsFunction = GpioPinFunction::None
+};
 
 constexpr Pin ButtonPins[] = { PIN_TODO };
 
@@ -208,10 +216,10 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm1a,	AdcInput::none,		"io0.in"	},	// GPIO18 ENDSTOP0
 	{ PwmOutput::pwm1b,	AdcInput::none,		"out0"		},	// GPIO19 HEAT0
 	{ PwmOutput::pwm2a,	AdcInput::none,		nullptr		},	// GPIO20 SPI0_MOSI
-	{ PwmOutput::pwm2b,	AdcInput::none,		nullptr		},	// GPIO21 Accelerometer_CS
+	{ PwmOutput::pwm2b,	AdcInput::none,		"spi.cs.acc"},	// GPIO21 Accelerometer_CS
 	{ PwmOutput::pwm3a,	AdcInput::none,		nullptr		},	// GPIO22 SPI0_SCLK
 	{ PwmOutput::pwm3b,	AdcInput::none,		nullptr		},	// GPIO23 SPI0_MISO
-	{ PwmOutput::pwm4a,	AdcInput::none,		nullptr		},	// GPIO24 Accelerometer_INT
+	{ PwmOutput::pwm4a,	AdcInput::none,		"int.acc"	},	// GPIO24 Accelerometer_INT
 	{ PwmOutput::none,	AdcInput::none,		"out1"		},	// GPIO25 Fan0
 	{ PwmOutput::pwm5a,	AdcInput::adc0_0,	"temp0"		},	// GPIO26 TEMP0
 	{ PwmOutput::pwm5b,	AdcInput::adc0_1,	"out2"		},	// GPIO27 Fan1

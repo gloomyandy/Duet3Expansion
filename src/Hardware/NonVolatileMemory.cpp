@@ -94,10 +94,6 @@ void NonVolatileMemory::EnsureWritten() noexcept
 		Flash::RwwWrite(RWW_ADDR + (512 * (unsigned int)page), 512, (uint8_t*)&buffer);
 		state = NvmState::clean;
 	}
-#elif RPXXXX
-	// Each page has its own flash sector, at the same offset that EnsureRead reads from
-	const uint32_t pageFlashOffset = NvmPage0Offset - (FlashSectorSize * (unsigned int)page);
-	if (state >= NvmState::writeNeeded)
 #elif SAM4E || SAME70
 	if (state == NvmState::eraseAndWriteNeeded)
 	{

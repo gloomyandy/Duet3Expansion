@@ -126,6 +126,14 @@ constexpr Pin TempSensePins[NumThermistorInputs] = { GpioPin(26), GpioPin(27) };
 constexpr Pin CanTxPin = GpioPin(5);
 constexpr Pin CanRxPin = GpioPin(4);
 #endif
+// we don't currently use CanParams, but it makes things easier to have one!
+constexpr CanParameters CanParams =
+{
+	.instanceNumber = 0,
+	.txPin = NoPin,
+	.rxPin = NoPin,
+	.pinsFunction = GpioPinFunction::None
+};
 
 constexpr Pin ButtonPins[] = { PIN_TODO };
 
@@ -219,7 +227,7 @@ constexpr PinDescription PinTable[] =
 	//	PWM					ADC				PinName
 	// Port A
 	{ PwmOutput::pwm0a,	AdcInput::none,		"out1"		},	// GPIO0 Fan0
-	{ PwmOutput::pwm0b,	AdcInput::none,		nullptr		},	// GPIO1 SPI ACC CS
+	{ PwmOutput::pwm0b,	AdcInput::none,		"spi.cs.acc"},	// GPIO1 SPI ACC CS
 	{ PwmOutput::pwm1a,	AdcInput::none,		nullptr		},	// GPIO2 SPI0 SCK
 	{ PwmOutput::pwm1b,	AdcInput::none,		nullptr		},	// GPIO3 SPI0 MOSI
 	{ PwmOutput::pwm2a,	AdcInput::none,		nullptr		},	// GPIO4 SPI0 MISO
@@ -243,7 +251,7 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm3a,	AdcInput::none,		"io0.in"	},	// GPIO22 Probe
 	{ PwmOutput::pwm3b,	AdcInput::none,		"out0"		},	// GPIO23 Heat0
 	{ PwmOutput::pwm4a,	AdcInput::none,		"io0.out"	},	// GPIO24 Servo
-	{ PwmOutput::pwm4b,	AdcInput::none,		nullptr		},	// GPIO25 ACC INT1
+	{ PwmOutput::pwm4b,	AdcInput::none,		"int.acc"	},	// GPIO25 ACC INT1
 	{ PwmOutput::pwm5a,	AdcInput::adc0_0,	"rgbled"	},	// GPIO26 RGBLED
 	{ PwmOutput::pwm5b,	AdcInput::adc0_1,	"temp0"		},	// GPIO27 T0 Temp
 	{ PwmOutput::pwm6a,	AdcInput::adc0_2,	"temp1"		},	// GPIO28 CHAMBER_TEMP
@@ -264,7 +272,7 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm3a,	AdcInput::none,		"rgbled"	},	// GPIO6 RGB
 	{ PwmOutput::pwm3b,	AdcInput::none,		"io0.out"	},	// GPIO7 SERVO (BLTouch out)
 	{ PwmOutput::pwm4a,	AdcInput::none,		"out0"		},	// GPIO8 HEAT0
-	{ PwmOutput::pwm4b,	AdcInput::none,		nullptr		},	// GPIO9 accelerometer CS
+	{ PwmOutput::pwm4b,	AdcInput::none,		"spi.cs.acc"},	// GPIO9 accelerometer CS
 	{ PwmOutput::pwm5a,	AdcInput::none,		nullptr		},	// GPIO10 SPI SCLK
 	{ PwmOutput::pwm5b,	AdcInput::none,		nullptr		},	// GPIO11 SPI MOSI
 	{ PwmOutput::pwm6a,	AdcInput::none,		nullptr 	},	// GPIO12 SPI MISO
@@ -284,7 +292,7 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm5a,	AdcInput::adc0_0,	"temp0"		},	// GPIO26 T0_TEMP
 	{ PwmOutput::pwm5b,	AdcInput::adc0_1,	"temp1"		},	// GPIO27 CHAMBER_TEMP
 	{ PwmOutput::pwm6a,	AdcInput::adc0_2,	nullptr		},	// GPIO28 VIN ADC
-	{ PwmOutput::none,	AdcInput::adc0_3,	nullptr		},	// GPIO29 ACC_INT1
+	{ PwmOutput::none,	AdcInput::adc0_3,	"int.acc"	},	// GPIO29 ACC_INT1
 };
 #endif
 

@@ -336,6 +336,7 @@ void Move::Spin() noexcept
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	// Warn if the closed-loop control cycle is not keeping its intended rate
 	SmartDrivers::PollClosedLoopCycleRate();
+#endif
 #if HAS_BOARD_THERMISTOR && SUPPORT_TMC51xx
 	// If we have a board temperature sensor and drivers that use external mosfets, then the TMC driver over temperature warning is of limited value because the mosfets will get hotter than the TMC driver.
 	// So we use the board temperature to detect that the board and hence the mosfets are getting too hot.

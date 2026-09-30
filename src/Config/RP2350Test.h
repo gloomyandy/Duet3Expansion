@@ -214,6 +214,14 @@ constexpr float DefaultThermistorSeriesR = 4700.0;		// TEMP0 has 1K or 4K7 pullu
 constexpr Pin TempSensePins[NumThermistorInputs] = { GpioPin(40), GpioPin(41) };
 constexpr Pin CanTxPin = GpioPin(0);
 constexpr Pin CanRxPin = GpioPin(1);
+// we don't currently use CanParams, but it makes things easier to have one!
+constexpr CanParameters CanParams =
+{
+	.instanceNumber = 0,
+	.txPin = NoPin,
+	.rxPin = NoPin,
+	.pinsFunction = GpioPinFunction::None
+};
 
 constexpr Pin ButtonPins[] = { PIN_TODO };
 

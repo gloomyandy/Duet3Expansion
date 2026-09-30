@@ -123,7 +123,7 @@ void StepTimer::Init() noexcept
 #endif
 }
 
-#if !RP2040 && !STM32
+#if !RPXXXX && !STM32
 
 // Get the step timer clock count
 /*static*/ StepTimer::Ticks StepTimer::GetTimerTicks() noexcept

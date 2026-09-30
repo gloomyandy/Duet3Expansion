@@ -313,7 +313,7 @@ GCodeResult AccelerometerHandler::ProcessConfigRequest(const CanMessageGeneric& 
 		}
 		uint32_t clockSpeed = DefaultAccelerometerSpiFrequency;
 		(void)parser.GetUintParam('Q', clockSpeed);
-		if (!Init(Platform::GetSharedSpi(), clockSpeed, csPort.GetPin(), irqPort.GetPin()))
+		if (!Init(Platform::GetSharedSpi(Lis_SpiChannel), clockSpeed, csPort.GetPin(), irqPort.GetPin()))
 		{
 			csPort.Release();
 			irqPort.Release();

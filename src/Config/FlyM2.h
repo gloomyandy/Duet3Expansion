@@ -113,6 +113,14 @@ constexpr Pin TempSensePins[NumThermistorInputs] = { GpioPin(26) };
 
 constexpr Pin CanTxPin = GpioPin(0);
 constexpr Pin CanRxPin = GpioPin(1);
+// we don't currently use CanParams, but it makes things easier to have one!
+constexpr CanParameters CanParams =
+{
+	.instanceNumber = 0,
+	.txPin = NoPin,
+	.rxPin = NoPin,
+	.pinsFunction = GpioPinFunction::None
+};
 
 constexpr Pin ButtonPins[] = { PIN_TODO };
 
@@ -197,7 +205,7 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm4b,	AdcInput::none,		nullptr		},	// GPIO9 SPI1_CS
 	{ PwmOutput::pwm5a,	AdcInput::none,		nullptr		},	// GPIO10 SPI1_SCLK
 	{ PwmOutput::pwm5b,	AdcInput::none,		nullptr		},	// GPIO11 SPI1_MOSI
-	{ PwmOutput::pwm6a,	AdcInput::none,		nullptr 	},	// GPIO12 accelerometer CS
+	{ PwmOutput::pwm6a,	AdcInput::none,		"spi.cs.acc"},	// GPIO12 accelerometer CS
 	{ PwmOutput::pwm6b,	AdcInput::none,		nullptr		},	// GPIO13 Extruder UART
 	{ PwmOutput::pwm7a,	AdcInput::none,		nullptr		},	// GPIO14 Extruder STEP
 	{ PwmOutput::pwm7b,	AdcInput::none,		nullptr		},	// GPIO15 Extruder DIR
@@ -210,7 +218,7 @@ constexpr PinDescription PinTable[] =
 	{ PwmOutput::pwm3a,	AdcInput::none,		"io0.in"	},	// GPIO22 X STOP
 	{ PwmOutput::pwm3b,	AdcInput::none,		"out0"		},	// GPIO23 HEAT0
 	{ PwmOutput::pwm4a,	AdcInput::none,		"out2"		},	// GPIO24 FAN2
-	{ PwmOutput::none,	AdcInput::none,		nullptr		},	// GPIO25 ACC_INT1
+	{ PwmOutput::none,	AdcInput::none,		"int.acc"	},	// GPIO25 ACC_INT1
 	{ PwmOutput::pwm5a,	AdcInput::adc0_0,	"temp0"		},	// GPIO26 E TEMP
 	{ PwmOutput::pwm5b,	AdcInput::adc0_1,	"io1.out"	},	// GPIO27 RP-PRES-CTL
 	{ PwmOutput::pwm6a,	AdcInput::adc0_2,	"io1.in"	},	// GPIO28 RP-PRES-PROBE

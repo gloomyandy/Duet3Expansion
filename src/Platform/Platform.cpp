@@ -388,7 +388,7 @@ namespace Platform
 #endif
 	}
 
-#if !RP2040 && !STM32
+#if !RPXXXX && !STM32
 	// Erase the firmware (but not the bootloader) and reset the processor
 	[[noreturn]] RAMFUNC static void EraseAndReset()
 	{

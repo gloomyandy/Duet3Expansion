@@ -126,6 +126,14 @@ constexpr SpiParameters SharedSpiParams[NUM_SHARED_SPI] = {
 constexpr uint8_t spiCan_SpiChannel = 1;						// CAN controller on shared SPI channel 1
 constexpr Pin SPICanCsPin  = GpioPin(9);						// GPIO9  CAN_CS
 constexpr Pin SPICanIntPin = GpioPin(13);						// GPIO13 CAN_INT
+// we don't currently use CanParams, but it makes things easier to have one!
+constexpr CanParameters CanParams =
+{
+	.instanceNumber = 0,
+	.txPin = NoPin,
+	.rxPin = NoPin,
+	.pinsFunction = GpioPinFunction::None
+};
 #endif
 
 #if SUPPORT_CLOSED_LOOP
