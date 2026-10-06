@@ -77,21 +77,27 @@ void StepTimer::Init() noexcept
 	// As that is only 16-bit and we need a 32-bit step timer, we use timer 5 for the step timer and clock it at the same rate as timer 3.
 	EnableTimerClock(StepTimerNumber);
 	EnableTimerClock(TimeStampTimerNumber);
-	StepTimerHw->PSC = GetTimerClockFrequency(StepTimerNumber)/StepClockRate;
-	TimeStampTimerHw->PSC = GetTimerClockFrequency(TimeStampTimerNumber)/StepClockRate;
-	StepTimerHw->DIER &= ~(TIM_DIER_CC1IE);							// disable the interrupt
+	StepTimerHw->CR1 = TIM_CR1_URS;
+	TimeStampTimerHw->CR1 = TIM_CR1_URS;
+	StepTimerHw->CR2 = 0;
+	TimeStampTimerHw->CR2 = 0;
 	StepTimerHw->ARR = 0xFFFFFFFF;
 	TimeStampTimerHw->ARR = 0x0000FFFF;
+	StepTimerHw->PSC = GetTimerClockFrequency(StepTimerNumber)/StepClockRate - 1;
+	TimeStampTimerHw->PSC = GetTimerClockFrequency(TimeStampTimerNumber)/StepClockRate - 1;
+	StepTimerHw->CNT = 0;
+	TimeStampTimerHw->CNT = 0;
+	StepTimerHw->EGR = TIM_EGR_UG;									// update the live registers, in particular the prescaler
+	TimeStampTimerHw->EGR = TIM_EGR_UG;
+	StepTimerHw->DIER &= ~(TIM_DIER_CC1IE);							// disable the interrupt
 	NVIC_SetPriority(StepTimerIRQn, NvicPriorityStep);			    // set the priority for this IRQ ->ARR
 	NVIC_ClearPendingIRQ(StepTimerIRQn);
 	NVIC_EnableIRQ(StepTimerIRQn);
 	{
-		// Start the two timers in sync
+		// Start the two timers in sync. The step timer is permitted to be a tiny amount ahead of the timestamp counter (i.e. slightly greater count), but not behind it. So start the step timer first.
 		AtomicCriticalSectionLocker lock;
-		StepTimerHw->CNT = 0;
-		TimeStampTimerHw->CNT = 0;
-		StepTimerHw->CR1 |= TIM_CR1_CEN;
-		TimeStampTimerHw->CR1 |= TIM_CR1_CEN;
+		StepTimerHw->CR1 = TIM_CR1_CEN | TIM_CR1_URS;
+		TimeStampTimerHw->CR1 = TIM_CR1_CEN | TIM_CR1_URS;
 	}
 #elif SAMC21 || SAME5x
 	// We use StepTcNumber+1 as the slave for 32-bit mode so we need to clock that one too
@@ -184,8 +190,9 @@ void StepTimer::Init() noexcept
 {
 	static uint32_t originalOffset = 0;
 
-#if SAME70 || STM32 || (RP2040 && !USE_SPICAN)
-	// On these processors the timestamp counter is the same as the step counter
+#if SAME70 || STM32 || (RPXXXX && !USE_SPICAN)
+	// On SAME70 and RP2040 processors the timestamp counter is the same as the step counter.
+	// On STM32 we use timer 3 (16 bits) as the timestamp counter and timer 5 (32 bits) as the step counter, but we clock them at the same rate, so they are effectively the same.
 	const uint32_t localTimeNow = StepTimer::GetTimerTicks();
 	const uint32_t timeStampDelay = (localTimeNow - timeStamp) & 0xFFFF;
 #else
