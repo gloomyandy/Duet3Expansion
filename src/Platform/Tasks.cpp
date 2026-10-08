@@ -83,8 +83,10 @@ struct UF2_Block
 
 #include <syscalls.h>
 
+#if !RPXXXX
 // Define the system stack. The stack doesn't actually live here, instead the linker script uses this section to define the stack start and end symbols.
-uint32_t dummySystemStack[SystemStackSize] __attribute__ ((section (".stack")));
+uint32_t dummySystemStack[SystemStackSize] __attribute__ ((section (".stack"), used));
+#endif
 
 constexpr uint32_t BlockReceiveTimeout = 2000;					// bootloader block receive timeout milliseconds
 
