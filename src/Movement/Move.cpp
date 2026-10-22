@@ -1639,7 +1639,7 @@ GCodeResult Move::SetMotorCurrent(size_t driver, float current, const StringRef&
 // TMC driver temperatures
 float Move::GetTmcDriversTemperature() noexcept
 {
-#if defined(TOOL1RR) || defined(F3PTB) || defined(TOOLINDX) || SUPPORT_TMC2240 || SUPPORT_TMC2240_SPI
+#if defined(TOOL1RR) || defined(F3PTB) || defined(TOOLINDX) || defined(NODETRIX) || SUPPORT_TMC2240 || SUPPORT_TMC2240_SPI
 	// TEMPORARY code until we have more general support for TMC2240 and other drivers that report temperature
 	// These boards have a single TMC2240 driver so report the temperature of that
 	return SmartDrivers::GetDriverTemperature(0);
