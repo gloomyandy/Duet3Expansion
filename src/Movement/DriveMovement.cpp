@@ -31,6 +31,8 @@ void DriveMovement::Init(size_t drv) noexcept
 	nextDM = nullptr;
 #endif
 	segments = nullptr;
+	segmentsTail = nullptr;
+	segHint = nullptr;
 	segmentFlags.InitNonPrinting();
 #if SUPPORT_CLOSED_LOOP
 	closedLoopControl.InitInstance();
@@ -112,7 +114,20 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		seg->SetExecuting();
 
 		// Calculate the movement parameters
-		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
+		const motioncalc_t endPosition = seg->GetLength() + distanceCarriedForwards;
+		netStepsThisSegment = (int32_t)endPosition;
+
+		// An axis that is about to stop must end on a whole step, but the segment lengths carry float rounding error.
+		// This must be corrected here as well as in CalcNextStepTimeFull because the closed loop and zero-step skip paths never get there
+		if (seg->GetNext() == nullptr && !segmentFlags.isExtruder)
+		{
+			const int32_t roundedSteps = lrintf(endPosition);
+			if (fabsm(endPosition - (motioncalc_t)roundedSteps) < (motioncalc_t)0.05)
+			{
+				seg->AdjustLength((motioncalc_t)roundedSteps - endPosition);
+				netStepsThisSegment = roundedSteps;
+			}
+		}
 
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		if (closedLoopControl.IsClosedLoopEnabled())
@@ -272,6 +287,8 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		distanceCarriedForwards = newDcf;
 		MoveSegment *oldSeg = seg;
 		segments = seg = seg->GetNext();						// skip this segment
+		if (seg == nullptr) { segmentsTail = nullptr; }			// keep the tail cache consistent when the list empties
+		if (segHint == oldSeg) { segHint = nullptr; }			// invalidate the insertion hint if we are releasing the segment it points to
 		MoveSegment::Release(oldSeg);
 	}
 }
@@ -380,8 +397,11 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 			}
 
 			movementAccumulator += netStepsThisSegment;				// update the amount of extrusion for filament monitors
-			segments = currentSegment->GetNext();
 			const uint32_t prevEndTime = currentSegment->GetStartTime() + currentSegment->GetDuration();
+			MoveSegment *const nextSeg = currentSegment->GetNext();
+			segments = nextSeg;
+			if (nextSeg == nullptr) { segmentsTail = nullptr; }		// keep the tail cache consistent when the list empties
+			if (segHint == currentSegment) { segHint = nullptr; }	// invalidate the insertion hint if we are releasing the segment it points to
 			MoveSegment::Release(currentSegment);
 			currentSegment = NewSegment(now);
 			if (currentSegment == nullptr)
@@ -559,16 +579,16 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 	return true;
 }
 
-// If the driver is moving, stop it and release the segments. Caller will remote it from the active list and disable interrupts before calling this.
+// Stop a driver that is moving and release its segments. The caller disables interrupts, checks that the drive is not
+// already idle and takes it off its list first, because DeactivateDM chooses the list from the state that this clears
 void DriveMovement::StopDriverFromRemote() noexcept
 {
-	if (state != DMState::idle)
-	{
-		state = DMState::idle;
-		MoveSegment *seg = nullptr;
-		std::swap(seg, const_cast<MoveSegment*&>(segments));
-		MoveSegment::ReleaseAll(seg);
-	}
+	state = DMState::idle;
+	MoveSegment *seg = nullptr;
+	std::swap(seg, const_cast<MoveSegment*&>(segments));
+	segmentsTail = nullptr;
+	segHint = nullptr;
+	MoveSegment::ReleaseAll(seg);
 }
 
 #endif	// SUPPORT_DRIVERS

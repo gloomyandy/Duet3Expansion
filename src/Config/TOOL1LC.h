@@ -226,7 +226,7 @@ constexpr PinDescription PinTable[] =
 };
 
 constexpr size_t NumPins = ARRAY_SIZE(PinTable);
-constexpr size_t NumRealPins = 32 + 24;				// 32 pins on port A (some missing), 24 on port B
+constexpr size_t NumRealPins = 32 + 24;					// 32 pins on port A (some missing), 24 on port B
 constexpr size_t NumVirtualPins = SUPPORT_LIS3DH + SUPPORT_LDC1612;
 
 static_assert(NumPins == NumRealPins + NumVirtualPins);
@@ -247,15 +247,13 @@ constexpr DmaChannel DmacChanTmcTx = 0;
 constexpr DmaChannel DmacChanTmcRx = 1;
 constexpr DmaChannel DmacChanAdc0Rx = 2;
 constexpr DmaChannel DmacChanSdadcRx = 3;
-constexpr DmaChannel DmacChanLedTx = 4;
 
-constexpr unsigned int NumDmaChannelsUsed = 5;			// must be at least the number of channels used, may be larger. Max 12 on the SAMC21.
+constexpr unsigned int NumDmaChannelsUsed = 4;			// must be at least the number of channels used, may be larger. Max 12 on the SAMC21.
 
 // DMA priorities, higher is better. 0 to 3 are available.
 constexpr DmaPriority DmacPrioTmcTx = 0;
 constexpr DmaPriority DmacPrioTmcRx = 3;
 constexpr DmaPriority DmacPrioAdcRx = 2;
-constexpr DmaPriority DmacPrioLed = 1;
 
 // Interrupt priorities, lower means higher priority. 0 can't make RTOS calls. Only 0 to 3 are available.
 const NvicPriority NvicPriorityStep = 1;				// step interrupt is next highest, it can preempt most other interrupts
