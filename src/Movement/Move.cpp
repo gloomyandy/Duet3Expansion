@@ -2283,7 +2283,7 @@ bool Move::SetMicrostepping(size_t driver, unsigned int microsteps, bool interpo
 
 #endif
 
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+#if SUPPORT_CLOSED_LOOP
 
 GCodeResult Move::ProcessM569Point1(const CanMessageGeneric &msg, const StringRef &reply) noexcept
 {
@@ -2347,6 +2347,29 @@ GCodeResult Move::ProcessM569Point6(const CanMessageGeneric &msg, const StringRe
 	return dms[drive].closedLoopControl.ProcessM569Point6(parser, reply);
 }
 
+void Move::ClosedLoopDiagnostics(size_t driver, const StringRef& reply) noexcept
+{
+	dms[driver].closedLoopControl.InstanceDiagnostics(driver, reply);
+}
+
+bool Move::EnableIfIdle(size_t driver) noexcept
+{
+	if (driverStates[driver] == DriverStateControl::driverIdle)
+	{
+		driverStates[driver] = DriverStateControl::driverActive;
+# if HAS_SMART_DRIVERS
+		driverAtIdleCurrent[driver] = false;
+		UpdateMotorCurrent(driver);
+# endif
+	}
+
+	return driverStates[driver] == DriverStateControl::driverActive;
+}
+
+#endif
+
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+
 void Move::PhaseStepControlLoop() noexcept
 {
 	// Record the control loop call interval
@@ -2366,25 +2389,6 @@ void Move::PhaseStepControlLoop() noexcept
 	const StepTimer::Ticks loopRuntime = StepTimer::GetTimerTicks() - loopCallTime;
 	if (loopRuntime < minPSControlLoopRuntime) { minPSControlLoopRuntime = loopRuntime; }
 	if (loopRuntime > maxPSControlLoopRuntime) { maxPSControlLoopRuntime = loopRuntime; }
-}
-
-void Move::ClosedLoopDiagnostics(size_t driver, const StringRef& reply) noexcept
-{
-	dms[driver].closedLoopControl.InstanceDiagnostics(driver, reply);
-}
-
-bool Move::EnableIfIdle(size_t driver) noexcept
-{
-	if (driverStates[driver] == DriverStateControl::driverIdle)
-	{
-		driverStates[driver] = DriverStateControl::driverActive;
-# if HAS_SMART_DRIVERS
-		driverAtIdleCurrent[driver] = false;
-		UpdateMotorCurrent(driver);
-# endif
-	}
-
-	return driverStates[driver] == DriverStateControl::driverActive;
 }
 
 void Move::ResetPhaseStepControlLoopCallTime() noexcept
